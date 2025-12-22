@@ -85,4 +85,10 @@ public class AppSettings
     // Calendar settings
     public bool AutoGenerateRecurringEvents { get; set; } = true;
     public int RecurringGenerationDaysAhead { get; set; } = 30;
+
+    // Discord Presence (Rich Presence)
+    public bool DiscordPresenceEnabled { get; set; } = false;
+    public string? DiscordPresenceAppId { get; set; }
+        = ""; // Discord Application Client ID
+    public bool DiscordPresenceShowRepoButton { get; set; } = true;
 }

@@ -51,6 +51,35 @@
                 </StackPanel>
             </Border>
 
+            <!-- Rich Presence Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="Discord Rich Presence" Foreground="White" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock Text="Show your VRCGT activity in Discord with buttons to GitHub and the current group." Foreground="#AAA" Margin="0,0,0,12" TextWrapping="Wrap"/>
+
+                    <CheckBox Content="Enable Rich Presence"
+                              IsChecked="{Binding PresenceEnabled}"
+                              Foreground="White"
+                              Margin="0,0,0,10"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+
+                    <TextBlock Text="Discord Application ID" Foreground="#AAA" FontSize="12" Margin="0,0,0,6"/>
+                    <TextBox Text="{Binding PresenceAppId, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="123456789012345678"
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    <TextBlock Text="Create a Discord application at https://discord.com/developers/applications and copy its Client ID."
+                               Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,10"/>
+
+                    <CheckBox Content="Show GitHub button (0xE69/VRCGT)"
+                              IsChecked="{Binding PresenceShowRepoButton}"
+                              Foreground="White"
+                              Margin="0,0,0,0"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                </StackPanel>
+            </Border>
+
             <!-- Event Toggles Section -->
             <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
                 <StackPanel>

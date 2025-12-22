@@ -54,6 +54,9 @@ public interface IVRChatApiService
     Task<GroupCalendarEvent?> CreateGroupEventAsync(string groupId, GroupEventCreateRequest request);
     Task<List<GroupCalendarEvent>> GetGroupEventsAsync(string groupId);
     Task<bool> DeleteGroupEventAsync(string groupId, string eventId);
+    Task<List<GroupPost>> GetGroupPostsAsync(string groupId, int n = 60, int offset = 0, bool publicOnly = false);
+    Task<bool> DeleteGroupPostAsync(string groupId, string postId);
+    Task<GroupPost?> UpdateGroupPostAsync(string groupId, string postId, string title, string text, string visibility = "public", bool sendNotification = false);
     string? GetAuthCookie();
     string? GetTwoFactorCookie();
     void Logout();
@@ -81,6 +84,10 @@ public class GroupInfo
     public string? BannerUrl { get; set; }
     public string? Privacy { get; set; }
     public string? OwnerId { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public List<string> Links { get; set; } = new();
+    public List<string> Rules { get; set; } = new();
+    public List<string> GalleryImageUrls { get; set; } = new();
 }
 
 public class GroupPostResult
@@ -92,6 +99,22 @@ public class GroupPostResult
     public string? ImageId { get; set; }
 }
 
+public class GroupPost
+{
+    public string Id { get; set; } = string.Empty;
+    public string GroupId { get; set; } = string.Empty;
+    public string AuthorId { get; set; } = string.Empty;
+    public string? EditorId { get; set; }
+    public string Visibility { get; set; } = "public";
+    public List<string> RoleIds { get; set; } = new();
+    public string Title { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public string? ImageId { get; set; }
+    public string? ImageUrl { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
 public class VRChatApiService : IVRChatApiService
 {
     private const string BaseUrl = "https://api.vrchat.cloud/api/1";
@@ -100,6 +123,7 @@ public class VRChatApiService : IVRChatApiService
 
     private readonly HttpClient _httpClient;
     private readonly CookieContainer _cookieContainer;
+    private const int LogBodyLimit = 2000; // avoid flooding logs
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
     private string? _authToken;
     private string? _twoFactorToken;
@@ -151,6 +175,31 @@ public class VRChatApiService : IVRChatApiService
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
         }
         return await _httpClient.SendAsync(request);
+    }
+
+    private void LogHttp(string tag, string url, HttpResponseMessage response, string content, string? extra = null)
+    {
+        var safeUrl = SanitizeUrl(url);
+        var status = $"{(int)response.StatusCode} {response.StatusCode}";
+        var prefix = extra == null
+            ? $"HTTP {response.RequestMessage?.Method} {safeUrl} {status}"
+            : $"HTTP {response.RequestMessage?.Method} {safeUrl} {status} ({extra})";
+
+        LoggingService.Debug(tag, prefix);
+
+        if (content != null)
+        {
+            var truncated = content.Length > LogBodyLimit
+                ? content.Substring(0, LogBodyLimit) + " ... [truncated]"
+                : content;
+            LoggingService.Debug(tag, $"Body {Math.Min(content.Length, LogBodyLimit)}/{content.Length} chars: {truncated}");
+        }
+    }
+
+    private static string SanitizeUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return url;
+        return url.Replace(ApiKey, "***");
     }
 
     private static string GetMimeType(string filePath)
@@ -458,12 +507,12 @@ public class VRChatApiService : IVRChatApiService
         try
         {
             await RateLimitAsync();
-            var response = await _httpClient.GetAsync($"groups/{groupId}?apiKey={ApiKey}");
+            var url = $"groups/{groupId}?apiKey={ApiKey}";
+            var response = await _httpClient.GetAsync(url);
             var content = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[GROUP] Status: {response.StatusCode}");
+            LogHttp("GROUP", url, response, content);
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[GROUP] Error: {content}");
                 return null;
             }
 
@@ -471,6 +520,51 @@ public class VRChatApiService : IVRChatApiService
             if (json == null)
             {
                 return null;
+            }
+
+            var links = new List<string>();
+            if (json["links"] is JArray linkArr)
+            {
+                foreach (var l in linkArr)
+                {
+                    if (l.Type == JTokenType.String)
+                        links.Add(l.ToString());
+                    else if (l.Type == JTokenType.Object)
+                    {
+                        var linkUrl = l["url"]?.ToString() ?? l["linkUrl"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(linkUrl)) links.Add(linkUrl);
+                    }
+                }
+            }
+
+            var rules = new List<string>();
+            if (json["rules"] is JArray ruleArr)
+            {
+                foreach (var r in ruleArr)
+                {
+                    if (r.Type == JTokenType.String)
+                        rules.Add(r.ToString());
+                    else if (r.Type == JTokenType.Object)
+                    {
+                        var text = r["text"]?.ToString() ?? r["description"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(text)) rules.Add(text);
+                    }
+                }
+            }
+
+            var gallery = new List<string>();
+            if (json["gallery"] is JArray galArr)
+            {
+                foreach (var g in galArr)
+                {
+                    if (g.Type == JTokenType.String)
+                        gallery.Add(g.ToString());
+                    else if (g.Type == JTokenType.Object)
+                    {
+                        var img = g["imageUrl"]?.ToString() ?? g["url"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(img)) gallery.Add(img);
+                    }
+                }
             }
 
             return new GroupInfo
@@ -484,7 +578,11 @@ public class VRChatApiService : IVRChatApiService
                 IconUrl = json["iconUrl"]?.ToString(),
                 BannerUrl = json["bannerUrl"]?.ToString(),
                 Privacy = json["privacy"]?.ToString(),
-                OwnerId = json["ownerId"]?.ToString()
+                OwnerId = json["ownerId"]?.ToString(),
+                CreatedAt = json["createdAt"]?.Value<DateTime?>(),
+                Links = links,
+                Rules = rules,
+                GalleryImageUrls = gallery
             };
         }
         catch (Exception ex)
@@ -619,16 +717,15 @@ public class VRChatApiService : IVRChatApiService
         try
         {
             await RateLimitAsync();
-            
-            var response = await _httpClient.GetAsync($"groups/{groupId}/members/{userId}?apiKey={ApiKey}");
-            
+            var url = $"groups/{groupId}/members/{userId}?apiKey={ApiKey}";
+            var response = await _httpClient.GetAsync(url);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP_MEMBER", url, response, content);
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[GROUP_MEMBER] User {userId} not found in group or error: {response.StatusCode}");
                 return null;
             }
 
-            var content = await response.Content.ReadAsStringAsync();
             var data = JsonConvert.DeserializeObject<JObject>(content);
 
             if (data == null) return null;
@@ -732,15 +829,15 @@ public class VRChatApiService : IVRChatApiService
         try
         {
             await RateLimitAsync();
-            var response = await _httpClient.GetAsync($"groups/{groupId}/roles?apiKey={ApiKey}");
-            
+            var url = $"groups/{groupId}/roles?apiKey={ApiKey}";
+            var response = await _httpClient.GetAsync(url);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("ROLES", url, response, content);
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[ROLES] Error: {response.StatusCode}");
                 return roles;
             }
 
-            var content = await response.Content.ReadAsStringAsync();
             var data = JsonConvert.DeserializeObject<List<JObject>>(content);
 
             if (data != null)
@@ -1036,6 +1133,130 @@ public class VRChatApiService : IVRChatApiService
         }
     }
 
+    public async Task<List<GroupPost>> GetGroupPostsAsync(string groupId, int n = 60, int offset = 0, bool publicOnly = false)
+    {
+        var posts = new List<GroupPost>();
+        try
+        {
+            await RateLimitAsync();
+            var url = $"groups/{groupId}/posts?apiKey={ApiKey}&n={n}&offset={offset}&publicOnly={publicOnly.ToString().ToLower()}";
+            var response = await _httpClient.GetAsync(url);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-POSTS", url, response, content);
+            if (!response.IsSuccessStatusCode)
+            {
+                return posts;
+            }
+
+            var json = JObject.Parse(content);
+            var postsArray = json["posts"] as JArray;
+            if (postsArray == null)
+            {
+                return posts;
+            }
+
+            foreach (var p in postsArray)
+            {
+                var post = new GroupPost
+                {
+                    Id = p["id"]?.ToString() ?? string.Empty,
+                    GroupId = p["groupId"]?.ToString() ?? string.Empty,
+                    AuthorId = p["authorId"]?.ToString() ?? string.Empty,
+                    EditorId = p["editorId"]?.ToString(),
+                    Visibility = p["visibility"]?.ToString() ?? "public",
+                    Title = p["title"]?.ToString() ?? string.Empty,
+                    Text = p["text"]?.ToString() ?? string.Empty,
+                    ImageId = p["imageId"]?.ToString(),
+                    ImageUrl = p["imageUrl"]?.ToString()
+                };
+
+                if (p["roleId"] is JArray rolesArr)
+                {
+                    post.RoleIds = rolesArr.Select(r => r.ToString()).ToList();
+                }
+
+                if (DateTime.TryParse(p["createdAt"]?.ToString(), out var created))
+                {
+                    post.CreatedAt = created;
+                }
+                if (DateTime.TryParse(p["updatedAt"]?.ToString(), out var updated))
+                {
+                    post.UpdatedAt = updated;
+                }
+
+                posts.Add(post);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-POSTS] Exception: {ex.Message}");
+        }
+        return posts;
+    }
+
+    public async Task<bool> DeleteGroupPostAsync(string groupId, string postId)
+    {
+        try
+        {
+            await RateLimitAsync();
+            var url = $"groups/{groupId}/posts/{postId}?apiKey={ApiKey}";
+            var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            var response = await _httpClient.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-POST-DELETE", url, response, content);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-POST-DELETE] Exception: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<GroupPost?> UpdateGroupPostAsync(string groupId, string postId, string title, string text, string visibility = "public", bool sendNotification = false)
+    {
+        try
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["title"] = title,
+                ["text"] = text,
+                ["visibility"] = visibility,
+                ["sendNotification"] = sendNotification
+            };
+
+            var response = await SendJsonAsync(HttpMethod.Put, $"groups/{groupId}/posts/{postId}", payload);
+            var content = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[GROUP-POST-UPDATE] Status: {response.StatusCode}");
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[GROUP-POST-UPDATE] Error: {content}");
+                return null;
+            }
+
+            var json = JObject.Parse(content);
+            return new GroupPost
+            {
+                Id = json["id"]?.ToString() ?? string.Empty,
+                GroupId = json["groupId"]?.ToString() ?? string.Empty,
+                AuthorId = json["authorId"]?.ToString() ?? string.Empty,
+                EditorId = json["editorId"]?.ToString(),
+                Visibility = json["visibility"]?.ToString() ?? "public",
+                Title = json["title"]?.ToString() ?? string.Empty,
+                Text = json["text"]?.ToString() ?? string.Empty,
+                ImageId = json["imageId"]?.ToString(),
+                ImageUrl = json["imageUrl"]?.ToString(),
+                CreatedAt = DateTime.TryParse(json["createdAt"]?.ToString(), out var created) ? created : DateTime.UtcNow,
+                UpdatedAt = DateTime.TryParse(json["updatedAt"]?.ToString(), out var updated) ? updated : null
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-POST-UPDATE] Exception: {ex.Message}");
+            return null;
+        }
+    }
+
     public async Task<List<GroupCalendarEvent>> GetGroupEventsAsync(string groupId)
     {
         var results = new List<GroupCalendarEvent>();
@@ -1050,10 +1271,9 @@ public class VRChatApiService : IVRChatApiService
                 var url = $"calendar/{groupId}?apiKey={ApiKey}&n={pageSize}&offset={offset}&date={Uri.EscapeDataString(date)}";
                 var response = await SendJsonAsync(HttpMethod.Get, url, null);
                 var content = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[EVENT-API] List status: {response.StatusCode} (offset={offset})");
+                LogHttp("EVENT-API", url, response, content, $"offset={offset}");
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[EVENT-API] Error: {content}");
                     break;
                 }
 

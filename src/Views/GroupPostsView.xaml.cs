@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace VRCGroupTools.Views;
 
-public partial class CreatePostView : UserControl
+public partial class GroupPostsView : UserControl
 {
-    public CreatePostView()
+    public GroupPostsView()
     {
         InitializeComponent();
     }

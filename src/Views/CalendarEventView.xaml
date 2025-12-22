@@ -36,7 +36,8 @@
                                   Foreground="White"/>
 
                         <TextBlock Text="Languages" Foreground="#AAA" FontSize="12" Margin="0,10,0,4"/>
-                        <ItemsControl ItemsSource="{Binding LanguageOptions}">
+                        <!-- Selected Languages Tags -->
+                        <ItemsControl ItemsSource="{Binding SelectedLanguages}" Margin="0,0,0,6">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel />
@@ -44,10 +45,65 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <CheckBox Content="{Binding Display}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,0,8,6" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                                    <Border Background="#7C4DFF" CornerRadius="12" Padding="10,4" Margin="0,0,6,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Display}" Foreground="White" VerticalAlignment="Center" FontSize="12"/>
+                                            <Button Content="✕" 
+                                                    Command="{Binding DataContext.RemoveLanguageCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                                    Foreground="White"
+                                                    Width="20" Height="20" Padding="0" Margin="6,0,0,0"
+                                                    FontSize="10"/>
+                                        </StackPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <!-- Language Search Box -->
+                        <Grid>
+                            <TextBox Text="{Binding LanguageSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="🔍 Type to search languages (e.g. English, Japanese...)"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Foreground="White">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Return" Command="{Binding AddFirstLanguageMatchCommand}"/>
+                                </TextBox.InputBindings>
+                            </TextBox>
+                        </Grid>
+                        <!-- Language Suggestions Dropdown -->
+                        <Border Background="#3D3D40" CornerRadius="4" Margin="0,2,0,0" MaxHeight="150"
+                                Visibility="{Binding ShowLanguageSuggestions, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding FilteredLanguages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="10,6" Cursor="Hand">
+                                                <Border.InputBindings>
+                                                    <MouseBinding MouseAction="LeftClick"
+                                                                  Command="{Binding DataContext.AddLanguageCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                  CommandParameter="{Binding}"/>
+                                                </Border.InputBindings>
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#4D4D50"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Display}" Foreground="White" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Code, StringFormat=' ({0})'}" Foreground="#888" FontSize="11" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
 
                         <TextBlock Text="Platforms" Foreground="#AAA" FontSize="12" Margin="0,10,0,4"/>
                         <StackPanel Orientation="Horizontal">
@@ -158,7 +214,8 @@
                         <ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding TemplateDraft.Category, Mode=TwoWay}" materialDesign:HintAssist.Hint="Category" Margin="0,10,0,0" Style="{StaticResource MaterialDesignOutlinedComboBox}" Foreground="White"/>
                         <ComboBox ItemsSource="{Binding VisibilityOptions}" SelectedItem="{Binding TemplateDraft.Visibility, Mode=TwoWay}" materialDesign:HintAssist.Hint="Visibility" Margin="0,10,0,0" Style="{StaticResource MaterialDesignOutlinedComboBox}" Foreground="White"/>
                         <TextBlock Text="Languages" Foreground="#AAA" FontSize="12" Margin="0,10,0,4"/>
-                        <ItemsControl ItemsSource="{Binding TemplateLanguageOptions}">
+                        <!-- Selected Template Languages Tags -->
+                        <ItemsControl ItemsSource="{Binding SelectedTemplateLanguages}" Margin="0,0,0,6">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel />
@@ -166,10 +223,65 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <CheckBox Content="{Binding Display}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,0,8,6" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                                    <Border Background="#7C4DFF" CornerRadius="12" Padding="10,4" Margin="0,0,6,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Display}" Foreground="White" VerticalAlignment="Center" FontSize="12"/>
+                                            <Button Content="✕" 
+                                                    Command="{Binding DataContext.RemoveTemplateLanguageCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                                    Foreground="White"
+                                                    Width="20" Height="20" Padding="0" Margin="6,0,0,0"
+                                                    FontSize="10"/>
+                                        </StackPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <!-- Template Language Search Box -->
+                        <Grid>
+                            <TextBox Text="{Binding TemplateLanguageSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="🔍 Type to search languages..."
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Foreground="White">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Return" Command="{Binding AddFirstTemplateLanguageMatchCommand}"/>
+                                </TextBox.InputBindings>
+                            </TextBox>
+                        </Grid>
+                        <!-- Template Language Suggestions Dropdown -->
+                        <Border Background="#3D3D40" CornerRadius="4" Margin="0,2,0,0" MaxHeight="150"
+                                Visibility="{Binding ShowTemplateLanguageSuggestions, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding FilteredTemplateLanguages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="10,6" Cursor="Hand">
+                                                <Border.InputBindings>
+                                                    <MouseBinding MouseAction="LeftClick"
+                                                                  Command="{Binding DataContext.AddTemplateLanguageCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                  CommandParameter="{Binding}"/>
+                                                </Border.InputBindings>
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#4D4D50"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Display}" Foreground="White" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Code, StringFormat=' ({0})'}" Foreground="#888" FontSize="11" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
                         <TextBlock Text="Platforms" Foreground="#AAA" FontSize="12" Margin="0,10,0,4"/>
                         <StackPanel Orientation="Horizontal">
                             <CheckBox Content="Windows" IsChecked="{Binding TemplatePlatformWindows}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>

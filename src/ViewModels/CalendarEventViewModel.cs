@@ -92,6 +92,21 @@ public partial class CalendarEventViewModel : ObservableObject
     [ObservableProperty]
     private string _recurrenceHint = "Choose recurrence pattern";
 
+    // Language search for Events
+    [ObservableProperty] private string _languageSearchText = "";
+    [ObservableProperty] private bool _showLanguageSuggestions;
+    public ObservableCollection<LanguageOption> SelectedLanguages { get; } = new();
+    public ObservableCollection<LanguageOption> FilteredLanguages { get; } = new();
+
+    // Language search for Templates  
+    [ObservableProperty] private string _templateLanguageSearchText = "";
+    [ObservableProperty] private bool _showTemplateLanguageSuggestions;
+    public ObservableCollection<LanguageOption> SelectedTemplateLanguages { get; } = new();
+    public ObservableCollection<LanguageOption> FilteredTemplateLanguages { get; } = new();
+
+    // All available languages (internal use)
+    private readonly List<LanguageOption> _allLanguages = new();
+
     public ObservableCollection<LanguageOption> LanguageOptions { get; } = new();
     public ObservableCollection<LanguageOption> TemplateLanguageOptions { get; } = new();
 
@@ -110,10 +125,93 @@ public partial class CalendarEventViewModel : ObservableObject
         _eventService = App.Services.GetRequiredService<ICalendarEventService>();
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
-        SeedLanguages(LanguageOptions);
-        SeedLanguages(TemplateLanguageOptions);
+        InitializeLanguages();
         SyncDraftUi(Draft);
         SyncTemplateUi(TemplateDraft);
+    }
+
+    partial void OnLanguageSearchTextChanged(string value)
+    {
+        UpdateFilteredLanguages(value, FilteredLanguages, SelectedLanguages);
+        ShowLanguageSuggestions = !string.IsNullOrWhiteSpace(value) && FilteredLanguages.Count > 0;
+    }
+
+    partial void OnTemplateLanguageSearchTextChanged(string value)
+    {
+        UpdateFilteredLanguages(value, FilteredTemplateLanguages, SelectedTemplateLanguages);
+        ShowTemplateLanguageSuggestions = !string.IsNullOrWhiteSpace(value) && FilteredTemplateLanguages.Count > 0;
+    }
+
+    private void UpdateFilteredLanguages(string searchText, ObservableCollection<LanguageOption> filtered, ObservableCollection<LanguageOption> selected)
+    {
+        filtered.Clear();
+        if (string.IsNullOrWhiteSpace(searchText)) return;
+
+        var selectedCodes = selected.Select(l => l.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var matches = _allLanguages
+            .Where(l => !selectedCodes.Contains(l.Code))
+            .Where(l => l.Display.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        l.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+            .Take(10);
+
+        foreach (var match in matches)
+        {
+            filtered.Add(match);
+        }
+    }
+
+    [RelayCommand]
+    private void AddLanguage(LanguageOption? lang)
+    {
+        if (lang == null) return;
+        if (!SelectedLanguages.Any(l => l.Code.Equals(lang.Code, StringComparison.OrdinalIgnoreCase)))
+        {
+            SelectedLanguages.Add(new LanguageOption(lang.Code, lang.Display));
+        }
+        LanguageSearchText = "";
+        ShowLanguageSuggestions = false;
+    }
+
+    [RelayCommand]
+    private void RemoveLanguage(LanguageOption? lang)
+    {
+        if (lang == null) return;
+        var toRemove = SelectedLanguages.FirstOrDefault(l => l.Code.Equals(lang.Code, StringComparison.OrdinalIgnoreCase));
+        if (toRemove != null) SelectedLanguages.Remove(toRemove);
+    }
+
+    [RelayCommand]
+    private void AddFirstLanguageMatch()
+    {
+        var first = FilteredLanguages.FirstOrDefault();
+        if (first != null) AddLanguage(first);
+    }
+
+    [RelayCommand]
+    private void AddTemplateLanguage(LanguageOption? lang)
+    {
+        if (lang == null) return;
+        if (!SelectedTemplateLanguages.Any(l => l.Code.Equals(lang.Code, StringComparison.OrdinalIgnoreCase)))
+        {
+            SelectedTemplateLanguages.Add(new LanguageOption(lang.Code, lang.Display));
+        }
+        TemplateLanguageSearchText = "";
+        ShowTemplateLanguageSuggestions = false;
+    }
+
+    [RelayCommand]
+    private void RemoveTemplateLanguage(LanguageOption? lang)
+    {
+        if (lang == null) return;
+        var toRemove = SelectedTemplateLanguages.FirstOrDefault(l => l.Code.Equals(lang.Code, StringComparison.OrdinalIgnoreCase));
+        if (toRemove != null) SelectedTemplateLanguages.Remove(toRemove);
+    }
+
+    [RelayCommand]
+    private void AddFirstTemplateLanguageMatch()
+    {
+        var first = FilteredTemplateLanguages.FirstOrDefault();
+        if (first != null) AddTemplateLanguage(first);
     }
 
     partial void OnDraftChanged(CalendarEvent value) => SyncDraftUi(value);
@@ -170,6 +268,8 @@ public partial class CalendarEventViewModel : ObservableObject
         DraftRecurrenceUntil = null;
         DraftSpecificDates = new ObservableCollection<DateTime>();
         SyncLanguageSelections(LanguageOptions, Draft.Languages);
+        SelectedLanguages.Clear();
+        LanguageSearchText = "";
         IsBusy = false;
     }
 
@@ -366,7 +466,7 @@ public partial class CalendarEventViewModel : ObservableObject
 
     private void ApplyDraftUiToModel()
     {
-        Draft.Languages = SelectedLanguageCodes(LanguageOptions);
+        Draft.Languages = SelectedLanguages.Select(l => l.Code).ToList();
         Draft.Tags = ParseCsv(DraftTagsText);
         Draft.Platforms = BuildPlatforms(DraftPlatformWindows, DraftPlatformAndroid, DraftPlatformIos);
         var rec = Draft.Recurrence ??= new RecurrenceOptions();
@@ -389,7 +489,7 @@ public partial class CalendarEventViewModel : ObservableObject
 
     private void ApplyTemplateUiToModel()
     {
-        TemplateDraft.Languages = SelectedLanguageCodes(TemplateLanguageOptions);
+        TemplateDraft.Languages = SelectedTemplateLanguages.Select(l => l.Code).ToList();
         TemplateDraft.Tags = ParseCsv(TemplateTagsText);
         TemplateDraft.Platforms = BuildPlatforms(TemplatePlatformWindows, TemplatePlatformAndroid, TemplatePlatformIos);
         TemplateDraft.Visibility = NormalizeVisibility(TemplateDraft.Visibility);
@@ -411,6 +511,7 @@ public partial class CalendarEventViewModel : ObservableObject
         DraftPlatformIos = value.Platforms.Contains("iOS", StringComparer.OrdinalIgnoreCase);
 
         SyncLanguageSelections(LanguageOptions, value.Languages);
+        SyncLanguageSelectionsToNew(SelectedLanguages, value.Languages);
 
         DraftRecurrenceType = string.IsNullOrWhiteSpace(value.Recurrence.Type) ? "None" : value.Recurrence.Type;
         RecSun = value.Recurrence.DaysOfWeek.Contains(DayOfWeek.Sunday);
@@ -435,6 +536,7 @@ public partial class CalendarEventViewModel : ObservableObject
         TemplatePlatformAndroid = value.Platforms.Contains("Android", StringComparer.OrdinalIgnoreCase);
         TemplatePlatformIos = value.Platforms.Contains("iOS", StringComparer.OrdinalIgnoreCase);
         SyncLanguageSelections(TemplateLanguageOptions, value.Languages);
+        SyncLanguageSelectionsToNew(SelectedTemplateLanguages, value.Languages);
     }
 
     private static List<string> ParseCsv(string text)
@@ -673,6 +775,58 @@ public partial class CalendarEventViewModel : ObservableObject
             if (kvp.Key.Length != 3) continue; // only canonical codes
             if (target.Any(o => string.Equals(o.Code, kvp.Key, StringComparison.OrdinalIgnoreCase))) continue;
             target.Add(new LanguageOption(kvp.Key, kvp.Key.ToUpperInvariant()));
+        }
+    }
+
+    private void InitializeLanguages()
+    {
+        _allLanguages.Clear();
+        // Add all languages with friendly names
+        var languageNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "eng", "English" }, { "spa", "Spanish" }, { "jpn", "Japanese" },
+            { "zho", "Chinese" }, { "deu", "German" }, { "fra", "French" },
+            { "rus", "Russian" }, { "por", "Portuguese" }, { "kor", "Korean" },
+            { "pol", "Polish" }, { "ita", "Italian" }, { "tha", "Thai" },
+            { "nld", "Dutch" }, { "ara", "Arabic" }, { "swe", "Swedish" },
+            { "nor", "Norwegian" }, { "tur", "Turkish" }, { "dan", "Danish" },
+            { "ukr", "Ukrainian" }, { "ind", "Indonesian" }, { "vie", "Vietnamese" },
+            { "ces", "Czech" }, { "hrv", "Croatian" }, { "fin", "Finnish" },
+            { "ron", "Romanian" }, { "hun", "Hungarian" }, { "heb", "Hebrew" },
+            { "afr", "Afrikaans" }, { "ben", "Bengali" }, { "bul", "Bulgarian" },
+            { "cym", "Welsh" }, { "ell", "Greek" }, { "est", "Estonian" },
+            { "fil", "Filipino" }, { "hin", "Hindi" }, { "isl", "Icelandic" },
+            { "lav", "Latvian" }, { "lit", "Lithuanian" }, { "ltz", "Luxembourgish" },
+            { "mar", "Marathi" }, { "mkd", "Macedonian" }, { "msa", "Malay" },
+            { "slk", "Slovak" }, { "slv", "Slovenian" }, { "tel", "Telugu" },
+            { "mri", "Maori" }, { "epo", "Esperanto" }, { "tok", "Toki Pona" }
+        };
+
+        foreach (var kvp in languageNames.OrderBy(x => x.Value))
+        {
+            _allLanguages.Add(new LanguageOption(kvp.Key, kvp.Value));
+        }
+
+        // Also seed old collections for backward compatibility
+        SeedLanguages(LanguageOptions);
+        SeedLanguages(TemplateLanguageOptions);
+    }
+
+    private void SyncLanguageSelectionsToNew(ObservableCollection<LanguageOption> selected, List<string> languageCodes)
+    {
+        selected.Clear();
+        if (languageCodes == null) return;
+        foreach (var code in languageCodes)
+        {
+            var lang = _allLanguages.FirstOrDefault(l => l.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
+            if (lang != null)
+            {
+                selected.Add(new LanguageOption(lang.Code, lang.Display));
+            }
+            else
+            {
+                selected.Add(new LanguageOption(code, code.ToUpperInvariant()));
+            }
         }
     }
 

@@ -41,6 +41,15 @@ public partial class DiscordSettingsViewModel : ObservableObject
     private bool _notifyRoleUpdate;
 
     [ObservableProperty]
+    private bool _presenceEnabled;
+
+    [ObservableProperty]
+    private string _presenceAppId = "";
+
+    [ObservableProperty]
+    private bool _presenceShowRepoButton = true;
+
+    [ObservableProperty]
     private string _statusMessage = "";
 
     [ObservableProperty]
@@ -70,6 +79,9 @@ public partial class DiscordSettingsViewModel : ObservableObject
         NotifyInstanceClosed = settings.DiscordNotifyInstanceClosed;
         NotifyJoinRequests = settings.DiscordNotifyJoinRequests;
         NotifyRoleUpdate = settings.DiscordNotifyRoleUpdate;
+        PresenceEnabled = settings.DiscordPresenceEnabled;
+        PresenceAppId = settings.DiscordPresenceAppId ?? "";
+        PresenceShowRepoButton = settings.DiscordPresenceShowRepoButton;
         
         IsWebhookValid = !string.IsNullOrWhiteSpace(WebhookUrl);
     }
@@ -128,6 +140,9 @@ public partial class DiscordSettingsViewModel : ObservableObject
         settings.DiscordNotifyInstanceClosed = NotifyInstanceClosed;
         settings.DiscordNotifyJoinRequests = NotifyJoinRequests;
         settings.DiscordNotifyRoleUpdate = NotifyRoleUpdate;
+        settings.DiscordPresenceEnabled = PresenceEnabled;
+        settings.DiscordPresenceAppId = PresenceAppId;
+        settings.DiscordPresenceShowRepoButton = PresenceShowRepoButton;
 
         _settingsService.Save();
         StatusMessage = "✅ Settings saved!";

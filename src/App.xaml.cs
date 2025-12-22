@@ -1,6 +1,11 @@
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using MaterialDesignThemes.Wpf;
 using VRCGroupTools.Data;
@@ -11,9 +16,12 @@ namespace VRCGroupTools;
 
 public partial class App : Application
 {
+    private static int _handlingException;
+
     public static IServiceProvider Services { get; private set; } = null!;
     public static string Version => "1.0.0";
     public static string GitHubRepo => "YourUsername/VRCGroupTools"; // Change this to your repo
+    public static string BindingLogPath { get; private set; } = string.Empty;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -21,6 +29,18 @@ public partial class App : Application
         
         // Set up global exception handlers FIRST
         SetupExceptionHandlers();
+
+        // Emit binding details to console and to a temp log for easier diagnostics
+        var bindingConsoleListener = new ConsoleTraceListener();
+        PresentationTraceSources.DataBindingSource.Listeners.Add(bindingConsoleListener);
+        PresentationTraceSources.DataBindingSource.Listeners.Add(new BindingTraceListener());
+        BindingLogPath = Path.Combine(Path.GetTempPath(), "vrcgt_binding.log");
+        var bindingFileListener = new TextWriterTraceListener(BindingLogPath) { TraceOutputOptions = TraceOptions.Timestamp };
+        PresentationTraceSources.DataBindingSource.Listeners.Add(bindingFileListener);
+        PresentationTraceSources.DataBindingSource.Listeners.Add(new DefaultTraceListener { LogFileName = BindingLogPath });
+        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.All;
+        Trace.AutoFlush = true;
+        bindingFileListener.Flush();
         
         // Initialize logging
         LoggingService.Initialize();
@@ -85,43 +105,102 @@ public partial class App : Application
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        LoggingService.Error("APP", e.Exception, "Unhandled UI exception");
-        var crashFile = LoggingService.WriteCrashReport(e.Exception, "UI Thread Exception");
-        
-        MessageBox.Show(
-            $"An unexpected error occurred:\n\n{e.Exception.Message}\n\nCrash report saved to:\n{crashFile}\n\nThe application will try to continue.",
-            "Error",
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
-        
-        e.Handled = true; // Prevent app crash, try to continue
+        // Guard against re-entrancy / recursive handling
+        if (Interlocked.Exchange(ref _handlingException, 1) == 1)
+        {
+            SafeWriteExceptionLog(e.Exception, "UI Thread Exception (re-entrant)");
+            e.Handled = true;
+            return;
+        }
+
+        var crashFile = SafeWriteExceptionLog(e.Exception, "UI Thread Exception");
+
+        // Avoid MessageBox in the handler to prevent further UI exceptions
+        // Keep app running if possible; if the dispatcher is shutting down, exit cleanly
+        if (Current?.Dispatcher?.HasShutdownStarted == true)
+        {
+            e.Handled = true;
+            Shutdown();
+        }
+        else
+        {
+            e.Handled = true; // try to continue
+        }
+
+        Interlocked.Exchange(ref _handlingException, 0);
     }
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var ex = e.ExceptionObject as Exception ?? new Exception("Unknown exception");
-        LoggingService.Error("APP", ex, "Unhandled background exception");
-        var crashFile = LoggingService.WriteCrashReport(ex, "Background Thread Exception");
-        
+        SafeWriteExceptionLog(ex, "Background Thread Exception", isTerminating: e.IsTerminating);
+
         if (e.IsTerminating)
         {
-            MessageBox.Show(
-                $"A fatal error occurred:\n\n{ex.Message}\n\nCrash report saved to:\n{crashFile}",
-                "Fatal Error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            Shutdown();
         }
     }
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        LoggingService.Error("APP", e.Exception, "Unobserved task exception");
-        LoggingService.WriteCrashReport(e.Exception, "Unobserved Task Exception");
+        SafeWriteExceptionLog(e.Exception, "Unobserved Task Exception");
         e.SetObserved(); // Prevent app crash
+    }
+
+    private static string SafeWriteExceptionLog(Exception ex, string context, bool isTerminating = false)
+    {
+        try
+        {
+            var logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "VRCGroupTools",
+                "logs");
+            Directory.CreateDirectory(logDir);
+            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss_fff");
+            var logPath = Path.Combine(logDir, $"crash_{timestamp}.log");
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"Timestamp (UTC): {DateTime.UtcNow:O}");
+            sb.AppendLine($"Context: {context}");
+            sb.AppendLine($"IsTerminating: {isTerminating}");
+            sb.AppendLine($"App Version: {Version}");
+            sb.AppendLine($"OS: {RuntimeInformation.OSDescription}");
+            sb.AppendLine($"Process Arch: {RuntimeInformation.ProcessArchitecture}");
+            sb.AppendLine($"Framework: {RuntimeInformation.FrameworkDescription}");
+            sb.AppendLine();
+            AppendException(sb, ex);
+
+            File.WriteAllText(logPath, sb.ToString());
+            return logPath;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static void AppendException(StringBuilder sb, Exception ex, string? prefix = null)
+    {
+        var label = prefix ?? "Exception";
+        sb.AppendLine($"{label}: {ex.GetType().FullName}");
+        sb.AppendLine($"Message: {ex.Message}");
+        sb.AppendLine("Stack:");
+        sb.AppendLine(ex.StackTrace);
+        sb.AppendLine();
+
+        if (ex.InnerException != null)
+        {
+            AppendException(sb, ex.InnerException, "Inner");
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try
+        {
+            Services.GetService<IDiscordPresenceService>()?.Dispose();
+        }
+        catch { }
         LoggingService.Info("APP", "Application exiting");
         LoggingService.Shutdown();
         base.OnExit(e);
@@ -152,6 +231,7 @@ public partial class App : Application
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<IAuditLogService, AuditLogService>();
         services.AddSingleton<IDiscordWebhookService, DiscordWebhookService>();
+        services.AddSingleton<IDiscordPresenceService, DiscordPresenceService>();
         services.AddSingleton<ICalendarEventService, CalendarEventService>();
 
         // ViewModels - use Singleton for ViewModels that need event subscriptions
@@ -169,7 +249,7 @@ public partial class App : Application
         services.AddTransient<MembersListViewModel>();
         services.AddTransient<BansListViewModel>();
         services.AddTransient<GroupInfoViewModel>();
-        services.AddTransient<CreatePostViewModel>();
+        services.AddTransient<GroupPostsViewModel>();
         services.AddTransient<InviteToGroupViewModel>();
         services.AddTransient<AppSettingsViewModel>();
         
@@ -206,6 +286,26 @@ public partial class App : Application
         catch (Exception ex)
         {
             LoggingService.Warn("APP", $"Update check failed: {ex.Message}");
+        }
+    }
+}
+
+// Writes WPF binding trace output through LoggingService so it is visible in the terminal/logs.
+file sealed class BindingTraceListener : TraceListener
+{
+    public override void Write(string? message)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            LoggingService.Debug("BINDING", message);
+        }
+    }
+
+    public override void WriteLine(string? message)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            LoggingService.Debug("BINDING", message);
         }
     }
 }

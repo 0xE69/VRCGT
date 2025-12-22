@@ -48,7 +48,7 @@ public partial class MainViewModel : ObservableObject
     private GroupInfoViewModel? _groupInfoVM;
 
     [ObservableProperty]
-    private CreatePostViewModel? _createPostVM;
+    private GroupPostsViewModel? _groupPostsVM;
 
     [ObservableProperty]
     private InviteToGroupViewModel? _inviteToGroupVM;
@@ -86,7 +86,7 @@ public partial class MainViewModel : ObservableObject
         CalendarEventVM = App.Services.GetRequiredService<CalendarEventViewModel>();
         InstanceCreatorVM = App.Services.GetRequiredService<InstanceCreatorViewModel>();
         GroupInfoVM = App.Services.GetRequiredService<GroupInfoViewModel>();
-        CreatePostVM = App.Services.GetRequiredService<CreatePostViewModel>();
+        GroupPostsVM = App.Services.GetRequiredService<GroupPostsViewModel>();
         InviteToGroupVM = App.Services.GetRequiredService<InviteToGroupViewModel>();
         MembersListVM = App.Services.GetRequiredService<MembersListViewModel>();
         BansListVM = App.Services.GetRequiredService<BansListViewModel>();

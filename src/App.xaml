@@ -29,7 +29,9 @@
             <converters:BoolToPollingColorConverter x:Key="BoolToPollingColorConverter"/>
             <converters:BoolToPollingTextConverter x:Key="BoolToPollingTextConverter"/>
             <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
+            <converters:BoolToSaveButtonConverter x:Key="BoolToSaveButtonConverter"/>
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+            <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter"/>
             <converters:CollectionContainsConverter x:Key="CollectionContainsConverter"/>
             <converters:DayToggleConverter x:Key="DayToggleConverter"/>
             <converters:DaysOfWeekStringConverter x:Key="DaysOfWeekStringConverter"/>

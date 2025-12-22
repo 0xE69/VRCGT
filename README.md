@@ -1,223 +1,231 @@
 # VRCGT - VRChat Group Tools
 
-A powerful desktop application for VRChat group management with comprehensive moderation tools.
+A powerful desktop toolkit for VRChat group owners and moderators. Fast login, rich group insights, member management, posts, calendar events, invites, audit logs, Discord webhooks, and more—all in one modern WPF app.
 
-![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4)
-![Windows](https://img.shields.io/badge/Platform-Windows-0078D6)
-![License](https://img.shields.io/badge/License-MIT-green)
-
-## ✨ Features
-
-### 🔐 Secure Login
-- Login with your VRChat credentials
-- Full 2FA/OTP (Time-based One-Time Password) support
-- Session caching for seamless re-login
-- Secure credential handling (sent only to VRChat API)
-
-### 🔍 18+ Badge Scanner
-- Scan all members in your VRChat group
-- Identify who has the 18+ age verification badge
-- Real-time progress tracking
-- Filter results by: Verified, Unverified, Unknown
-- Export results to CSV for record-keeping
-
-### 👥 User Search & Moderation
-- Search for any VRChat user by name
-- View detailed user profiles including:
-  - Display name and bio
-  - Trust rank and status
-  - Profile picture
-  - Age verification status
-- **Moderation Actions** (for group members):
-  - Kick from group
-  - Ban from group
-  - Unban users
-
-### 📋 Audit Logs
-- View comprehensive group audit logs
-- Track all group activities:
-  - Member joins/leaves
-  - Kicks and bans
-  - Role changes
-  - Group setting updates
-  - Announcements
-  - Instance activity
-- **Advanced Filtering**:
-  - Search by username or action
-  - Filter by event type
-  - Date range selection
-- **Auto-refresh** polling (60-second intervals)
-- **Fetch History** - Download complete audit log history
-- Local SQLite caching for fast loading
-
-### 🔔 Discord Notifications
-- Send group events to a Discord channel via webhook
-- **Configurable event notifications**:
-  - 👋 User Joins
-  - 🚪 User Leaves
-  - 👢 User Kicked
-  - 🔨 User Banned
-  - ✅ User Unbanned
-  - 🌐 Instance Opened
-  - 🔒 Instance Closed
-  - 📥 Join Requests
-  - 🏷️ Role Updates
-- Test webhook connection
-- Select All / Deselect All quick toggles
-
-### 🎨 Modern UI
-- Dark Material Design theme
-- Responsive layout
-- Background task support (scans continue when switching modules)
-
-### 🔄 Auto Updates
-- Automatic update checks from GitHub releases
-- One-click update installation
-
-## Screenshots
-
-*Coming soon*
-
-## Requirements
-
-- Windows 10/11 (64-bit)
-- VRChat account
-- Group ownership or moderator permissions for moderation features
-
-## Installation
-
-### Option 1: Download Release
-1. Download the latest release from the [Releases](../../releases) page
-2. Run `VRCGT_Setup_x.x.x.exe`
-3. Follow the installation wizard
-
-### Option 2: Build from Source
-1. Install [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-2. Clone this repository
-3. Run `build.bat` to build and publish
-4. The executable will be in `src\bin\Publish\`
-
-## Usage
-
-### Getting Started
-1. **Login**: Enter your VRChat username and password
-2. **2FA**: If prompted, enter your authenticator code
-3. **Set Group ID**: Enter your VRChat Group ID in the sidebar
-4. **Navigate**: Use the sidebar to access different modules
-
-### Badge Scanner
-1. Click "🔍 18+ Badge Scanner"
-2. Click "Start Scan" to begin scanning members
-3. Watch real-time progress
-4. Use filters to view specific verification statuses
-5. Export results to CSV if needed
-
-### User Search
-1. Click "👥 User Search"
-2. Enter a username and click "Search"
-3. Click on a user to view their profile
-4. Use moderation buttons (Kick/Ban/Unban) as needed
-
-### Audit Logs
-1. Click "📋 Audit Logs"
-2. Logs load automatically from cache
-3. Click "Fetch History" to download complete history
-4. Use filters to find specific events
-5. Toggle "Auto Refresh" for live updates
-
-### Discord Notifications
-1. Click "🔔 Discord"
-2. Create a webhook in Discord: Server Settings → Integrations → Webhooks → New Webhook
-3. Paste the webhook URL and click "Test"
-4. Enable desired event notifications
-5. Click "Save Settings"
-
-## Finding Your Group ID
-
-1. Go to [VRChat Groups](https://vrchat.com/home/groups)
-2. Click on your group
-3. The Group ID is in the URL: `vrchat.com/home/group/grp_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
-
-## Data Storage
-
-All data is stored locally in `%LocalAppData%\VRCGroupTools\`:
-- `vrcgt.db` - SQLite database (audit logs cache)
-- `settings.json` - Application settings
-- `Logs/` - Application logs
-- `CrashReports/` - Error reports for debugging
-
-## Project Structure
-
-```
-VRCGT/
-├── src/                    # Source code
-│   ├── App.xaml           # Application entry
-│   ├── Converters/        # XAML value converters
-│   ├── Data/              # Database entities & context
-│   ├── Services/          # API, caching, and Discord services
-│   ├── ViewModels/        # MVVM ViewModels
-│   └── Views/             # WPF Views (XAML + code-behind)
-├── installer/             # Inno Setup installer script
-├── build.bat              # Build script
-├── VRCGroupTools.sln      # Visual Studio solution
-├── LICENSE                # MIT License
-└── README.md              # This file
-```
-
-## Technologies
-
-- **.NET 8** - Framework
-- **WPF** - UI Framework
-- **Material Design in XAML** - UI Theme
-- **CommunityToolkit.Mvvm** - MVVM Pattern
-- **Entity Framework Core** - SQLite Database
-- **Octokit** - GitHub API for auto-updates
-- **Newtonsoft.Json** - JSON Handling
-
-## Privacy & Security
-
-- ✅ Credentials are only sent directly to VRChat's API
-- ✅ Auth cookies are stored locally only
-- ✅ Discord webhooks stored in local settings only
-- ✅ No data is sent to third parties
-- ✅ All sensitive files excluded from git
-
-## Troubleshooting
-
-### Login Issues
-- Ensure your credentials are correct
-- Check if 2FA is enabled on your account
-- VRChat may rate-limit login attempts - wait a few minutes
-
-### Audit Logs Not Loading
-- Make sure you've set a valid Group ID
-- Click "Refresh Now" to force a refresh
-- Check the status message for errors
-
-### Discord Notifications Not Working
-- Verify webhook URL starts with `https://discord.com/api/webhooks/`
-- Use the "Test" button to verify connection
-- Check that the desired events are enabled
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues and pull requests.
-
-## Changelog
-
-### v1.0.0
-- Initial release with 18+ Badge Scanner
-- User Search & Moderation (Kick/Ban/Unban)
-- Comprehensive Audit Logs with caching
-- Discord Webhook Notifications
-- Modern Material Design UI
+![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4) ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6) ![License](https://img.shields.io/badge/License-MIT-green) ![Build](https://img.shields.io/github/actions/workflow/status/yourusername/VRCGroupTools/build.yml?branch=main)
 
 ---
 
-## Disclaimer
+## ✨ Features
 
-VRCGT is not endorsed by VRChat and does not reflect the views or opinions of VRChat or anyone officially involved in producing or managing VRChat properties. VRChat and all associated properties are trademarks or registered trademarks of VRChat Inc. VRChat © VRChat Inc.
+### 🔐 Authentication
+- Secure VRChat login with 2FA (TOTP/Email) support
+- Session caching for instant re-login
+- Automatic session restoration on app startup
+
+### 📊 Group Dashboard
+- Group name, privacy level, member counts, and online stats
+- Creation date, owner info, and group links
+- Rules, description, and gallery preview
+- Role management and permissions overview
+- Upcoming and past events display
+
+### 👥 User Search & Moderation
+- Search any VRChat user by username or User ID
+- View detailed user profiles with avatar, bio, and badges
+- Age verification status display (18+ badge)
+- Highlight existing group members
+- **Moderation Actions:**
+  - Kick users from group
+  - Ban/Unban users
+  - Assign and remove roles
+  - Send group invites
+
+### 📨 Invite to Group
+- Search users by name or paste User ID directly
+- Click-to-preview user profile before inviting
+- View age verification status and bio
+- Quick "Use" button to select user
+- One-click invite sending
+
+### 📅 Calendar Events
+- Create and manage group events
+- **Event Options:**
+  - Title, description, category
+  - Start/end time with date pickers
+  - Visibility (Public/Group)
+  - Platform tags (Windows, Android, iOS)
+  - Language tags with searchable dropdown
+  - Send notification toggle
+  - Thumbnail upload support
+- **Recurrence Support:**
+  - Weekly (select days)
+  - Monthly (specific dates)
+  - Specific dates list
+  - Recurrence end date
+- **Templates:** Save and reuse event configurations
+- Sync events from VRChat
+- Duplicate and delete events
+
+### 📝 Group Posts
+- View existing group posts with pagination
+- Create new posts with title and content
+- Visibility settings (Public/Group/Friends)
+- Send notification option
+- Edit existing posts
+- Delete posts
+
+### 🌐 Instance Creator
+- Build VRChat launch links with full customization:
+  - Region selection (US, EU, JP)
+  - Access type (Public, Friends+, Friends, Invite+, Invite, Group)
+  - Queue enabled toggle
+  - Age gate (18+) toggle
+- Schedule instances with time zone support
+- Copy link, send invite, or launch directly
+
+### 👤 Members List
+- Browse all group members
+- Filter by role
+- View member details
+- Quick moderation actions
+
+### 🚫 Bans List
+- View all banned users
+- Unban users with one click
+- Ban details and dates
+
+### 📜 Audit Logs
+- Full audit log history
+- Filter by action type
+- Date range selection
+- Search functionality
+- Auto-refresh toggle
+- Fetch complete history
+- Cached locally for speed
+
+### 🔍 18+ Badge Scanner
+- Scan entire group for age verification status
+- Filter by verified/unverified
+- Export results to CSV
+- Progress tracking
+
+### 🔔 Discord Webhooks
+- Configure webhook URL
+- Select which events to notify:
+  - Member joins/leaves
+  - Bans/Unbans
+  - Role changes
+  - Posts created
+  - Events scheduled
+- Test webhook functionality
+- Select/deselect all events
+
+### ⚙️ Settings
+- Auto-update checks from GitHub releases
+- Theme customization
+- Local data management
+- About and version info
+
+---
+
+## 🚀 Quick Start
+
+1. **Download:** Get the latest release from [Releases](../../releases) or build from source
+2. **Run:** Launch `VRCGroupTools.exe`
+3. **Login:** Enter your VRChat credentials + 2FA code
+4. **Set Group:** Enter your Group ID (`grp_...` or short code) in the sidebar
+5. **Explore:** Navigate modules from the left sidebar
+
+---
+
+## 💻 System Requirements
+
+- **OS:** Windows 10/11 (64-bit)
+- **Runtime:** .NET 8 Desktop Runtime (included in self-contained builds)
+- **Account:** VRChat account with group moderator/owner rights for moderation features
+
+---
+
+## 🔨 Building from Source
+
+### Prerequisites
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+- Windows 10/11
+
+### Quick Build
+```cmd
+:: Clone the repository
+git clone https://github.com/yourusername/VRCGroupTools.git
+cd VRCGroupTools
+
+:: Run the build script
+build.bat
+```
+
+### Manual Build
+```cmd
+:: Navigate to source directory
+cd src
+
+:: Restore packages
+dotnet restore
+
+:: Build release version
+dotnet build -c Release
+
+:: Publish self-contained executable
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o bin/Publish
+```
+
+### Output
+The compiled executable will be in `src/bin/Publish/VRCGroupTools.exe`
+
+### Creating an Installer (Optional)
+1. Install [Inno Setup](https://jrsoftware.org/isinfo.php)
+2. Open `installer/setup.iss`
+3. Compile to create the installer
+
+---
+
+## 🔄 GitHub Actions CI/CD
+
+This project includes automated builds via GitHub Actions:
+
+- **On Push/PR:** Builds and uploads artifacts
+- **On Tag (v*):** Creates a GitHub Release with the compiled binary
+
+To create a release:
+```cmd
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+---
+
+## 📁 Data & Privacy
+
+All data is stored locally in `%LocalAppData%\VRCGroupTools\`:
+- `settings.json` - App configuration
+- `cache.db` - SQLite database for caching
+- `Logs/` - Application logs
+- `CrashReports/` - Error reports
+
+**Privacy:** 
+- Credentials are sent directly to VRChat's official API
+- No data is sent to third parties
+- Discord webhooks are configured and stored locally
+
+---
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## ⚠️ Disclaimer
+
+This project is not affiliated with, endorsed by, or connected to VRChat Inc. VRChat and related marks are trademarks of VRChat Inc. Use at your own risk and in accordance with VRChat's Terms of Service.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request

@@ -123,9 +123,9 @@
                                         Margin="0,0,0,5"
                                         Style="{StaticResource MaterialDesignFlatButton}"
                                         Foreground="White"/>
-                                    <Button Content="📮  Create Post"
+                                    <Button Content="📮  Group Posts"
                                         Command="{Binding SelectModuleCommand}"
-                                        CommandParameter="CreatePost"
+                                        CommandParameter="GroupPosts"
                                         HorizontalContentAlignment="Left"
                                         Height="40"
                                         Margin="0,0,0,5"
@@ -209,7 +209,7 @@
                         <!-- Logout -->
                         <Button Grid.Row="4" 
                                 Content="🚪  Logout"
-                                Command="{Binding LogoutAsyncCommand}"
+                                Command="{Binding LogoutCommand}"
                                 HorizontalContentAlignment="Left"
                                 Height="40"
                                 Margin="0,0,0,30"
@@ -231,55 +231,90 @@
                 
                 <!-- Content Area -->
                 <Border Grid.Column="1" Padding="20">
-                    <Grid x:Name="ContentGrid">
-                        <!-- Badge Scanner View -->
-                        <views:BadgeScannerView DataContext="{Binding BadgeScannerVM}"
-                                                Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=BadgeScanner}"/>
+                    <ContentControl Content="{Binding}">
+                        <ContentControl.Resources>
+                            <DataTemplate x:Key="GroupInfo">
+                                <views:GroupInfoView DataContext="{Binding GroupInfoVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="GroupPosts">
+                                <views:GroupPostsView DataContext="{Binding GroupPostsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="InviteToGroup">
+                                <views:InviteToGroupView DataContext="{Binding InviteToGroupVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="BadgeScanner">
+                                <views:BadgeScannerView DataContext="{Binding BadgeScannerVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="UserSearch">
+                                <views:UserSearchView DataContext="{Binding UserSearchVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Members">
+                                <views:MembersListView DataContext="{Binding MembersListVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Bans">
+                                <views:BansListView DataContext="{Binding BansListVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="AuditLogs">
+                                <views:AuditLogView DataContext="{Binding AuditLogVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="CalendarEvents">
+                                <views:CalendarEventView DataContext="{Binding CalendarEventVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="InstanceCreator">
+                                <views:InstanceCreatorView DataContext="{Binding InstanceCreatorVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Discord">
+                                <views:DiscordSettingsView DataContext="{Binding DiscordSettingsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="AppSettings">
+                                <views:AppSettingsView DataContext="{Binding AppSettingsVM}"/>
+                            </DataTemplate>
+                        </ContentControl.Resources>
 
-                        <!-- Group Info View -->
-                        <views:GroupInfoView DataContext="{Binding GroupInfoVM}"
-                                            Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=GroupInfo}"/>
-
-                        <!-- Create Post View -->
-                        <views:CreatePostView DataContext="{Binding CreatePostVM}"
-                                              Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=CreatePost}"/>
-
-                        <!-- Invite To Group View -->
-                        <views:InviteToGroupView DataContext="{Binding InviteToGroupVM}"
-                                                 Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=InviteToGroup}"/>
-                        
-                        <!-- User Search View -->
-                        <views:UserSearchView DataContext="{Binding UserSearchVM}"
-                                              Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=UserSearch}"/>
-
-                        <!-- Members List View -->
-                        <views:MembersListView DataContext="{Binding MembersListVM}"
-                                               Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=Members}"/>
-
-                        <!-- Bans List View -->
-                        <views:BansListView DataContext="{Binding BansListVM}"
-                                            Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=Bans}"/>
-                        
-                        <!-- Audit Log View -->
-                        <views:AuditLogView DataContext="{Binding AuditLogVM}"
-                                            Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=AuditLogs}"/>
-
-                        <!-- Calendar Events View -->
-                        <views:CalendarEventView DataContext="{Binding CalendarEventVM}"
-                                                 Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=CalendarEvents}"/>
-
-                        <!-- Instance Creator View -->
-                        <views:InstanceCreatorView DataContext="{Binding InstanceCreatorVM}"
-                                                   Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=InstanceCreator}"/>
-                        
-                        <!-- Discord Settings View -->
-                        <views:DiscordSettingsView DataContext="{Binding DiscordSettingsVM}"
-                                                   Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=Discord}"/>
-
-                        <!-- Application Settings View -->
-                        <views:AppSettingsView DataContext="{Binding AppSettingsVM}"
-                                               Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=AppSettings}"/>
-                    </Grid>
+                        <ContentControl.Style>
+                            <Style TargetType="ContentControl">
+                                <Setter Property="ContentTemplate" Value="{StaticResource GroupInfo}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="GroupInfo">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource GroupInfo}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="GroupPosts">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource GroupPosts}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="InviteToGroup">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource InviteToGroup}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="BadgeScanner">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource BadgeScanner}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="UserSearch">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource UserSearch}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Members">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Members}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Bans">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Bans}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="AuditLogs">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource AuditLogs}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="CalendarEvents">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource CalendarEvents}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="InstanceCreator">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource InstanceCreator}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Discord">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Discord}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="AppSettings">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource AppSettings}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                    </ContentControl>
                 </Border>
             </Grid>
         </Grid>

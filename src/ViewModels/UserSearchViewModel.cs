@@ -412,6 +412,40 @@ public partial class UserSearchViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task InviteUserAsync()
+    {
+        if (SelectedUserProfile == null)
+        {
+            StatusMessage = "Select a user first";
+            return;
+        }
+
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            StatusMessage = "Set a Group ID in the sidebar first";
+            return;
+        }
+
+        IsLoadingUser = true;
+        try
+        {
+            var ok = await _apiService.SendGroupInviteAsync(groupId, SelectedUserProfile.UserId);
+            StatusMessage = ok
+                ? $"Invite sent to {SelectedUserProfile.DisplayName}"
+                : "Failed to send invite";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingUser = false;
+        }
+    }
+
+    [RelayCommand]
     private void CloseUserPanel()
     {
         ShowUserPanel = false;
