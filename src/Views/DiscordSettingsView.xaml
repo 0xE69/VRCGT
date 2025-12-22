@@ -1,0 +1,155 @@
+<UserControl x:Class="VRCGroupTools.Views.DiscordSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="10">
+            <!-- Header -->
+            <TextBlock Text="🔔 Discord Notifications" 
+                       FontSize="24" 
+                       FontWeight="Bold" 
+                       Foreground="White"
+                       Margin="0,0,0,5"/>
+            <TextBlock Text="Send group events to a Discord channel via webhook" 
+                       Foreground="#AAA" 
+                       Margin="0,0,0,20"/>
+
+            <!-- Webhook URL Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="Webhook URL" Foreground="#AAA" FontSize="12" Margin="0,0,0,8"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding WebhookUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                                 Foreground="White"
+                                 CaretBrush="White"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        <Button Grid.Column="1"
+                                Content="{Binding IsTesting, Converter={StaticResource BoolToTestButtonConverter}}"
+                                Command="{Binding TestWebhookCommand}"
+                                IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBooleanConverter}}"
+                                Margin="10,0,0,0"
+                                Width="100"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                    </Grid>
+                    <TextBlock Text="{Binding StatusMessage}" 
+                               Foreground="#AAA" 
+                               FontSize="12" 
+                               Margin="0,10,0,0"
+                               Visibility="{Binding StatusMessage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                    <TextBlock Text="Create a webhook in Discord: Server Settings → Integrations → Webhooks → New Webhook" 
+                               Foreground="#666" 
+                               FontSize="11" 
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Event Toggles Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <Grid Margin="0,0,0,15">
+                        <TextBlock Text="Event Notifications" 
+                                   Foreground="White" 
+                                   FontSize="16" 
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Select All"
+                                    Command="{Binding SelectAllCommand}"
+                                    Height="28"
+                                    FontSize="11"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Foreground="#7C4DFF"/>
+                            <Button Content="Deselect All"
+                                    Command="{Binding DeselectAllCommand}"
+                                    Height="28"
+                                    FontSize="11"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Foreground="#888"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Member Events -->
+                    <TextBlock Text="MEMBER EVENTS" Foreground="#666" FontSize="11" Margin="0,0,0,10"/>
+                    
+                    <CheckBox Content="👋  User Joins"
+                              IsChecked="{Binding NotifyUserJoins}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="🚪  User Leaves"
+                              IsChecked="{Binding NotifyUserLeaves}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="👢  User Kicked"
+                              IsChecked="{Binding NotifyUserKicked}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="🔨  User Banned"
+                              IsChecked="{Binding NotifyUserBanned}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="✅  User Unbanned"
+                              IsChecked="{Binding NotifyUserUnbanned}"
+                              Foreground="White"
+                              Margin="0,0,0,20"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+
+                    <!-- Instance Events -->
+                    <TextBlock Text="INSTANCE EVENTS" Foreground="#666" FontSize="11" Margin="0,0,0,10"/>
+                    
+                    <CheckBox Content="🌐  Instance Opened"
+                              IsChecked="{Binding NotifyInstanceOpened}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="🔒  Instance Closed"
+                              IsChecked="{Binding NotifyInstanceClosed}"
+                              Foreground="White"
+                              Margin="0,0,0,20"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+
+                    <!-- Other Events -->
+                    <TextBlock Text="OTHER EVENTS" Foreground="#666" FontSize="11" Margin="0,0,0,10"/>
+                    
+                    <CheckBox Content="📥  Join Requests"
+                              IsChecked="{Binding NotifyJoinRequests}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="🏷️  Group Role Updates"
+                              IsChecked="{Binding NotifyRoleUpdate}"
+                              Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Save Button -->
+            <Button Content="💾  Save Settings"
+                    Command="{Binding SaveSettingsCommand}"
+                    Height="45"
+                    FontSize="14"
+                    Background="#7C4DFF"
+                    Foreground="White"
+                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

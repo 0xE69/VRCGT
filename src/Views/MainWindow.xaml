@@ -1,0 +1,287 @@
+<Window x:Class="VRCGroupTools.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:VRCGroupTools.ViewModels"
+        xmlns:views="clr-namespace:VRCGroupTools.Views"
+        Title="VRC Group Tools" 
+        Height="700" Width="1100"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E1E"
+        ResizeMode="CanResize">
+    
+    <!-- DataContext is set in code-behind to use DI singleton -->
+    
+    <Border Background="#1E1E1E">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Title Bar -->
+            <Border Grid.Row="0" Background="#252526" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
+                        <TextBlock Text="🎮 VRC Group Tools" 
+                                   Foreground="#CCCCCC"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding AppVersion}" 
+                                   Foreground="#666"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,5,0">
+                        <Button Content="⚙" Width="40" Height="30"
+                            Command="{Binding SelectModuleCommand}"
+                            CommandParameter="AppSettings"
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"
+                            ToolTip="Application settings"/>
+                        <Button Content="─" Width="40" Height="30" Click="MinimizeButton_Click"
+                                Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"/>
+                        <Button Content="□" Width="40" Height="30" Click="MaximizeButton_Click"
+                                Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"/>
+                        <Button Content="✕" Width="40" Height="30" Click="CloseButton_Click"
+                                Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            
+            <!-- Main Content -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Sidebar -->
+                <Border Grid.Column="0" Background="#252526" Padding="15">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <!-- User Info -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+                            <Border Width="60" Height="60" HorizontalAlignment="Center" CornerRadius="30" ClipToBounds="True">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding UserProfilePicUrl}" Stretch="UniformToFill"/>
+                                </Border.Background>
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding UserProfilePicUrl}" Value="{x:Null}">
+                                                <Setter Property="Background" Value="#7C4DFF"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                            <TextBlock Text="{Binding WelcomeMessage}" 
+                                       Foreground="White"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <!-- Group ID Settings -->
+                        <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="12" Margin="0,0,0,20">
+                            <StackPanel>
+                                <TextBlock Text="Group ID" Foreground="#AAA" FontSize="12" Margin="0,0,0,8"/>
+                                <TextBox Text="{Binding GroupId, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="grp_xxxxxxxx-xxxx-xxxx"
+                                         FontSize="11"
+                                         Foreground="White"
+                                         CaretBrush="White"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                                <Button Content="Save Group ID"
+                                        Command="{Binding SaveGroupIdCommand}"
+                                        Margin="0,10,0,0"
+                                        Height="32"
+                                        FontSize="12"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Navigation -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="MODULES" Foreground="#666" FontSize="11" Margin="0,0,0,10"/>
+                                    <Button Content="ℹ️  Group Info"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="GroupInfo"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="📮  Create Post"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="CreatePost"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="📨  Invite To Group"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="InviteToGroup"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="🔍  18+ Badge Scanner"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="BadgeScanner"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="👥  User Search"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="UserSearch"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="📑  Members"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Members"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="⛔  Bans"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Bans"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="📋  Audit Logs"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="AuditLogs"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="🗓️  Calendar Events"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="CalendarEvents"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="🚀  Instance Creator"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="InstanceCreator"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="🔔  Discord"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Discord"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                        
+                        <!-- Logout -->
+                        <Button Grid.Row="4" 
+                                Content="🚪  Logout"
+                                Command="{Binding LogoutAsyncCommand}"
+                                HorizontalContentAlignment="Left"
+                                Height="40"
+                                Margin="0,0,0,30"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Foreground="#F44336"/>
+                        
+                        <!-- Footer Credits -->
+                        <Border Grid.Row="4" VerticalAlignment="Bottom" Margin="0,0,0,5">
+                            <TextBlock HorizontalAlignment="Center" FontSize="10">
+                                <Run Text="VRCGT By " Foreground="#555"/><Hyperlink NavigateUri="https://vrchat.com/home/user/usr_a0a7676a-e6d2-4660-9a48-65074e872a29" 
+                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                           Foreground="#7C4DFF">Pĩxęlㄔღ</Hyperlink><Run Text=" - " Foreground="#555"/><Hyperlink NavigateUri="https://github.com/0xE69/VRCGT" 
+                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                           Foreground="#7C4DFF">GitHub</Hyperlink>
+                            </TextBlock>
+                        </Border>
+                    </Grid>
+                </Border>
+                
+                <!-- Content Area -->
+                <Border Grid.Column="1" Padding="20">
+                    <Grid x:Name="ContentGrid">
+                        <!-- Badge Scanner View -->
+                        <views:BadgeScannerView DataContext="{Binding BadgeScannerVM}"
+                                                Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=BadgeScanner}"/>
+
+                        <!-- Group Info View -->
+                        <views:GroupInfoView DataContext="{Binding GroupInfoVM}"
+                                            Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=GroupInfo}"/>
+
+                        <!-- Create Post View -->
+                        <views:CreatePostView DataContext="{Binding CreatePostVM}"
+                                              Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=CreatePost}"/>
+
+                        <!-- Invite To Group View -->
+                        <views:InviteToGroupView DataContext="{Binding InviteToGroupVM}"
+                                                 Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=InviteToGroup}"/>
+                        
+                        <!-- User Search View -->
+                        <views:UserSearchView DataContext="{Binding UserSearchVM}"
+                                              Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=UserSearch}"/>
+
+                        <!-- Members List View -->
+                        <views:MembersListView DataContext="{Binding MembersListVM}"
+                                               Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=Members}"/>
+
+                        <!-- Bans List View -->
+                        <views:BansListView DataContext="{Binding BansListVM}"
+                                            Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=Bans}"/>
+                        
+                        <!-- Audit Log View -->
+                        <views:AuditLogView DataContext="{Binding AuditLogVM}"
+                                            Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=AuditLogs}"/>
+
+                        <!-- Calendar Events View -->
+                        <views:CalendarEventView DataContext="{Binding CalendarEventVM}"
+                                                 Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=CalendarEvents}"/>
+
+                        <!-- Instance Creator View -->
+                        <views:InstanceCreatorView DataContext="{Binding InstanceCreatorVM}"
+                                                   Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=InstanceCreator}"/>
+                        
+                        <!-- Discord Settings View -->
+                        <views:DiscordSettingsView DataContext="{Binding DiscordSettingsVM}"
+                                                   Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=Discord}"/>
+
+                        <!-- Application Settings View -->
+                        <views:AppSettingsView DataContext="{Binding AppSettingsVM}"
+                                               Visibility="{Binding DataContext.CurrentModule, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource StringMatchToVisibilityConverter}, ConverterParameter=AppSettings}"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

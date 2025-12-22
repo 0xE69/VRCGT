@@ -1,0 +1,198 @@
+<UserControl x:Class="VRCGroupTools.Views.BadgeScannerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="🔍 18+ Badge Scanner" FontSize="28" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="Scan group members to identify age-verified users" Foreground="#888" FontSize="14" Margin="0,5,0,0"/>
+        </StackPanel>
+        
+        <!-- Controls -->
+        <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBox Text="{Binding GroupId, UpdateSourceTrigger=PropertyChanged}"
+                             Width="350"
+                             materialDesign:HintAssist.Hint="Group ID or VRChat Group URL"
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBooleanConverter}}"/>
+                </StackPanel>
+                
+                <Button Grid.Column="1" 
+                        Content="Start Scan"
+                        Command="{Binding StartScanCommand}"
+                        Width="120"
+                        Height="40"
+                        Margin="15,0,0,0"
+                        FontWeight="Bold"
+                        Style="{StaticResource MaterialDesignRaisedDarkButton}"
+                        Background="#7C4DFF"
+                        Visibility="{Binding IsScanning, Converter={StaticResource InverseBoolToVisConverter}}"/>
+                
+                <Button Grid.Column="1" 
+                        Content="Stop"
+                        Command="{Binding StopScanCommand}"
+                        Width="120"
+                        Height="40"
+                        Margin="15,0,0,0"
+                        FontWeight="Bold"
+                        Style="{StaticResource MaterialDesignRaisedDarkButton}"
+                        Background="#F44336"
+                        Visibility="{Binding IsScanning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                
+                <Button Grid.Column="2" 
+                        Content="📁 Export CSV"
+                        Command="{Binding ExportToCSVCommand}"
+                        Width="120"
+                        Height="40"
+                        Margin="10,0,0,0"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBooleanConverter}}"/>
+            </Grid>
+        </Border>
+        
+        <!-- Progress & Stats -->
+        <Border Grid.Row="2" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding TotalMembers}" FontSize="32" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Total Members" Foreground="#888" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding ScannedMembers}" FontSize="32" FontWeight="Bold" Foreground="#2196F3" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Scanned" Foreground="#888" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding VerifiedCount}" FontSize="32" FontWeight="Bold" Foreground="#4CAF50" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Verified (18+)" Foreground="#888" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding UnverifiedCount}" FontSize="32" FontWeight="Bold" Foreground="#F44336" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Not Verified" Foreground="#888" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+                
+                <ProgressBar Grid.Row="1" 
+                             Value="{Binding ProgressPercent}" 
+                             Maximum="100"
+                             Height="8"
+                             Margin="0,20,0,10"
+                             Style="{StaticResource MaterialDesignLinearProgressBar}"/>
+                
+                <TextBlock Grid.Row="2" 
+                           Text="{Binding StatusMessage}" 
+                           Foreground="#AAA" 
+                           HorizontalAlignment="Center"/>
+            </Grid>
+        </Border>
+        
+        <!-- Results Table -->
+        <Border Grid.Row="3" Background="#2D2D30" CornerRadius="8" Padding="15">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Filter -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                    <TextBlock Text="Filter:" Foreground="#888" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <RadioButton Content="All" 
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=All}"
+                                 GroupName="Filter"
+                                 Style="{StaticResource MaterialDesignTabRadioButton}"
+                                 Margin="0,0,5,0"/>
+                    <RadioButton Content="Verified" 
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Verified}"
+                                 GroupName="Filter"
+                                 Style="{StaticResource MaterialDesignTabRadioButton}"
+                                 Foreground="#4CAF50"
+                                 Margin="0,0,5,0"/>
+                    <RadioButton Content="Not Verified" 
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Unverified}"
+                                 GroupName="Filter"
+                                 Style="{StaticResource MaterialDesignTabRadioButton}"
+                                 Foreground="#F44336"
+                                 Margin="0,0,5,0"/>
+                    <RadioButton Content="Unknown" 
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource StringMatchConverter}, ConverterParameter=Unknown}"
+                                 GroupName="Filter"
+                                 Style="{StaticResource MaterialDesignTabRadioButton}"
+                                 Foreground="#9E9E9E"/>
+                </StackPanel>
+                
+                <!-- Data Grid -->
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding FilteredResults}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          Background="Transparent"
+                          BorderThickness="0"
+                          RowBackground="#2D2D30"
+                          AlternatingRowBackground="#333333"
+                          GridLinesVisibility="None"
+                          HeadersVisibility="Column"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          SelectionMode="Single"
+                          Style="{StaticResource MaterialDesignDataGrid}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="*"/>
+                        <DataGridTextColumn Header="User ID" Binding="{Binding UserId}" Width="280"/>
+                        <DataGridTemplateColumn Header="Status" Width="150">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding VerificationStatus}" 
+                                               Foreground="{Binding StatusColor}"
+                                               FontWeight="SemiBold"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+        
+        <!-- Footer -->
+        <TextBlock Grid.Row="4" 
+                   Text="{Binding FilteredResults.Count, StringFormat='Showing {0} results'}" 
+                   Foreground="#666" 
+                   Margin="0,10,0,0"/>
+    </Grid>
+</UserControl>

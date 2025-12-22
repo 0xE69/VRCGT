@@ -1,0 +1,152 @@
+<UserControl x:Class="VRCGroupTools.Views.InstanceCreatorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="0,0,0,10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Vertical">
+            <TextBlock Text="Group Instance Creator" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
+            <TextBlock Text="Search a world, then generate a group instance link." Foreground="#AAA" FontSize="12"/>
+
+            <DockPanel Margin="0,10,0,0">
+                <TextBox Text="{Binding SearchWorldId, UpdateSourceTrigger=PropertyChanged}" 
+                         materialDesign:HintAssist.Hint="World ID (wrld_xxx)" 
+                         Style="{StaticResource MaterialDesignFilledTextBox}" Width="240"
+                         Foreground="White" CaretBrush="White"/>
+                <Button Content="Load World" Command="{Binding FetchWorldCommand}" Height="36" Margin="10,0,0,0" Style="{StaticResource MaterialDesignRaisedButton}"/>
+            </DockPanel>
+
+            <DockPanel Margin="0,10,0,0">
+                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
+                         materialDesign:HintAssist.Hint="Search worlds by name" 
+                         Style="{StaticResource MaterialDesignFilledTextBox}" Width="240"
+                         Foreground="White" CaretBrush="White"/>
+                <Button Content="Search" Command="{Binding SearchWorldsCommand}" Height="36" Margin="10,0,0,0" Style="{StaticResource MaterialDesignOutlinedButton}"/>
+            </DockPanel>
+
+            <ItemsControl ItemsSource="{Binding SearchResults}" Margin="0,8,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="#2b2b2b" Padding="8" CornerRadius="4" Margin="0,6,0,0">
+                            <DockPanel>
+                                <Image Width="64" Height="64" Margin="0,0,8,0">
+                                    <Image.Source>
+                                        <PriorityBinding>
+                                            <Binding Path="ThumbnailImageUrl"/>
+                                            <Binding Path="ImageUrl"/>
+                                        </PriorityBinding>
+                                    </Image.Source>
+                                </Image>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Id}" Foreground="#aaa" FontSize="12"/>
+                                    <Button Content="Use World" Command="{Binding DataContext.UseWorldCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Height="28" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Orientation="Vertical" Margin="0,10,0,0">
+                <TextBlock Text="{Binding WorldName}" Foreground="White" FontSize="14" FontWeight="SemiBold"/>
+                <TextBlock Text="World ID: {Binding WorldId}" Foreground="#888" FontSize="11"/>
+            </StackPanel>
+
+            <TextBox Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" 
+                     materialDesign:HintAssist.Hint="Display name (VRC+)" 
+                     Style="{StaticResource MaterialDesignFilledTextBox}" Margin="0,10,0,0"
+                     Foreground="White" CaretBrush="White"/>
+
+            <TextBox Text="{Binding ShortName, UpdateSourceTrigger=PropertyChanged}" 
+                     materialDesign:HintAssist.Hint="Short name (optional, 5 digits)" 
+                     Style="{StaticResource MaterialDesignFilledTextBox}" Margin="0,10,0,0"
+                     Foreground="White" CaretBrush="White"/>
+
+            <ComboBox ItemsSource="{Binding Regions}"
+                      SelectedItem="{Binding Region}"
+                      Style="{StaticResource MaterialDesignFilledComboBox}" Margin="0,10,0,0"
+                      Foreground="White"/>
+
+            <TextBlock Text="Group Access" Foreground="#aaa" FontSize="12" Margin="0,10,0,0"/>
+            <ComboBox ItemsSource="{Binding GroupAccessModes}"
+                      SelectedItem="{Binding GroupAccess}"
+                      Style="{StaticResource MaterialDesignFilledComboBox}"
+                      Foreground="White"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <CheckBox Content="Queue Enabled" IsChecked="{Binding QueueEnabled}" Foreground="White"/>
+                <CheckBox Content="Age Gate" IsChecked="{Binding AgeGateEnabled}" Foreground="White" Margin="15,0,0,0"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Vertical" Margin="0,10,0,0">
+                <DockPanel>
+                    <TextBlock Text="Schedule (optional)" Foreground="#aaa" FontSize="12" VerticalAlignment="Center"/>
+                    <CheckBox Content="Enable" IsChecked="{Binding SchedulingEnabled}"
+                              Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </DockPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <DatePicker SelectedDate="{Binding ScheduledDate}"
+                                Width="160"
+                                Foreground="White"
+                                IsEnabled="{Binding SchedulingEnabled}"/>
+                    <TextBox Text="{Binding ScheduledTime, UpdateSourceTrigger=PropertyChanged}"
+                             Width="80"
+                             Margin="8,0,0,0"
+                             materialDesign:HintAssist.Hint="HH:MM"
+                             Foreground="White"
+                             CaretBrush="White"
+                             IsEnabled="{Binding SchedulingEnabled}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding TimeZoneDisplay}" Foreground="#888" FontSize="11" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <Button Content="Generate Instance Link"
+                    Command="{Binding GenerateInstanceCommand}"
+                    Height="36"
+                    Margin="0,10,0,0"
+                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+
+            <TextBlock Text="{Binding Status}" Foreground="#7C4DFF" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <Border Grid.Row="1" Margin="0,15,0,0" Background="#1f1f1f" Padding="10" CornerRadius="6">
+            <StackPanel>
+                <TextBlock Text="Generated Links" Foreground="White" FontWeight="SemiBold"/>
+                <ItemsControl ItemsSource="{Binding Plans}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#2b2b2b" Padding="8" CornerRadius="4" Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding WorldName}" Foreground="White" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding WorldId}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding Region}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding GroupAccess, StringFormat='Access: {0}'}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding QueueEnabled, StringFormat='Queue: {0}'}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding AgeGateEnabled, StringFormat='Age Gate: {0}'}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding ShortName, StringFormat='Short: {0}'}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding ScheduledFor, StringFormat='Scheduled (UTC): {0:yyyy-MM-dd HH:mm}'}" Foreground="#aaa" FontSize="12"/>
+                                    <TextBlock Text="{Binding TimeZoneId, StringFormat='Time zone: {0}'}" Foreground="#666" FontSize="11"/>
+                                    <TextBlock Text="{Binding InstanceId}" Foreground="#ccc" FontSize="12" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding LaunchUrl}" Foreground="#7C4DFF" FontSize="12" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Button Content="Copy URL" Command="{Binding DataContext.CopyLaunchUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Height="30" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,6,0"/>
+                                        <Button Content="Copy Instance" Command="{Binding DataContext.CopyInstanceIdCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Height="30" Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                        <Button Content="Invite Yourself" Command="{Binding DataContext.InviteSelfCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Height="30" Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                        <Button Content="Launch" Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Height="30" Style="{StaticResource MaterialDesignRaisedButton}" Margin="6,0,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </Grid>
+    </ScrollViewer>
+</UserControl>

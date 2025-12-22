@@ -1,0 +1,353 @@
+<UserControl x:Class="VRCGroupTools.Views.AuditLogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             Background="Transparent">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="📋 Group Audit Logs" 
+                               FontSize="24" 
+                               FontWeight="Bold" 
+                               Foreground="White"/>
+                    <TextBlock Text="View, search, and filter all group activity logs" 
+                               Foreground="#888" 
+                               Margin="0,5,0,0"/>
+                </StackPanel>
+                
+                <!-- Action Buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="{Binding IsPollingActive, Converter={StaticResource BoolToPausePlayConverter}}"
+                            Command="{Binding TogglePollingCommand}"
+                            ToolTip="Toggle auto-refresh"
+                            Width="40" Height="40"
+                            Margin="5,0"
+                            Foreground="White"
+                            Style="{StaticResource MaterialDesignIconButton}"/>
+                    
+                    <Button Content="🔄"
+                            Command="{Binding RefreshCommand}"
+                            ToolTip="Refresh now"
+                            Width="40" Height="40"
+                            Margin="5,0"
+                            Foreground="White"
+                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"
+                            Style="{StaticResource MaterialDesignIconButton}"/>
+                    
+                    <Button Content="📥"
+                            Command="{Binding FetchHistoryCommand}"
+                            ToolTip="Fetch all historical logs"
+                            Width="40" Height="40"
+                            Margin="5,0"
+                            Foreground="White"
+                            IsEnabled="{Binding IsFetchingHistory, Converter={StaticResource InverseBooleanConverter}}"
+                            Style="{StaticResource MaterialDesignIconButton}"/>
+                    
+                    <Button Content="📤"
+                            Command="{Binding ExportLogsCommand}"
+                            ToolTip="Export logs to file"
+                            Width="40" Height="40"
+                            Margin="5,0"
+                            Foreground="White"
+                            Style="{StaticResource MaterialDesignIconButton}"/>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+        
+        <!-- Search and Filter Bar -->
+        <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="15" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Search Box -->
+                <TextBox Grid.Column="0"
+                         Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                         materialDesign:HintAssist.Hint="🔍 Search logs (username, action, description...)"
+                         Foreground="White"
+                         CaretBrush="White"
+                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                         Margin="0,0,10,0"/>
+                
+                <!-- Event Type Filter -->
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding EventTypes}"
+                          SelectedItem="{Binding SelectedEventType}"
+                          Width="150"
+                          Margin="0,0,10,0"
+                          Foreground="White"
+                          Style="{StaticResource MaterialDesignOutlinedComboBox}"/>
+                
+                <!-- Start Date -->
+                <DatePicker Grid.Column="2"
+                            SelectedDate="{Binding StartDate}"
+                            Width="130"
+                            Margin="0,0,10,0"
+                            materialDesign:HintAssist.Hint="From"
+                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"/>
+                
+                <!-- End Date -->
+                <DatePicker Grid.Column="3"
+                            SelectedDate="{Binding EndDate}"
+                            Width="130"
+                            Margin="0,0,10,0"
+                            materialDesign:HintAssist.Hint="To"
+                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"/>
+                
+                <!-- Clear Filters -->
+                <Button Grid.Column="4"
+                        Content="Clear"
+                        Command="{Binding ClearFiltersCommand}"
+                        Width="70"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"/>
+            </Grid>
+        </Border>
+        
+        <!-- Stats Bar -->
+        <Border Grid.Row="2" Background="#252526" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="📊 Total:" Foreground="#888" Margin="0,0,5,0"/>
+                    <TextBlock Text="{Binding TotalLogCount}" Foreground="White" FontWeight="Bold" Margin="0,0,20,0"/>
+                    
+                    <TextBlock Text="Filtered:" Foreground="#888" Margin="0,0,5,0"/>
+                    <TextBlock Text="{Binding FilteredLogs.Count}" Foreground="White" FontWeight="Bold"/>
+                </StackPanel>
+                
+                <TextBlock Grid.Column="2" Text="{Binding StatusMessage}" Foreground="#888" TextAlignment="Right"/>
+            </Grid>
+        </Border>
+        
+        <!-- Logs List -->
+        <Border Grid.Row="3" Background="#2D2D30" CornerRadius="8" Padding="10">
+            <Grid>
+                <!-- Initial empty state - before any logs loaded -->
+                <StackPanel VerticalAlignment="Center" 
+                            HorizontalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsLoading}" Value="False"/>
+                                        <Condition Binding="{Binding IsFetchingHistory}" Value="False"/>
+                                        <Condition Binding="{Binding HasLoadedLogs}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="📋" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+                    <TextBlock Text="No Audit Logs Yet" 
+                               Foreground="White"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="Click the 📥 button above to fetch historical logs" 
+                               Foreground="#666"
+                               FontSize="13"
+                               HorizontalAlignment="Center"
+                               Margin="0,8,0,15"/>
+                    <Button Content="📥  Fetch Historical Logs"
+                            Command="{Binding FetchHistoryCommand}"
+                            Height="40"
+                            Padding="20,0"
+                            Background="#7C4DFF"
+                            Foreground="White"
+                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                </StackPanel>
+
+                <!-- Loading/Fetching Indicator -->
+                <StackPanel VerticalAlignment="Center" 
+                            HorizontalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsFetchingHistory}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <ProgressBar IsIndeterminate="True" Width="250" Height="4"/>
+                    <TextBlock Text="{Binding StatusMessage}" 
+                               Foreground="#888" 
+                               HorizontalAlignment="Center"
+                               FontSize="13"
+                               Margin="0,15,0,5"/>
+                    <TextBlock Text="{Binding FetchProgressText}" 
+                               Foreground="#7C4DFF" 
+                               HorizontalAlignment="Center"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Visibility="{Binding IsFetchingHistory, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </StackPanel>
+                
+                <!-- Empty State (after loading, but no results match filter) -->
+                <StackPanel VerticalAlignment="Center" 
+                            HorizontalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsLoading}" Value="False"/>
+                                        <Condition Binding="{Binding IsFetchingHistory}" Value="False"/>
+                                        <Condition Binding="{Binding HasLoadedLogs}" Value="True"/>
+                                        <Condition Binding="{Binding FilteredLogs.Count}" Value="0"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="🔍" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+                    <TextBlock Text="No Logs Match Your Filters" 
+                               Foreground="White"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="Try adjusting your search or date filters" 
+                               Foreground="#666"
+                               FontSize="13"
+                               HorizontalAlignment="Center"
+                               Margin="0,8,0,0"/>
+                </StackPanel>
+                
+                <!-- Logs List (visible when we have results) -->
+                <ListView ItemsSource="{Binding FilteredLogs}"
+                          SelectedItem="{Binding SelectedLog}"
+                          Background="Transparent"
+                          BorderThickness="0"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          Visibility="{Binding HasLoadedLogs, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#3D3D40" CornerRadius="6" Padding="12" Margin="5,3">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="40"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <!-- Event Icon -->
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding EventIcon}"
+                                               FontSize="20"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Center"/>
+                                    
+                                    <!-- Timestamp -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,15,0">
+                                        <TextBlock Text="{Binding FormattedTime}" 
+                                                   Foreground="#AAA" 
+                                                   FontSize="12"/>
+                                        <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:MMM dd}'}" 
+                                                   Foreground="#666" 
+                                                   FontSize="10"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Description -->
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Description}" 
+                                                   Foreground="White"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxHeight="40"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Foreground="#666" FontSize="11" Text="By: "/>
+                                            <TextBlock Foreground="#888" FontSize="11" Text="{Binding ActorName}"/>
+                                            <TextBlock Foreground="#666" FontSize="11" Text=" → " 
+                                                       Visibility="{Binding TargetName, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                            <TextBlock Foreground="#888" FontSize="11" Text="{Binding TargetName}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    
+                                    <!-- Event Type Badge -->
+                                    <Border Grid.Column="3" 
+                                            Background="{Binding EventColor}"
+                                            CornerRadius="4"
+                                            Padding="8,4"
+                                            VerticalAlignment="Center"
+                                            Margin="10,0,0,0">
+                                        <TextBlock Text="{Binding EventType}" 
+                                                   Foreground="White" 
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                </ListView>
+            </Grid>
+        </Border>
+        
+        <!-- Polling Indicator -->
+        <Border Grid.Row="4" Margin="0,10,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Ellipse Width="8" Height="8" 
+                         Fill="{Binding IsPollingActive, Converter={StaticResource BoolToPollingColorConverter}}"
+                         VerticalAlignment="Center"
+                         Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding IsPollingActive, Converter={StaticResource BoolToPollingTextConverter}}"
+                           Foreground="#888"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
