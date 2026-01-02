@@ -100,6 +100,19 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 - Export results to CSV
 - Progress tracking
 
+### ⚡ Kill Switch (Role Removal)
+- Emergency bulk role removal from group members
+- Automatically creates a snapshot before removing roles
+- Select specific members or roles to remove
+- **Snapshot & Restore:**
+  - All role assignments saved to local database before removal
+  - View historical snapshots with timestamps
+  - Restore roles individually or in bulk
+  - Track which roles have been restored
+- Rate-limited API calls to avoid VRChat restrictions
+- Progress tracking with success/failure counts
+- Excludes default "Member" role from removal
+
 ### 🔔 Discord Webhooks
 - Configure webhook URL
 - Select which events to notify:
