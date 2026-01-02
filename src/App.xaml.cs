@@ -19,7 +19,7 @@ public partial class App : Application
     private static int _handlingException;
 
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string Version => "1.0.0";
+    public static string Version => "1.0.1";
     public static string GitHubRepo => "YourUsername/VRCGroupTools"; // Change this to your repo
     public static string BindingLogPath { get; private set; } = string.Empty;
 
@@ -251,6 +251,7 @@ public partial class App : Application
         services.AddTransient<GroupInfoViewModel>();
         services.AddTransient<GroupPostsViewModel>();
         services.AddTransient<InviteToGroupViewModel>();
+        services.AddTransient<KillSwitchViewModel>();
         services.AddTransient<AppSettingsViewModel>();
         
         LoggingService.Debug("APP", "All services registered");

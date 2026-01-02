@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<UserEntity> Users { get; set; } = null!;
     public DbSet<CachedSessionEntity> CachedSessions { get; set; } = null!;
     public DbSet<AppSettingEntity> AppSettings { get; set; } = null!;
+    public DbSet<RoleSnapshotEntity> RoleSnapshots { get; set; } = null!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -71,6 +72,16 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Key).IsUnique();
+        });
+
+        // RoleSnapshot configuration (Kill Switch)
+        modelBuilder.Entity<RoleSnapshotEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.SnapshotId);
+            entity.HasIndex(e => e.GroupId);
+            entity.HasIndex(e => new { e.GroupId, e.UserId, e.RoleId });
+            entity.HasIndex(e => e.CreatedAt);
         });
     }
 }

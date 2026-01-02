@@ -203,6 +203,15 @@
                                         Margin="0,0,0,5"
                                         Style="{StaticResource MaterialDesignFlatButton}"
                                         Foreground="White"/>
+                                <Button Content="🚨  Kill Switch"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="KillSwitch"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#F44336"
+                                        FontWeight="SemiBold"/>
                             </StackPanel>
                         </ScrollViewer>
                         
@@ -269,6 +278,9 @@
                             <DataTemplate x:Key="AppSettings">
                                 <views:AppSettingsView DataContext="{Binding AppSettingsVM}"/>
                             </DataTemplate>
+                            <DataTemplate x:Key="KillSwitch">
+                                <views:KillSwitchView DataContext="{Binding KillSwitchVM}"/>
+                            </DataTemplate>
                         </ContentControl.Resources>
 
                         <ContentControl.Style>
@@ -310,6 +322,9 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="AppSettings">
                                         <Setter Property="ContentTemplate" Value="{StaticResource AppSettings}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="KillSwitch">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource KillSwitch}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>

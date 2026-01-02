@@ -59,6 +59,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private BansListViewModel? _bansListVM;
 
+    [ObservableProperty]
+    private KillSwitchViewModel? _killSwitchVM;
+
     public string AppVersion => $"v{App.Version}";
 
     public event Action? LogoutRequested;
@@ -90,6 +93,7 @@ public partial class MainViewModel : ObservableObject
         InviteToGroupVM = App.Services.GetRequiredService<InviteToGroupViewModel>();
         MembersListVM = App.Services.GetRequiredService<MembersListViewModel>();
         BansListVM = App.Services.GetRequiredService<BansListViewModel>();
+        KillSwitchVM = App.Services.GetRequiredService<KillSwitchViewModel>();
         AppSettingsVM = App.Services.GetRequiredService<AppSettingsViewModel>();
         
         // Sync group ID to badge scanner and API service

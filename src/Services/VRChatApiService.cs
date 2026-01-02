@@ -151,7 +151,7 @@ public class VRChatApiService : IVRChatApiService
         };
 
         // VRChat requires a proper User-Agent
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "VRCGT/1.0.0 (https://github.com/VRCGT)");
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "VRCGT/1.0.1 (https://github.com/VRCGT)");
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
     }
 
@@ -885,10 +885,15 @@ public class VRChatApiService : IVRChatApiService
         try
         {
             await RateLimitAsync();
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"groups/{groupId}/members/{userId}/roles/{roleId}?apiKey={ApiKey}");
+            // This endpoint removes a role FROM a user (unassigns the role), NOT deletes the role itself
+            var url = $"groups/{groupId}/members/{userId}/roles/{roleId}?apiKey={ApiKey}";
+            var request = new HttpRequestMessage(HttpMethod.Delete, url);
             var response = await _httpClient.SendAsync(request);
             
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[REMOVE_ROLE] URL: {url}");
             Console.WriteLine($"[REMOVE_ROLE] User: {userId}, Role: {roleId}, Status: {response.StatusCode}");
+            Console.WriteLine($"[REMOVE_ROLE] Response: {responseBody}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

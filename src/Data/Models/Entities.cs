@@ -164,3 +164,49 @@ public class AppSettingEntity
     
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>
+/// Snapshot of user roles before emergency role removal (Kill Switch)
+/// Used to restore roles after an emergency
+/// </summary>
+public class RoleSnapshotEntity
+{
+    public int Id { get; set; }
+    
+    [Required]
+    [MaxLength(100)]
+    public string SnapshotId { get; set; } = string.Empty;
+    
+    [Required]
+    [MaxLength(100)]
+    public string GroupId { get; set; } = string.Empty;
+    
+    [Required]
+    [MaxLength(100)]
+    public string UserId { get; set; } = string.Empty;
+    
+    [MaxLength(200)]
+    public string DisplayName { get; set; } = string.Empty;
+    
+    [Required]
+    [MaxLength(100)]
+    public string RoleId { get; set; } = string.Empty;
+    
+    [MaxLength(200)]
+    public string RoleName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// When the snapshot was taken (before roles were removed)
+    /// </summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    /// <summary>
+    /// Whether this role has been restored
+    /// </summary>
+    public bool IsRestored { get; set; }
+    
+    /// <summary>
+    /// When the role was restored (null if not restored)
+    /// </summary>
+    public DateTime? RestoredAt { get; set; }
+}
