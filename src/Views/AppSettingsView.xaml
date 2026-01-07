@@ -1,0 +1,46 @@
+<UserControl x:Class="VRCGroupTools.Views.AppSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    <Grid>
+        <StackPanel>
+            <TextBlock Text="Application Settings" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
+            <TextBlock Text="Theme, timezone, and defaults" Foreground="#AAA" FontSize="12" Margin="0,2,0,10"/>
+
+            <TextBlock Text="Theme" Foreground="#aaa" FontSize="12"/>
+            <ComboBox ItemsSource="{Binding Themes}"
+                      SelectedItem="{Binding SelectedTheme}"
+                      Style="{StaticResource MaterialDesignFilledComboBox}"
+                      Foreground="White"
+                      Margin="0,2,0,10"/>
+
+            <TextBlock Text="Time zone" Foreground="#aaa" FontSize="12"/>
+            <ComboBox ItemsSource="{Binding TimeZones}"
+                      SelectedItem="{Binding SelectedTimeZoneId}"
+                      Style="{StaticResource MaterialDesignFilledComboBox}"
+                      Foreground="White"
+                      Margin="0,2,0,10"
+                      IsTextSearchEnabled="True"/>
+
+            <TextBlock Text="Default region" Foreground="#aaa" FontSize="12"/>
+            <ComboBox ItemsSource="{Binding Regions}"
+                      SelectedItem="{Binding DefaultRegion}"
+                      Style="{StaticResource MaterialDesignFilledComboBox}"
+                      Foreground="White"
+                      Margin="0,2,0,16"/>
+
+            <CheckBox Content="🚀 Start with Windows"
+                      IsChecked="{Binding StartWithWindows}"
+                      Foreground="White"
+                      Margin="0,0,0,16"
+                      Style="{StaticResource MaterialDesignCheckBox}"/>
+
+            <Button Content="Save Settings"
+                    Command="{Binding SaveCommand}"
+                    Height="36"
+                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+
+            <TextBlock Text="{Binding Status}" Foreground="#7C4DFF" FontWeight="SemiBold" Margin="0,8,0,0"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

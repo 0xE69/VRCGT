@@ -1,0 +1,243 @@
+<Window x:Class="VRCGroupTools.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:VRCGroupTools.ViewModels"
+        Title="VRC Group Tools - Login" 
+        Height="580" Width="400"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#1E1E1E"
+        WindowStyle="None"
+        AllowsTransparency="True">
+    
+    <Window.DataContext>
+        <vm:LoginViewModel/>
+    </Window.DataContext>
+    
+    <Border CornerRadius="10" Background="#1E1E1E" BorderBrush="#333" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Title Bar -->
+            <Border Grid.Row="0" Background="#252526" CornerRadius="10,10,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <TextBlock Text="VRC Group Tools" 
+                               VerticalAlignment="Center" 
+                               HorizontalAlignment="Left"
+                               Margin="15,0,0,0"
+                               Foreground="#CCCCCC"
+                               FontWeight="SemiBold"/>
+                    <Button Content="✕" 
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,5,0"
+                            Width="30" Height="30"
+                            Click="CloseButton_Click"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            Foreground="White"
+                            FontSize="16"
+                            FontWeight="Bold"
+                            Cursor="Hand">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" 
+                                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                                    BorderThickness="0"
+                                                    CornerRadius="3">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#3E3E42"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Border>
+            
+            <!-- Main Content -->
+            <Grid Grid.Row="1" Margin="30">
+                <!-- Login Form -->
+                <StackPanel Visibility="{Binding ShowTwoFactor, Converter={StaticResource InverseBoolToVisConverter}}">
+                    <TextBlock Text="🎮" FontSize="48" HorizontalAlignment="Center" Margin="0,10,0,5"/>
+                    <TextBlock Text="VRChat Group Tools" Style="{StaticResource TitleStyle}" Margin="0,0,0,5"/>
+                    <TextBlock Text="Login with your VRChat credentials" Style="{StaticResource SubtitleStyle}" Margin="0,0,0,30"/>
+                    
+                    <TextBlock Text="Username" Foreground="#AAA" Margin="0,0,0,5"/>
+                    <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="VRChat username"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Foreground="White"
+                             CaretBrush="White"
+                             Margin="0,0,0,15"
+                             IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"/>
+                    
+                    <TextBlock Text="Password" Foreground="#AAA" Margin="0,0,0,5"/>
+                    <Grid Margin="0,0,0,20">
+                        <PasswordBox x:Name="PasswordBox"
+                                     materialDesign:HintAssist.Hint="Password"
+                                     Style="{StaticResource MaterialDesignOutlinedPasswordBox}"
+                                     Foreground="White"
+                                     CaretBrush="White"
+                                     IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"
+                                     PasswordChanged="PasswordBox_PasswordChanged"
+                                     Visibility="{Binding ShowPassword, Converter={StaticResource InverseBoolToVisConverter}}"/>
+                        <TextBox Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="Password"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 Foreground="White"
+                                 CaretBrush="White"
+                                 IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"
+                                 Visibility="{Binding ShowPassword, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <Button Content="👁"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="30" Height="30"
+                                Margin="0,0,5,0"
+                                FontSize="18"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                Foreground="White"
+                                Cursor="Hand"
+                                Command="{Binding ToggleShowPasswordCommand}"
+                                ToolTip="Show/hide password">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" 
+                                                        BorderBrush="{TemplateBinding BorderBrush}" 
+                                                        BorderThickness="0"
+                                                        CornerRadius="3">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#3E3E42"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                    
+                    <Button Content="{Binding IsLoading, Converter={StaticResource BoolToLoginTextConverter}}"
+                            Command="{Binding LoginCommand}"
+                            Height="45"
+                            FontSize="16"
+                            Style="{StaticResource MaterialDesignRaisedDarkButton}"
+                            Background="#7C4DFF"
+                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"/>
+                    
+                    <!-- Remember Me Checkbox -->
+                    <CheckBox Content="Remember Me"
+                              IsChecked="{Binding RememberMe}"
+                              Foreground="#AAA"
+                              Margin="0,15,0,0"
+                              HorizontalAlignment="Center"
+                              IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"/>
+                    
+                    <ProgressBar IsIndeterminate="True" 
+                                 Margin="0,15,0,0"
+                                 Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    
+                    <!-- Auto-login indicator -->
+                    <StackPanel Orientation="Horizontal" 
+                                HorizontalAlignment="Center"
+                                Margin="0,10,0,0"
+                                Visibility="{Binding IsAutoLoggingIn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ProgressBar IsIndeterminate="True" Width="20" Height="20" Style="{StaticResource MaterialDesignCircularProgressBar}"/>
+                        <TextBlock Text="  Auto-logging in..." Foreground="#888" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="{Binding StatusMessage}" 
+                               Foreground="{Binding StatusColor}"
+                               HorizontalAlignment="Center"
+                               Margin="0,15,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+                
+                <!-- 2FA Form -->
+                <StackPanel Visibility="{Binding ShowTwoFactor, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock Text="🔐" FontSize="48" HorizontalAlignment="Center" Margin="0,20,0,5"/>
+                    <TextBlock Text="Two-Factor Authentication" Style="{StaticResource TitleStyle}" Margin="0,0,0,5"/>
+                    <TextBlock Text="Enter the 6-digit code from your&#x0a;authenticator app" 
+                               Style="{StaticResource SubtitleStyle}" 
+                               TextAlignment="Center"
+                               Margin="0,0,0,30"/>
+                    
+                    <TextBox Text="{Binding TwoFactorCode, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="000000"
+                             FontSize="28"
+                             FontWeight="Bold"
+                             HorizontalContentAlignment="Center"
+                             MaxLength="6"
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Margin="40,0,40,20"
+                             IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"/>
+                    
+                    <Button Content="{Binding IsLoading, Converter={StaticResource BoolToVerifyTextConverter}}"
+                            Command="{Binding Verify2FACommand}"
+                            Height="45"
+                            FontSize="16"
+                            Style="{StaticResource MaterialDesignRaisedDarkButton}"
+                            Background="#4CAF50"
+                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"/>
+                    
+                    <Button Content="← Back to Login"
+                            Command="{Binding BackToLoginCommand}"
+                            Margin="0,15,0,0"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="#888"/>
+                    
+                    <ProgressBar IsIndeterminate="True" 
+                                 Margin="0,15,0,0"
+                                 Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    
+                    <TextBlock Text="{Binding StatusMessage}" 
+                               Foreground="{Binding StatusColor}"
+                               HorizontalAlignment="Center"
+                               Margin="0,15,0,20"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+            
+            <!-- Footer -->
+            <Border Grid.Row="1" VerticalAlignment="Bottom" Padding="10" Margin="0,0,0,10">
+                <TextBlock HorizontalAlignment="Center" FontSize="11">
+                    <Run Text="VRCGT By " Foreground="#666"/>
+                    <Hyperlink NavigateUri="https://vrchat.com/home/user/usr_a0a7676a-e6d2-4660-9a48-65074e872a29" 
+                               RequestNavigate="Hyperlink_RequestNavigate"
+                               Foreground="#7C4DFF">
+                        Pĩxęlㄔღ
+                    </Hyperlink>
+                    <Run Text=" - " Foreground="#666"/>
+                    <Hyperlink NavigateUri="https://github.com/0xE69/VRCGT" 
+                               RequestNavigate="Hyperlink_RequestNavigate"
+                               Foreground="#7C4DFF">
+                        GitHub
+                    </Hyperlink>
+                </TextBlock>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

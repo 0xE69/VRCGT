@@ -1,0 +1,80 @@
+<Application x:Class="VRCGroupTools.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:converters="clr-namespace:VRCGroupTools.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <materialDesign:BundledTheme BaseTheme="Dark" PrimaryColor="DeepPurple" SecondaryColor="Teal" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign3.Defaults.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            
+            <!-- Converters -->
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <converters:InverseBoolToVisConverter x:Key="InverseBoolToVisConverter"/>
+            <converters:BoolToLoginTextConverter x:Key="BoolToLoginTextConverter"/>
+            <converters:BoolToVerifyTextConverter x:Key="BoolToVerifyTextConverter"/>
+            <converters:BoolToScanTextConverter x:Key="BoolToScanTextConverter"/>
+            <converters:BoolToScanColorConverter x:Key="BoolToScanColorConverter"/>
+            <converters:ModuleToColorConverter x:Key="ModuleToColorConverter"/>
+            <converters:StringMatchConverter x:Key="StringMatchConverter"/>
+            <converters:StringMatchToVisibilityConverter x:Key="StringMatchToVisibilityConverter"/>
+            <!-- Alias for views expecting the shorter key -->
+            <converters:StringMatchToVisibilityConverter x:Key="StringMatchToVisibility"/>
+            <converters:BoolToScanCommandConverter x:Key="BoolToScanCommandConverter"/>
+            <converters:BoolToVerifiedColorConverter x:Key="BoolToVerifiedColorConverter"/>
+            <converters:BoolToVerifiedTextConverter x:Key="BoolToVerifiedTextConverter"/>
+            <converters:BoolToPausePlayConverter x:Key="BoolToPausePlayConverter"/>
+            <converters:BoolToPollingColorConverter x:Key="BoolToPollingColorConverter"/>
+            <converters:BoolToPollingTextConverter x:Key="BoolToPollingTextConverter"/>
+            <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
+            <converters:BoolToSaveButtonConverter x:Key="BoolToSaveButtonConverter"/>
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+            <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter"/>
+            <converters:CollectionContainsConverter x:Key="CollectionContainsConverter"/>
+            <converters:DayToggleConverter x:Key="DayToggleConverter"/>
+            <converters:DaysOfWeekStringConverter x:Key="DaysOfWeekStringConverter"/>
+            <converters:BoolToTestButtonConverter x:Key="BoolToTestButtonConverter"/>
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            
+            <!-- Custom Styles -->
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="#2D2D30"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="20"/>
+            </Style>
+            
+            <Style x:Key="TitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+            </Style>
+            
+            <Style x:Key="SubtitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Foreground" Value="#AAAAAA"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+            </Style>
+            
+            <!-- TextBox style with white text -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="CaretBrush" Value="White"/>
+                <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="White"/>
+            </Style>
+            
+            <Style TargetType="PasswordBox" BasedOn="{StaticResource MaterialDesignOutlinedPasswordBox}">
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="CaretBrush" Value="White"/>
+            </Style>
+            
+            <!-- Also override the filled styles -->
+            <Style x:Key="WhiteTextBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignTextBox}">
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="CaretBrush" Value="White"/>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

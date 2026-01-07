@@ -1,0 +1,124 @@
+# Build results
+bin/
+obj/
+[Pp]ublish/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Installer output
+installer/Output/
+
+# Secrets & Credentials
+.env
+*.pem
+*.key
+
+# Logs
+*.log
+
+# ===========================================
+# VRCGroupTools - User Data (DO NOT COMMIT!)
+# ===========================================
+
+# SQLite Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Application Data folder contents
+# (These are created in %LocalAppData%\VRCGroupTools\ at runtime)
+# This ensures if someone copies the folder, sensitive data isn't included
+
+# Cached data
+Cache/
+cache/
+
+# Secure/encrypted credential storage  
+Secure/
+secure/
+
+# Settings that may contain sensitive info
+settings.json
+appsettings.json
+appsettings.*.json
+
+# VRChat API related
+auth_cookie.txt
+session.json
+credentials.enc
+*.enc
+
+# Any backup files
+*.bak
+*.backup
+
+# Test/debug files with potential sensitive data
+*_test.json
+*_debug.json
+
+# ===========================================
+# Additional Security - Login & Session Data
+# ===========================================
+
+# Cookies and tokens
+*.cookie
+*.cookies
+*.token
+*_token.txt
+*_session.txt
+auth_*.txt
+auth_*.json
+
+# Captcha related
+captcha_*.png
+captcha_*.jpg
+captcha_*.gif
+captcha/
+hcaptcha/
+recaptcha/
+
+# User-specific data
+user_data/
+userdata/
+UserData/
+
+# Logs folder (runtime logs)
+Logs/
+logs/
+CrashReports/
+crashreports/
+
+# Discord webhook URLs (may be in config)
+webhook*.txt
+discord_*.json
+
+# Local development overrides
+*.local
+*.local.json
+
+# Windows credential store exports
+*.cred
+
+# Temporary files
+*.tmp
+*.temp
+~$*
