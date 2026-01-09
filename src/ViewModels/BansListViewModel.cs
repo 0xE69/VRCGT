@@ -18,6 +18,13 @@ public partial class BansListViewModel : ObservableObject
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _filter = string.Empty;
+    
+    // User search for banning
+    [ObservableProperty] private string _searchQuery = string.Empty;
+    [ObservableProperty] private ObservableCollection<UserSearchResult> _searchResults = new();
+    [ObservableProperty] private bool _isSearching;
+    [ObservableProperty] private string _banReason = string.Empty;
+    [ObservableProperty] private UserSearchResult? _selectedSearchResult;
 
     public BansListViewModel()
     {
@@ -92,5 +99,91 @@ public partial class BansListViewModel : ObservableObject
     partial void OnFilterChanged(string value)
     {
         OnPropertyChanged(nameof(FilteredBans));
+    }
+
+    [RelayCommand]
+    private async Task SearchUsersAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SearchQuery) || SearchQuery.Length < 3)
+        {
+            Status = "Enter at least 3 characters to search.";
+            return;
+        }
+
+        IsSearching = true;
+        Status = $"Searching for '{SearchQuery}'...";
+        SearchResults.Clear();
+
+        var results = await _apiService.SearchUsersAsync(SearchQuery);
+        
+        foreach (var user in results)
+        {
+            SearchResults.Add(user);
+        }
+
+        Status = results.Count == 0 ? "No users found." : $"Found {results.Count} users.";
+        IsSearching = false;
+    }
+
+    [RelayCommand]
+    private async Task BanSelectedUserAsync()
+    {
+        if (SelectedSearchResult == null)
+        {
+            Status = "Select a user to ban.";
+            return;
+        }
+
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            Status = "Set a Group ID first.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(BanReason))
+        {
+            Status = "Please enter a ban reason.";
+            return;
+        }
+
+        Status = $"Banning {SelectedSearchResult.DisplayName}...";
+        var success = await _apiService.BanGroupMemberAsync(groupId, SelectedSearchResult.UserId);
+        
+        if (success)
+        {
+            Status = $"✅ {SelectedSearchResult.DisplayName} has been banned.";
+            SearchResults.Clear();
+            SearchQuery = string.Empty;
+            BanReason = string.Empty;
+            SelectedSearchResult = null;
+            
+            // Refresh the bans list
+            await RefreshAsync();
+        }
+        else
+        {
+            Status = "❌ Failed to ban user. Check permissions.";
+        }
+    }
+
+    [RelayCommand]
+    private void ClearSearch()
+    {
+        SearchQuery = string.Empty;
+        SearchResults.Clear();
+        BanReason = string.Empty;
+        SelectedSearchResult = null;
+        Status = string.Empty;
+    }
+
+    [RelayCommand]
+    private void SelectSearchResult(UserSearchResult? result)
+    {
+        SelectedSearchResult = result;
+        if (result != null)
+        {
+            Status = $"Selected: {result.DisplayName}. Enter ban reason and click 'Ban User'.";
+        }
     }
 }

@@ -87,6 +87,7 @@ public class AppSettings
     // Application Behavior
     public bool StartMinimized { get; set; } = false;
     public bool MinimizeToTray { get; set; } = true;
+    public bool ShowConsoleWindow { get; set; } = false;
     
     // Update Settings
     public string UpdateAction { get; set; } = "Notify"; // Off, Notify, Auto Download

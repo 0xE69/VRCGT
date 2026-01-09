@@ -224,8 +224,8 @@ This project includes automated builds via GitHub Actions:
 
 To create a release:
 ```cmd
-git tag v1.0.4
-git push origin v1.0.4
+git tag v1.0.5
+git push origin v1.0.5
 ```
 
 ---

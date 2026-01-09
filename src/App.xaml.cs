@@ -18,8 +18,14 @@ public partial class App : Application
 {
     private static int _handlingException;
 
+    [DllImport("kernel32.dll")]
+    private static extern bool AllocConsole();
+
+    [DllImport("kernel32.dll")]
+    private static extern bool FreeConsole();
+
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string Version => "1.0.4";
+    public static string Version => "1.0.5";
     public static string GitHubRepo => "0xE69/VRCGT";
     public static string BindingLogPath { get; private set; } = string.Empty;
 
@@ -30,18 +36,6 @@ public partial class App : Application
         // Set up global exception handlers FIRST
         SetupExceptionHandlers();
 
-        // Emit binding details to console and to a temp log for easier diagnostics
-        var bindingConsoleListener = new ConsoleTraceListener();
-        PresentationTraceSources.DataBindingSource.Listeners.Add(bindingConsoleListener);
-        PresentationTraceSources.DataBindingSource.Listeners.Add(new BindingTraceListener());
-        BindingLogPath = Path.Combine(Path.GetTempPath(), "vrcgt_binding.log");
-        var bindingFileListener = new TextWriterTraceListener(BindingLogPath) { TraceOutputOptions = TraceOptions.Timestamp };
-        PresentationTraceSources.DataBindingSource.Listeners.Add(bindingFileListener);
-        PresentationTraceSources.DataBindingSource.Listeners.Add(new DefaultTraceListener { LogFileName = BindingLogPath });
-        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.All;
-        Trace.AutoFlush = true;
-        bindingFileListener.Flush();
-        
         // Initialize logging
         LoggingService.Initialize();
         
@@ -60,6 +54,13 @@ public partial class App : Application
             // Apply saved theme early
             var settingsService = Services.GetRequiredService<ISettingsService>();
             ApplyTheme(settingsService.Settings.Theme);
+            
+            // Allocate console if debug mode is enabled
+            if (settingsService.Settings.ShowConsoleWindow)
+            {
+                AllocConsole();
+                LoggingService.Info("APP", "Console window enabled via settings");
+            }
             
             // Initialize database
             LoggingService.Debug("APP", "Initializing SQLite database...");

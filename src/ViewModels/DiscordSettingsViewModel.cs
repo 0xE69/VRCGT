@@ -190,13 +190,13 @@ public partial class DiscordSettingsViewModel : ObservableObject
     }
 
     // Auto-save when any notification setting changes
-    partial void OnNotifyUserJoinsChanged(bool value) => AutoSaveSettings();
-    partial void OnNotifyUserLeavesChanged(bool value) => AutoSaveSettings();
-    partial void OnNotifyUserKickedChanged(bool value) => AutoSaveSettings();
-    partial void OnNotifyUserBannedChanged(bool value) => AutoSaveSettings();
-    partial void OnNotifyUserUnbannedChanged(bool value) => AutoSaveSettings();
-    partial void OnNotifyUserRoleAddChanged(bool value) => AutoSaveSettings();
-    partial void OnNotifyUserRoleRemoveChanged(bool value) => AutoSaveSettings();
+    partial void OnNotifyUserJoinsChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserJoins changed to: {value}"); AutoSaveSettings(); }
+    partial void OnNotifyUserLeavesChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserLeaves changed to: {value}"); AutoSaveSettings(); }
+    partial void OnNotifyUserKickedChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserKicked changed to: {value}"); AutoSaveSettings(); }
+    partial void OnNotifyUserBannedChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserBanned changed to: {value}"); AutoSaveSettings(); }
+    partial void OnNotifyUserUnbannedChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserUnbanned changed to: {value}"); AutoSaveSettings(); }
+    partial void OnNotifyUserRoleAddChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserRoleAdd changed to: {value}"); AutoSaveSettings(); }
+    partial void OnNotifyUserRoleRemoveChanged(bool value) { Console.WriteLine($"[DISCORD-VM] NotifyUserRoleRemove changed to: {value}"); AutoSaveSettings(); }
     partial void OnNotifyRoleCreateChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyRoleUpdateChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyRoleDeleteChanged(bool value) => AutoSaveSettings();
@@ -221,9 +221,13 @@ public partial class DiscordSettingsViewModel : ObservableObject
 
     private void AutoSaveSettings()
     {
-        if (_isLoading) return; // Don't save during initial load
+        if (_isLoading)
+        {
+            Console.WriteLine("[DISCORD-VM] AutoSaveSettings skipped - still loading");
+            return; // Don't save during initial load
+        }
         
-        System.Diagnostics.Debug.WriteLine("[DISCORD-VM] Auto-saving settings...");
+        Console.WriteLine("[DISCORD-VM] AutoSaveSettings triggered - saving now");
         SaveSettings();
     }
 

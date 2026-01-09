@@ -5,28 +5,184 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Vertical" Margin="0,0,0,10">
-            <TextBlock Text="Bans" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
-            <TextBlock Text="Review and unban users from the group." Foreground="#AAA" FontSize="12"/>
+        <!-- Header and Bans Filter -->
+        <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,10">
+            <TextBlock Text="Bans Management" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
+            <TextBlock Text="Review banned users and ban new users." Foreground="#AAA" FontSize="12"/>
 
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Button Content="Refresh"
+                <Button Content="Refresh Bans"
                         Command="{Binding RefreshCommand}"
-                        Style="{StaticResource MaterialDesignRaisedButton}" Height="32" Width="100"/>
+                        Style="{StaticResource MaterialDesignRaisedButton}" Height="32" Width="120"/>
                 <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
                          materialDesign:HintAssist.Hint="Filter by name or userId"
                          Width="220"
                          Margin="10,0,0,0"
                          Style="{StaticResource MaterialDesignFilledTextBox}"
                          Foreground="White" CaretBrush="White"/>
-                <TextBlock Text="{Binding Status}" Foreground="#7C4DFF" Margin="10,6,0,0"/>
+                <TextBlock Text="{Binding Status}" Foreground="#7C4DFF" Margin="10,6,0,0" FontWeight="SemiBold"/>
             </StackPanel>
         </StackPanel>
 
-        <DataGrid Grid.Row="1"
+        <!-- Search and Ban User Section -->
+        <Border Grid.Row="1" Background="#2A2A2A" CornerRadius="8" Padding="15" Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="🔍 Search User to Ban" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,10"/>
+                
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBox Grid.Column="0"
+                             Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="Enter username to search (min 3 characters)"
+                             Style="{StaticResource MaterialDesignFilledTextBox}"
+                             Foreground="White" 
+                             CaretBrush="White"
+                             Margin="0,0,10,0">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding SearchUsersCommand}"/>
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    
+                    <Button Grid.Column="1"
+                            Content="Search"
+                            Command="{Binding SearchUsersCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            Height="32"
+                            Width="90"
+                            Margin="0,0,10,0"/>
+                    
+                    <Button Grid.Column="2"
+                            Content="Clear"
+                            Command="{Binding ClearSearchCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Height="32"
+                            Width="70"/>
+                </Grid>
+
+                <!-- Search Results -->
+                <StackPanel Margin="0,10,0,0">
+                    <TextBlock Text="Search Results:" 
+                               Foreground="#AAA" 
+                               FontSize="12" 
+                               Margin="0,0,0,5"
+                               Visibility="{Binding SearchResults.Count, Converter={StaticResource CountGreaterThanZeroToVisibilityConverter}}"/>
+                    
+                    <Border Background="#1A1A1A" 
+                            CornerRadius="4" 
+                            Padding="10" 
+                            MaxHeight="200"
+                            Visibility="{Binding SearchResults.Count, Converter={StaticResource CountGreaterThanZeroToVisibilityConverter}}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding SearchResults}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#2B2B2B" 
+                                                CornerRadius="4" 
+                                                Padding="10" 
+                                                Margin="0,0,0,5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                
+                                                <Border Grid.Column="0"
+                                                        Width="40" 
+                                                        Height="40" 
+                                                        Margin="0,0,10,0"
+                                                        CornerRadius="20"
+                                                        Background="#444">
+                                                    <Image Source="{Binding ProfilePicUrl}" 
+                                                           Stretch="UniformToFill">
+                                                        <Image.Clip>
+                                                            <RectangleGeometry Rect="0,0,40,40" RadiusX="20" RadiusY="20"/>
+                                                        </Image.Clip>
+                                                    </Image>
+                                                </Border>
+                                                
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}" 
+                                                               Foreground="White" 
+                                                               FontWeight="SemiBold"
+                                                               FontSize="14"/>
+                                                    <TextBlock Text="{Binding UserId}" 
+                                                               Foreground="#999" 
+                                                               FontSize="11"/>
+                                                </StackPanel>
+                                                
+                                                <Button Grid.Column="2"
+                                                        Content="Select"
+                                                        Command="{Binding DataContext.SelectSearchResultCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                                        Height="30"
+                                                        Foreground="#7C4DFF"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </StackPanel>
+
+                <!-- Ban Details -->
+                <StackPanel Visibility="{Binding SelectedSearchResult, Converter={StaticResource NullToVisibilityConverter}}"
+                            Margin="0,10,0,0">
+                    <TextBlock Text="Selected User:" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                    <Border Background="#1A1A1A" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="{Binding SelectedSearchResult.ProfilePicUrl}" 
+                                   Width="32" 
+                                   Height="32" 
+                                   Margin="0,0,10,0"
+                                   Stretch="UniformToFill">
+                                <Image.Clip>
+                                    <RectangleGeometry Rect="0,0,32,32" RadiusX="16" RadiusY="16"/>
+                                </Image.Clip>
+                            </Image>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedSearchResult.DisplayName}" 
+                                           Foreground="White" 
+                                           FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding SelectedSearchResult.UserId}" 
+                                           Foreground="#999" 
+                                           FontSize="11"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Ban Reason:" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                    <TextBox Text="{Binding BanReason, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="Enter reason for ban (required)"
+                             Style="{StaticResource MaterialDesignFilledTextBox}"
+                             Foreground="White"
+                             CaretBrush="White"
+                             MaxLength="200"
+                             Margin="0,0,0,10"/>
+
+                    <Button Content="🚫 Ban User"
+                            Command="{Binding BanSelectedUserCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            Background="#D32F2F"
+                            Height="36"
+                            FontWeight="SemiBold"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Bans List -->
+        <DataGrid Grid.Row="2"
                   ItemsSource="{Binding FilteredBans}"
                   AutoGenerateColumns="False"
                   HeadersVisibility="Column"

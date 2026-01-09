@@ -29,6 +29,7 @@
             <converters:BoolToPollingColorConverter x:Key="BoolToPollingColorConverter"/>
             <converters:BoolToPollingTextConverter x:Key="BoolToPollingTextConverter"/>
             <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
+            <converters:CountGreaterThanZeroToVisibilityConverter x:Key="CountGreaterThanZeroToVisibilityConverter"/>
             <converters:BoolToSaveButtonConverter x:Key="BoolToSaveButtonConverter"/>
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter"/>
