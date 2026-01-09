@@ -19,7 +19,7 @@ public partial class App : Application
     private static int _handlingException;
 
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string Version => "1.0.2";
+    public static string Version => "1.0.4";
     public static string GitHubRepo => "0xE69/VRCGT";
     public static string BindingLogPath { get; private set; } = string.Empty;
 
@@ -67,14 +67,14 @@ public partial class App : Application
             await cacheService.InitializeAsync();
             LoggingService.Debug("APP", "Database initialized");
 
+            // Check for updates BEFORE showing login window (to block startup if update needed)
+            await CheckForUpdatesAsync();
+
             // Create and show the login window
             LoggingService.Debug("APP", "Creating LoginWindow...");
             var loginWindow = new Views.LoginWindow();
             LoggingService.Debug("APP", "Showing LoginWindow...");
             loginWindow.Show();
-
-            // Check for updates on startup (async, don't block)
-            _ = CheckForUpdatesAsync();
         }
         catch (Exception ex)
         {
@@ -268,14 +268,26 @@ public partial class App : Application
             if (hasUpdate)
             {
                 LoggingService.Info("APP", $"Update available: v{updateService.LatestVersion}");
-                var result = MessageBox.Show(
-                    $"A new version is available!\n\nCurrent: v{Version}\nLatest: v{updateService.LatestVersion}\n\nWould you like to download the update?",
-                    "Update Available",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Information);
-
-                if (result == MessageBoxResult.Yes)
+                
+                // Show custom update prompt on UI thread (modal and blocking)
+                bool shouldUpdate = false;
+                await Current.Dispatcher.InvokeAsync(() =>
                 {
+                    var updatePrompt = new Views.UpdatePromptWindow
+                    {
+                        CurrentVersion = $"v{Version}",
+                        LatestVersion = $"v{updateService.LatestVersion}",
+                        WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                        Topmost = true
+                    };
+
+                    // ShowDialog() blocks until user responds
+                    shouldUpdate = updatePrompt.ShowDialog() == true && updatePrompt.ShouldUpdate;
+                });
+
+                if (shouldUpdate)
+                {
+                    LoggingService.Info("APP", "User accepted update, starting download...");
                     await updateService.DownloadAndInstallUpdateAsync();
                 }
             }
