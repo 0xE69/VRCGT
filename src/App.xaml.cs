@@ -270,9 +270,9 @@ public partial class App : Application
             {
                 LoggingService.Info("APP", $"Update available: v{updateService.LatestVersion}");
                 
-                // Show custom update prompt on UI thread (modal and blocking)
+                // Show custom update prompt on UI thread (synchronously blocking)
                 bool shouldUpdate = false;
-                await Current.Dispatcher.InvokeAsync(() =>
+                Current.Dispatcher.Invoke(() =>
                 {
                     var updatePrompt = new Views.UpdatePromptWindow
                     {
