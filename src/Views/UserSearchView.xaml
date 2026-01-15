@@ -407,6 +407,14 @@
                                     <StackPanel>
                                         <TextBlock Text="Moderation Actions" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
                                         
+                                        <Button Content="⚡ Issue Warning"
+                                                Command="{Binding WarnUserCommand}"
+                                                Height="36"
+                                                Margin="0,0,0,8"
+                                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                Foreground="#FFC107"
+                                                BorderBrush="#FFC107"/>
+                                        
                                         <Button Content="⚠️ Kick from Group"
                                                 Command="{Binding KickUserCommand}"
                                                 Height="36"

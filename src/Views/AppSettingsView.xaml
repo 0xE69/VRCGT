@@ -55,8 +55,7 @@
                                 Maximum="1.5"
                                 TickFrequency="0.05"
                                 IsSnapToTickEnabled="True"
-                                VerticalAlignment="Center"
-                                Style="{StaticResource MaterialDesignSlider}"/>
+                                VerticalAlignment="Center"/>
                         <TextBlock Grid.Column="1" 
                                    Text="{Binding UiZoom, StringFormat={}{0:P0}}" 
                                    Foreground="White" 

@@ -230,10 +230,13 @@ public partial class App : Application
         services.AddSingleton<IVRChatApiService, VRChatApiService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IUpdateService, UpdateService>();
+        services.AddSingleton<ISecurityMonitorService, SecurityMonitorService>();
+        services.AddSingleton<IMemberBackupService, MemberBackupService>();
         services.AddSingleton<IAuditLogService, AuditLogService>();
         services.AddSingleton<IDiscordWebhookService, DiscordWebhookService>();
         services.AddSingleton<IDiscordPresenceService, DiscordPresenceService>();
         services.AddSingleton<ICalendarEventService, CalendarEventService>();
+        services.AddSingleton<IModerationService, ModerationService>();
 
         // ViewModels - use Singleton for ViewModels that need event subscriptions
         services.AddSingleton<LoginViewModel>();
@@ -246,9 +249,11 @@ public partial class App : Application
         services.AddTransient<AuditLogViewModel>();
         services.AddTransient<CalendarEventViewModel>();
         services.AddTransient<DiscordSettingsViewModel>();
+        services.AddTransient<SecuritySettingsViewModel>();
         services.AddTransient<InstanceCreatorViewModel>();
         services.AddTransient<MembersListViewModel>();
         services.AddTransient<BansListViewModel>();
+        services.AddTransient<MemberBackupViewModel>();
         services.AddTransient<GroupInfoViewModel>();
         services.AddTransient<GroupPostsViewModel>();
         services.AddTransient<InviteToGroupViewModel>();

@@ -19,6 +19,19 @@ public class InverseBooleanConverter : IValueConverter
     }
 }
 
+public class BoolToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is bool b && b ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
 public class InverseBoolToVisConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -393,6 +406,29 @@ public class BoolToTestButtonConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         return value is bool b && b ? "Testing..." : "Test";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class ActionTypeToColorConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string actionType)
+        {
+            return actionType.ToLower() switch
+            {
+                "warning" => new SolidColorBrush(Color.FromRgb(255, 193, 7)), // Yellow
+                "kick" => new SolidColorBrush(Color.FromRgb(255, 152, 0)), // Orange
+                "ban" => new SolidColorBrush(Color.FromRgb(244, 67, 54)), // Red
+                _ => new SolidColorBrush(Colors.Gray)
+            };
+        }
+        return new SolidColorBrush(Colors.Gray);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

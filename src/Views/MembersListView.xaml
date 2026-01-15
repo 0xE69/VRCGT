@@ -25,10 +25,15 @@
                             Style="{StaticResource MaterialDesignRaisedDarkButton}" 
                             Background="#7C4DFF"
                             Height="36" Width="100"/>
+                    <Button Content="Load Cached"
+                        Command="{Binding LoadFromCacheCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Height="36" Width="120"
+                        Margin="10,0,0,0"/>
                     <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
                              materialDesign:HintAssist.Hint="🔍 Filter by name or userId"
                              Width="220"
-                             Margin="10,0,0,0"
+                         Margin="10,0,0,0"
                              Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Foreground="White" CaretBrush="White"/>
                     <ComboBox ItemsSource="{Binding RoleFilters}"
@@ -221,7 +226,15 @@
                                 <StackPanel>
                                     <TextBlock Text="Moderation Actions" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
                                     
-                                    <Button Content="⚠️ Kick from Group"
+                                    <Button Content="⚠️ Issue Warning"
+                                            Command="{Binding WarnMemberCommand}"
+                                            Height="36"
+                                            Margin="0,0,0,8"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                                            Foreground="#FFC107"
+                                            BorderBrush="#FFC107"/>
+                                    
+                                    <Button Content="👢 Kick from Group"
                                             Command="{Binding KickMemberCommand}"
                                             Height="36"
                                             Margin="0,0,0,8"

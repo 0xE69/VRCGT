@@ -30,6 +30,11 @@
                             Style="{StaticResource MaterialDesignOutlinedButton}"
                             Foreground="White"
                             Height="36" Margin="0,0,10,0"/>
+                    <Button Content="Load Cached" 
+                        Command="{Binding LoadFromCacheCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Foreground="White"
+                        Height="36" Margin="0,0,10,0"/>
                     <Button Content="➕ New Post" 
                             Command="{Binding ToggleCreatePanelCommand}"
                             Style="{StaticResource MaterialDesignRaisedButton}"

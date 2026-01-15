@@ -2,7 +2,7 @@
 ; Download Inno Setup from: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "VRC Group Tools"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "VRCGT"
 #define MyAppURL "https://github.com/0xE69/VRCGT"
 #define MyAppExeName "VRCGroupTools.exe"
@@ -37,7 +37,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Main application (self-contained publish output)
-Source: "..\src\bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\src\bin\Publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

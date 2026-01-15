@@ -6,6 +6,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using VRCGroupTools.Services;
+using VRCGroupTools.Helpers;
+using VRCGroupTools.Models;
 
 namespace VRCGroupTools.ViewModels;
 
@@ -13,11 +15,18 @@ public partial class BansListViewModel : ObservableObject
 {
     private readonly IVRChatApiService _apiService;
     private readonly MainViewModel _mainViewModel;
+    private readonly IModerationService _moderationService;
+    private readonly IDiscordWebhookService _discordService;
+    private readonly ICacheService _cacheService;
 
     [ObservableProperty] private ObservableCollection<GroupBanEntry> _bans = new();
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _filter = string.Empty;
+    [ObservableProperty] private bool _showInstanceBans = true;
+    [ObservableProperty] private bool _showGroupBans = true;
+    [ObservableProperty] private bool _showMemberBans = true;
+    [ObservableProperty] private bool _showNonMemberBans = true;
     
     // User search for banning
     [ObservableProperty] private string _searchQuery = string.Empty;
@@ -30,13 +39,44 @@ public partial class BansListViewModel : ObservableObject
     {
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
+        _moderationService = (App.Services.GetService(typeof(IModerationService)) as IModerationService)!;
+        _discordService = (App.Services.GetService(typeof(IDiscordWebhookService)) as IDiscordWebhookService)!;
+        _cacheService = App.Services.GetRequiredService<ICacheService>();
     }
 
-    public IEnumerable<GroupBanEntry> FilteredBans => string.IsNullOrWhiteSpace(Filter)
-        ? Bans
-        : Bans.Where(b =>
-            (b.DisplayName ?? string.Empty).Contains(Filter, StringComparison.OrdinalIgnoreCase) ||
-            (b.UserId ?? string.Empty).Contains(Filter, StringComparison.OrdinalIgnoreCase));
+    public IEnumerable<GroupBanEntry> FilteredBans
+    {
+        get
+        {
+            var filtered = Bans.AsEnumerable();
+            
+            // Filter by ban type
+            if (!ShowInstanceBans || !ShowGroupBans)
+            {
+                filtered = filtered.Where(b =>
+                    (b.IsInstanceBan && ShowInstanceBans) ||
+                    (!b.IsInstanceBan && ShowGroupBans));
+            }
+            
+            // Filter by membership status
+            if (!ShowMemberBans || !ShowNonMemberBans)
+            {
+                filtered = filtered.Where(b =>
+                    (b.WasMember && ShowMemberBans) ||
+                    (!b.WasMember && ShowNonMemberBans));
+            }
+            
+            // Text filter
+            if (!string.IsNullOrWhiteSpace(Filter))
+            {
+                filtered = filtered.Where(b =>
+                    (b.DisplayName ?? string.Empty).Contains(Filter, StringComparison.OrdinalIgnoreCase) ||
+                    (b.UserId ?? string.Empty).Contains(Filter, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            return filtered;
+        }
+    }
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -62,8 +102,38 @@ public partial class BansListViewModel : ObservableObject
             Bans.Add(ban);
         }
 
+        await _cacheService.SaveAsync($"group_bans_{groupId}", list);
+
         Status = list.Count == 0 ? "No bans found." : $"Loaded {list.Count} bans.";
         IsBusy = false;
+        OnPropertyChanged(nameof(FilteredBans));
+    }
+
+    [RelayCommand]
+    private async Task LoadFromCacheAsync()
+    {
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            Status = "Set a Group ID first.";
+            return;
+        }
+
+        Status = "Loading cached bans...";
+        var cached = await _cacheService.LoadAsync<List<GroupBanEntry>>($"group_bans_{groupId}");
+        if (cached == null || cached.Count == 0)
+        {
+            Status = "No cached bans found.";
+            return;
+        }
+
+        Bans.Clear();
+        foreach (var ban in cached)
+        {
+            Bans.Add(ban);
+        }
+
+        Status = $"Loaded {cached.Count} cached bans.";
         OnPropertyChanged(nameof(FilteredBans));
     }
 
@@ -97,6 +167,26 @@ public partial class BansListViewModel : ObservableObject
     }
 
     partial void OnFilterChanged(string value)
+    {
+        OnPropertyChanged(nameof(FilteredBans));
+    }
+
+    partial void OnShowInstanceBansChanged(bool value)
+    {
+        OnPropertyChanged(nameof(FilteredBans));
+    }
+
+    partial void OnShowGroupBansChanged(bool value)
+    {
+        OnPropertyChanged(nameof(FilteredBans));
+    }
+
+    partial void OnShowMemberBansChanged(bool value)
+    {
+        OnPropertyChanged(nameof(FilteredBans));
+    }
+
+    partial void OnShowNonMemberBansChanged(bool value)
     {
         OnPropertyChanged(nameof(FilteredBans));
     }
@@ -141,14 +231,27 @@ public partial class BansListViewModel : ObservableObject
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(BanReason))
+        Status = $"Preparing to ban {SelectedSearchResult.DisplayName}...";
+        
+        // Show moderation dialog to get reason, duration, and description
+        var request = await ModerationDialogHelper.ShowModerationDialogAsync(
+            "ban",
+            groupId,
+            SelectedSearchResult.UserId,
+            SelectedSearchResult.DisplayName);
+
+        if (request == null)
         {
-            Status = "Please enter a ban reason.";
+            Status = "Ban cancelled.";
             return;
         }
 
         Status = $"Banning {SelectedSearchResult.DisplayName}...";
-        var success = await _apiService.BanGroupMemberAsync(groupId, SelectedSearchResult.UserId);
+        var success = await ModerationDialogHelper.ExecuteModerationActionAsync(
+            groupId,
+            request,
+            _apiService,
+            _moderationService);
         
         if (success)
         {

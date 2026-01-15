@@ -44,12 +44,16 @@ public interface IVRChatApiService
         string type = "group");
     Task<GroupMemberApiResult?> GetGroupMemberAsync(string groupId, string userId);
     Task<List<GroupRole>> GetGroupRolesAsync(string groupId);
+    Task<List<string>> GetGroupMemberRolesAsync(string groupId, string userId);
     Task<bool> AssignGroupRoleAsync(string groupId, string userId, string roleId);
     Task<bool> RemoveGroupRoleAsync(string groupId, string userId, string roleId);
-    Task<bool> KickGroupMemberAsync(string groupId, string userId);
-    Task<bool> BanGroupMemberAsync(string groupId, string userId);
+    Task<bool> RemoveGroupMemberRoleAsync(string groupId, string userId, string roleId);
+    Task<bool> KickGroupMemberAsync(string groupId, string userId, string? reason = null, string? description = null);
+    Task<bool> BanGroupMemberAsync(string groupId, string userId, string? reason = null, string? description = null);
+    Task<bool> WarnUserAsync(string groupId, string userId, string reason, string? description = null);
     Task<bool> UnbanGroupMemberAsync(string groupId, string oderId);
     Task<JsonElement?> GetGroupAuditLogsAsync(string groupId, int count = 100, int offset = 0);
+    Task<List<GroupInfo>> GetMyManageableGroupsAsync();
     Task<string?> UploadImageAsync(string filePath);
     Task<GroupCalendarEvent?> CreateGroupEventAsync(string groupId, GroupEventCreateRequest request);
     Task<List<GroupCalendarEvent>> GetGroupEventsAsync(string groupId);
@@ -393,6 +397,7 @@ public class VRChatApiService : IVRChatApiService
         int offset = 0;
         const int limit = 100;
         int total = 0;
+        int transientFailures = 0;
 
         try
         {
@@ -400,11 +405,34 @@ public class VRChatApiService : IVRChatApiService
             {
                 await RateLimitAsync();
 
-                var response = await _httpClient.GetAsync($"groups/{groupId}/members?apiKey={ApiKey}&n={limit}&offset={offset}");
-                
+                var url = $"groups/{groupId}/members?apiKey={ApiKey}&n={limit}&offset={offset}";
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta?.TotalSeconds;
+                    var delaySeconds = retryAfter.HasValue ? Math.Max(1, (int)retryAfter.Value) : 30;
+                    Console.WriteLine($"[MEMBERS] Rate limited. Waiting {delaySeconds}s before retry...");
+                    await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+                    continue; // retry same offset
+                }
+
+                if ((int)response.StatusCode >= 500)
+                {
+                    transientFailures++;
+                    Console.WriteLine($"[MEMBERS] Server error {response.StatusCode} at offset {offset} (attempt {transientFailures}/3)");
+                    if (transientFailures >= 3)
+                    {
+                        Console.WriteLine("[MEMBERS] Too many server errors, stopping member fetch.");
+                        break;
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                    continue; // retry same offset
+                }
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[MEMBERS] Error: {response.StatusCode}");
+                    Console.WriteLine($"[MEMBERS] Error: {response.StatusCode} at offset {offset}");
                     break;
                 }
 
@@ -428,6 +456,7 @@ public class VRChatApiService : IVRChatApiService
 
                 total = members.Count;
                 progressCallback?.Invoke(total, -1); // -1 means unknown total
+                Console.WriteLine($"[MEMBERS] Fetched {data.Count} members (total so far: {total})");
 
                 if (data.Count < limit)
                     break;
@@ -437,7 +466,7 @@ public class VRChatApiService : IVRChatApiService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[MEMBERS] Exception: {ex.Message}");
+            Console.WriteLine($"[MEMBERS] Exception: {ex.Message}");
         }
 
         return members;
@@ -473,13 +502,23 @@ public class VRChatApiService : IVRChatApiService
 
                 foreach (var banData in data)
                 {
+                    // Determine if it's an instance ban by checking for instanceId
+                    var isInstanceBan = banData["instanceId"] != null && !string.IsNullOrEmpty(banData["instanceId"]?.ToString());
+                    
+                    // Check if user was a member by looking at the membershipStatus field
+                    // If membershipStatus exists and isn't "notMember", they were a member
+                    var membershipStatus = banData["membershipStatus"]?.ToString();
+                    var wasMember = !string.IsNullOrEmpty(membershipStatus) && membershipStatus != "notMember";
+                    
                     var ban = new GroupBanEntry
                     {
                         UserId = banData["userId"]?.ToString() ?? string.Empty,
                         DisplayName = banData["user"]?["displayName"]?.ToString() ?? "Unknown",
                         Reason = banData["reason"]?.ToString() ?? string.Empty,
                         BannedAt = banData["createdAt"]?.ToString(),
-                        ExpiresAt = banData["expiresAt"]?.ToString()
+                        ExpiresAt = banData["expiresAt"]?.ToString(),
+                        IsInstanceBan = isInstanceBan,
+                        WasMember = wasMember
                     };
                     bans.Add(ban);
                 }
@@ -590,6 +629,176 @@ public class VRChatApiService : IVRChatApiService
             Console.WriteLine($"[GROUP] Exception: {ex.Message}");
             return null;
         }
+    }
+
+    public async Task<List<GroupInfo>> GetMyManageableGroupsAsync()
+    {
+        var manageableGroups = new List<GroupInfo>();
+        var processedGroupIds = new HashSet<string>(); // Track processed groups to avoid duplicates
+        
+        try
+        {
+            // Get the current user's ID
+            await RateLimitAsync();
+            var userResponse = await _httpClient.GetAsync($"auth/user?apiKey={ApiKey}");
+            
+            if (!userResponse.IsSuccessStatusCode)
+            {
+                LoggingService.Debug("API", $"Failed to get user info: {userResponse.StatusCode}");
+                return manageableGroups;
+            }
+
+            var userContent = await userResponse.Content.ReadAsStringAsync();
+            var userData = JsonConvert.DeserializeObject<JObject>(userContent);
+            
+            if (userData == null)
+            {
+                return manageableGroups;
+            }
+
+            var userId = userData["id"]?.ToString();
+            if (string.IsNullOrEmpty(userId))
+            {
+                return manageableGroups;
+            }
+
+            // Fetch user's groups - basic list includes ownerId
+            int offset = 0;
+            const int limit = 100;
+            
+            while (true)
+            {
+                await RateLimitAsync();
+                var groupsResponse = await _httpClient.GetAsync($"users/{userId}/groups?apiKey={ApiKey}&n={limit}&offset={offset}");
+                
+                if (!groupsResponse.IsSuccessStatusCode)
+                {
+                    LoggingService.Debug("API", $"Failed to get user groups: {groupsResponse.StatusCode}");
+                    break;
+                }
+
+                var groupsContent = await groupsResponse.Content.ReadAsStringAsync();
+                var groupsData = JsonConvert.DeserializeObject<List<JObject>>(groupsContent);
+                
+                if (groupsData == null || groupsData.Count == 0)
+                {
+                    break;
+                }
+                
+                // Process groups - check ownership directly from this response
+                foreach (var groupData in groupsData)
+                {
+                    try
+                    {
+                        // In users/{userId}/groups response:
+                        // - "id" is the membership ID (gmem_*)
+                        // - "groupId" is the actual group ID (grp_*)
+                        var membershipId = groupData["id"]?.ToString();
+                        var groupId = groupData["groupId"]?.ToString(); // This is the actual group ID
+                        var groupName = groupData["name"]?.ToString();
+                        var ownerId = groupData["ownerId"]?.ToString();
+                        
+                        // Skip if we've already processed this group or missing group ID
+                        if (string.IsNullOrEmpty(groupId) || processedGroupIds.Contains(groupId))
+                        {
+                            continue;
+                        }
+                        
+                        // Only add groups where user is the owner
+                        if (ownerId == userId)
+                        {
+                            processedGroupIds.Add(groupId); // Mark as processed
+                            LoggingService.Info("API", $"✓ {groupName}: User is OWNER");
+                            
+                            // Parse group info
+                            var links = new List<string>();
+                            if (groupData["links"] is JArray linkArr)
+                            {
+                                foreach (var l in linkArr)
+                                {
+                                    if (l.Type == JTokenType.String)
+                                        links.Add(l.ToString());
+                                    else if (l.Type == JTokenType.Object)
+                                    {
+                                        var linkUrl = l["url"]?.ToString() ?? l["linkUrl"]?.ToString();
+                                        if (!string.IsNullOrWhiteSpace(linkUrl)) links.Add(linkUrl);
+                                    }
+                                }
+                            }
+
+                            var rules = new List<string>();
+                            if (groupData["rules"] is JArray ruleArr)
+                            {
+                                foreach (var r in ruleArr)
+                                {
+                                    if (r.Type == JTokenType.String)
+                                        rules.Add(r.ToString());
+                                    else if (r.Type == JTokenType.Object)
+                                    {
+                                        var text = r["text"]?.ToString() ?? r["description"]?.ToString();
+                                        if (!string.IsNullOrWhiteSpace(text)) rules.Add(text);
+                                    }
+                                }
+                            }
+
+                            var gallery = new List<string>();
+                            if (groupData["gallery"] is JArray galArr)
+                            {
+                                foreach (var g in galArr)
+                                {
+                                    if (g.Type == JTokenType.String)
+                                        gallery.Add(g.ToString());
+                                    else if (g.Type == JTokenType.Object)
+                                    {
+                                        var img = g["imageUrl"]?.ToString() ?? g["url"]?.ToString();
+                                        if (!string.IsNullOrWhiteSpace(img)) gallery.Add(img);
+                                    }
+                                }
+                            }
+
+                            var groupInfo = new GroupInfo
+                            {
+                                Id = groupId, // Use groupId, not membershipId
+                                Name = groupData["name"]?.ToString() ?? string.Empty,
+                                ShortCode = groupData["shortCode"]?.ToString(),
+                                Description = groupData["description"]?.ToString(),
+                                MemberCount = groupData["memberCount"]?.Value<int?>() ?? 0,
+                                OnlineCount = groupData["onlineMemberCount"]?.Value<int?>() ?? 0,
+                                IconUrl = groupData["iconUrl"]?.ToString(),
+                                BannerUrl = groupData["bannerUrl"]?.ToString(),
+                                Privacy = groupData["privacy"]?.ToString(),
+                                OwnerId = groupData["ownerId"]?.ToString(),
+                                CreatedAt = groupData["createdAt"]?.Value<DateTime?>(),
+                                Links = links,
+                                Rules = rules,
+                                GalleryImageUrls = gallery
+                            };
+
+                            manageableGroups.Add(groupInfo);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggingService.Error("API", $"Error processing group: {ex.Message}");
+                    }
+                }
+
+                if (groupsData.Count < limit)
+                {
+                    break;
+                }
+
+                offset += limit;
+            }
+
+            LoggingService.Info("API", $"Found {manageableGroups.Count} manageable groups");
+        }
+        catch (Exception ex)
+        {
+            LoggingService.Error("API", $"Exception in GetMyManageableGroupsAsync: {ex.Message}");
+        }
+
+        return manageableGroups;
     }
 
     public async Task<UserDetails?> GetUserAsync(string userId)
@@ -750,17 +959,34 @@ public class VRChatApiService : IVRChatApiService
     {
         try
         {
-            await RateLimitAsync();
             var payload = new { userId };
-            var response = await SendJsonAsync(HttpMethod.Post, $"groups/{groupId}/invites", payload);
-            var content = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[GROUP-INVITE] Status: {response.StatusCode}");
-            if (!response.IsSuccessStatusCode)
+
+            for (var attempt = 1; attempt <= 3; attempt++)
             {
-                Console.WriteLine($"[GROUP-INVITE] Error: {content}");
-                return false;
+                await RateLimitAsync();
+                var response = await SendJsonAsync(HttpMethod.Post, $"groups/{groupId}/invites", payload);
+                var content = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[GROUP-INVITE] Status: {response.StatusCode}");
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta?.TotalSeconds;
+                    var delaySeconds = retryAfter.HasValue ? Math.Max(1, (int)retryAfter.Value) : 30;
+                    Console.WriteLine($"[GROUP-INVITE] Rate limited. Waiting {delaySeconds}s before retry (attempt {attempt}/3)...");
+                    await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+                    continue;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[GROUP-INVITE] Error: {content}");
+                    return false;
+                }
+
+                return true;
             }
-            return true;
+
+            return false;
         }
         catch (Exception ex)
         {
@@ -903,7 +1129,27 @@ public class VRChatApiService : IVRChatApiService
         }
     }
 
-    public async Task<bool> KickGroupMemberAsync(string groupId, string userId)
+    public async Task<List<string>> GetGroupMemberRolesAsync(string groupId, string userId)
+    {
+        try
+        {
+            var member = await GetGroupMemberAsync(groupId, userId);
+            return member?.RoleIds ?? new List<string>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GET_MEMBER_ROLES] Exception: {ex.Message}");
+            return new List<string>();
+        }
+    }
+
+    public async Task<bool> RemoveGroupMemberRoleAsync(string groupId, string userId, string roleId)
+    {
+        // Alias to RemoveGroupRoleAsync for clarity in security context
+        return await RemoveGroupRoleAsync(groupId, userId, roleId);
+    }
+
+    public async Task<bool> KickGroupMemberAsync(string groupId, string userId, string? reason = null, string? description = null)
     {
         try
         {
@@ -911,7 +1157,34 @@ public class VRChatApiService : IVRChatApiService
             var request = new HttpRequestMessage(HttpMethod.Delete, $"groups/{groupId}/members/{userId}?apiKey={ApiKey}");
             var response = await _httpClient.SendAsync(request);
             
-            Console.WriteLine($"[KICK] User: {userId}, Status: {response.StatusCode}");
+            Console.WriteLine($"[KICK] User: {userId}, Reason: {reason ?? "N/A"}, Status: {response.StatusCode}");
+            
+            // Log to moderation database if reason provided
+            if (response.IsSuccessStatusCode && !string.IsNullOrEmpty(reason))
+            {
+                try
+                {
+                    var moderationService = App.Services.GetService(typeof(IModerationService)) as IModerationService;
+                    if (moderationService != null)
+                    {
+                        var moderationRequest = new Models.ModerationActionRequest
+                        {
+                            ActionType = "kick",
+                            TargetUserId = userId,
+                            TargetDisplayName = userId, // Will be updated by caller
+                            Reason = reason,
+                            Description = description,
+                            DurationDays = -1
+                        };
+                        await moderationService.LogModerationActionAsync(groupId, moderationRequest, CurrentUserId ?? "unknown", CurrentUserDisplayName ?? "Unknown");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[KICK] Failed to log moderation action: {ex.Message}");
+                }
+            }
+            
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -921,7 +1194,7 @@ public class VRChatApiService : IVRChatApiService
         }
     }
 
-    public async Task<bool> BanGroupMemberAsync(string groupId, string userId)
+    public async Task<bool> BanGroupMemberAsync(string groupId, string userId, string? reason = null, string? description = null)
     {
         try
         {
@@ -933,12 +1206,70 @@ public class VRChatApiService : IVRChatApiService
             };
             var response = await _httpClient.SendAsync(request);
             
-            Console.WriteLine($"[BAN] User: {userId}, Status: {response.StatusCode}");
+            Console.WriteLine($"[BAN] User: {userId}, Reason: {reason ?? "N/A"}, Status: {response.StatusCode}");
+            
+            // Log to moderation database if reason provided
+            if (response.IsSuccessStatusCode && !string.IsNullOrEmpty(reason))
+            {
+                try
+                {
+                    var moderationService = App.Services.GetService(typeof(IModerationService)) as IModerationService;
+                    if (moderationService != null)
+                    {
+                        var moderationRequest = new Models.ModerationActionRequest
+                        {
+                            ActionType = "ban",
+                            TargetUserId = userId,
+                            TargetDisplayName = userId, // Will be updated by caller
+                            Reason = reason,
+                            Description = description,
+                            DurationDays = 0, // Permanent by default
+                            AllowsAppeal = true
+                        };
+                        await moderationService.LogModerationActionAsync(groupId, moderationRequest, CurrentUserId ?? "unknown", CurrentUserDisplayName ?? "Unknown");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[BAN] Failed to log moderation action: {ex.Message}");
+                }
+            }
+            
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[BAN] Exception: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> WarnUserAsync(string groupId, string userId, string reason, string? description = null)
+    {
+        try
+        {
+            // Warnings are not a VRChat API action, only local logging
+            var moderationService = App.Services.GetService(typeof(IModerationService)) as IModerationService;
+            if (moderationService != null)
+            {
+                var moderationRequest = new Models.ModerationActionRequest
+                {
+                    ActionType = "warning",
+                    TargetUserId = userId,
+                    TargetDisplayName = userId, // Will be updated by caller
+                    Reason = reason,
+                    Description = description,
+                    DurationDays = -1
+                };
+                await moderationService.LogModerationActionAsync(groupId, moderationRequest, CurrentUserId ?? "unknown", CurrentUserDisplayName ?? "Unknown");
+                LoggingService.Info("API", $"Warning issued to {userId}: {reason}");
+                return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Exception: {ex.Message}");
             return false;
         }
     }
@@ -1649,6 +1980,11 @@ public class GroupBanEntry
     public string Reason { get; set; } = string.Empty;
     public string? BannedAt { get; set; }
     public string? ExpiresAt { get; set; }
+    public bool IsInstanceBan { get; set; }
+    public bool WasMember { get; set; }
+    
+    public string BanTypeDisplay => IsInstanceBan ? "Instance Ban" : "Group Ban";
+    public string MembershipDisplay => WasMember ? "Was Member" : "Not Member";
 }
 
 public class GroupRole

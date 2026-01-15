@@ -196,6 +196,12 @@
                     <CheckBox Content="🔒  Instance Closed"
                               IsChecked="{Binding NotifyInstanceClosed}"
                               Foreground="White"
+                              Margin="0,0,0,8"
+                              Style="{StaticResource MaterialDesignCheckBox}"/>
+                    
+                    <CheckBox Content="⚠️  Instance Warning"
+                              IsChecked="{Binding NotifyInstanceWarn}"
+                              Foreground="White"
                               Margin="0,0,0,20"
                               Style="{StaticResource MaterialDesignCheckBox}"/>
 

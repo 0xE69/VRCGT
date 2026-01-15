@@ -4,6 +4,9 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VRCGroupTools.Services;
+using VRCGroupTools.Helpers;
+using VRCGroupTools.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace VRCGroupTools.ViewModels;
 
@@ -11,6 +14,8 @@ public partial class UserSearchViewModel : ObservableObject
 {
     private readonly IVRChatApiService _apiService;
     private readonly MainViewModel _mainViewModel;
+    private readonly IModerationService _moderationService;
+    private readonly IDiscordWebhookService _discordService;
 
     [ObservableProperty]
     private string _searchQuery = "";
@@ -60,6 +65,8 @@ public partial class UserSearchViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(mainViewModel);
         _apiService = apiService;
         _mainViewModel = mainViewModel;
+        _moderationService = (App.Services.GetService(typeof(IModerationService)) as IModerationService)!;
+        _discordService = (App.Services.GetService(typeof(IDiscordWebhookService)) as IDiscordWebhookService)!;
         Console.WriteLine("[USER-SEARCH] ViewModel initialized");
         Console.WriteLine($"[USER-SEARCH] API Service received: {apiService != null}");
         Console.WriteLine($"[USER-SEARCH] MainViewModel received: {mainViewModel != null}");
@@ -333,18 +340,29 @@ public partial class UserSearchViewModel : ObservableObject
             return;
         }
 
-        var result = MessageBox.Show(
-            $"Are you sure you want to kick {SelectedUserProfile.DisplayName} from the group?",
-            "Confirm Kick",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (result != MessageBoxResult.Yes) return;
-
         IsLoadingUser = true;
         try
         {
-            var success = await _apiService.KickGroupMemberAsync(groupId, SelectedUserProfile.UserId);
+            // Show moderation dialog to get reason and description
+            var request = await ModerationDialogHelper.ShowModerationDialogAsync(
+                "kick",
+                groupId,
+                SelectedUserProfile.UserId,
+                SelectedUserProfile.DisplayName);
+
+            if (request == null)
+            {
+                StatusMessage = "Kick cancelled";
+                return;
+            }
+
+            StatusMessage = $"Kicking {SelectedUserProfile.DisplayName}...";
+            var success = await ModerationDialogHelper.ExecuteModerationActionAsync(
+                groupId,
+                request,
+                _apiService,
+                _moderationService);
+
             if (success)
             {
                 StatusMessage = $"Kicked {SelectedUserProfile.DisplayName} from the group";
@@ -378,18 +396,29 @@ public partial class UserSearchViewModel : ObservableObject
             return;
         }
 
-        var result = MessageBox.Show(
-            $"Are you sure you want to BAN {SelectedUserProfile.DisplayName} from the group?\n\nThis will prevent them from rejoining.",
-            "Confirm Ban",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (result != MessageBoxResult.Yes) return;
-
         IsLoadingUser = true;
         try
         {
-            var success = await _apiService.BanGroupMemberAsync(groupId, SelectedUserProfile.UserId);
+            // Show moderation dialog to get reason, duration, and description
+            var request = await ModerationDialogHelper.ShowModerationDialogAsync(
+                "ban",
+                groupId,
+                SelectedUserProfile.UserId,
+                SelectedUserProfile.DisplayName);
+
+            if (request == null)
+            {
+                StatusMessage = "Ban cancelled";
+                return;
+            }
+
+            StatusMessage = $"Banning {SelectedUserProfile.DisplayName}...";
+            var success = await ModerationDialogHelper.ExecuteModerationActionAsync(
+                groupId,
+                request,
+                _apiService,
+                _moderationService);
+
             if (success)
             {
                 StatusMessage = $"Banned {SelectedUserProfile.DisplayName} from the group";
@@ -434,6 +463,60 @@ public partial class UserSearchViewModel : ObservableObject
             StatusMessage = ok
                 ? $"Invite sent to {SelectedUserProfile.DisplayName}"
                 : "Failed to send invite";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingUser = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task WarnUserAsync()
+    {
+        if (SelectedUserProfile == null) return;
+
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            StatusMessage = "Please set a Group ID in the sidebar first";
+            return;
+        }
+
+        IsLoadingUser = true;
+        try
+        {
+            // Show moderation dialog to get reason and description
+            var request = await ModerationDialogHelper.ShowModerationDialogAsync(
+                "warning",
+                groupId,
+                SelectedUserProfile.UserId,
+                SelectedUserProfile.DisplayName);
+
+            if (request == null)
+            {
+                StatusMessage = "Warning cancelled";
+                return;
+            }
+
+            StatusMessage = $"Issuing warning to {SelectedUserProfile.DisplayName}...";
+            var success = await ModerationDialogHelper.ExecuteModerationActionAsync(
+                groupId,
+                request,
+                _apiService,
+                _moderationService);
+
+            if (success)
+            {
+                StatusMessage = $"Warning issued to {SelectedUserProfile.DisplayName}";
+            }
+            else
+            {
+                StatusMessage = "Failed to issue warning";
+            }
         }
         catch (Exception ex)
         {

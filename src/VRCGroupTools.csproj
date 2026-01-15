@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -9,13 +9,17 @@
     <AssemblyName>VRCGroupTools</AssemblyName>
     <DefineConstants>DEBUG</DefineConstants>
     <RootNamespace>VRCGroupTools</RootNamespace>
-    <Version>1.0.5</Version>
-    <AssemblyVersion>1.0.5.0</AssemblyVersion>
-    <FileVersion>1.0.5.0</FileVersion>
-    <Company>VRC Group Tools</Company>
+    <Version>1.0.7</Version>
+    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <FileVersion>1.0.7.0</FileVersion>
+    <Company>0xE69</Company>
     <Product>VRC Group Tools</Product>
+    <Authors>0xE69</Authors>
     <Description>VRChat Group Management Tools with 18+ Badge Scanner</Description>
-    <Copyright>Copyright © 2024</Copyright>
+    <Copyright>Copyright © 2026</Copyright>
+    <RepositoryUrl>https://github.com/0xE69/VRCGT</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/0xE69/VRCGT</PackageProjectUrl>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

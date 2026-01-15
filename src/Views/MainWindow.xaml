@@ -100,22 +100,54 @@
                                        TextAlignment="Center"/>
                         </StackPanel>
                         
-                        <!-- Group ID Settings -->
+                        <!-- Group Selection -->
                         <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="12" Margin="0,0,0,20">
                             <StackPanel>
-                                <TextBlock Text="Group ID" Foreground="#AAA" FontSize="12" Margin="0,0,0,8"/>
-                                <TextBox Text="{Binding GroupId, UpdateSourceTrigger=PropertyChanged}"
-                                         materialDesign:HintAssist.Hint="grp_xxxxxxxx-xxxx-xxxx"
-                                         FontSize="11"
-                                         Foreground="White"
-                                         CaretBrush="White"
-                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-                                <Button Content="Save Group ID"
-                                        Command="{Binding SaveGroupIdCommand}"
-                                        Margin="0,10,0,0"
-                                        Height="32"
-                                        FontSize="12"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                <TextBlock Text="Managed Groups" Foreground="#AAA" FontSize="12" Margin="0,0,0,8"/>
+                                <ComboBox ItemsSource="{Binding ManagedGroups}"
+                                          SelectedItem="{Binding SelectedGroup}"
+                                          DisplayMemberPath="DisplayName"
+                                          FontSize="11"
+                                          Foreground="White"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}">
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource MaterialDesignComboBoxItemStyle}">
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+                                </ComboBox>
+                                
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Content="+ Add Group"
+                                            Command="{Binding ShowAddGroupDialogCommand}"
+                                            Height="32"
+                                            FontSize="11"
+                                            Margin="0,0,5,0"
+                                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                    <Button Content="− Remove"
+                                            Command="{Binding RemoveSelectedGroupCommand}"
+                                            Height="32"
+                                            FontSize="11"
+                                            Margin="0,0,5,0"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                </StackPanel>
+                                
+                                <Button Command="{Binding DiscoverMyGroupsCommand}"
+                                        Height="36"
+                                        FontSize="11"
+                                        Margin="0,10,0,0">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                            <Setter Property="Content" Value="🔍 Discover My Groups"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsDiscoveringGroups}" Value="True">
+                                                    <Setter Property="Content" Value="⏳ Discovering..."/>
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                             </StackPanel>
                         </Border>
                         
@@ -179,6 +211,15 @@
                                         Margin="0,0,0,5"
                                         Style="{StaticResource MaterialDesignFlatButton}"
                                         Foreground="White"/>
+                                <Button Content="💾  Member Backup"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="MemberBackup"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#29B6F6"
+                                        FontWeight="SemiBold"/>
                                 <Button Content="📋  Audit Logs"
                                         Command="{Binding SelectModuleCommand}"
                                         CommandParameter="AuditLogs"
@@ -211,6 +252,15 @@
                                         Margin="0,0,0,5"
                                         Style="{StaticResource MaterialDesignFlatButton}"
                                         Foreground="White"/>
+                                <Button Content="🛡️  Security"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Security"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#FFC107"
+                                        FontWeight="SemiBold"/>
                                 <Button Content="🚨  Kill Switch"
                                         Command="{Binding SelectModuleCommand}"
                                         CommandParameter="KillSwitch"
@@ -271,6 +321,9 @@
                             <DataTemplate x:Key="Bans">
                                 <views:BansListView DataContext="{Binding BansListVM}"/>
                             </DataTemplate>
+                            <DataTemplate x:Key="MemberBackup">
+                                <views:MemberBackupView DataContext="{Binding MemberBackupVM}"/>
+                            </DataTemplate>
                             <DataTemplate x:Key="AuditLogs">
                                 <views:AuditLogView DataContext="{Binding AuditLogVM}"/>
                             </DataTemplate>
@@ -282,6 +335,9 @@
                             </DataTemplate>
                             <DataTemplate x:Key="Discord">
                                 <views:DiscordSettingsView DataContext="{Binding DiscordSettingsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Security">
+                                <views:SecuritySettingsView DataContext="{Binding SecuritySettingsVM}"/>
                             </DataTemplate>
                             <DataTemplate x:Key="AppSettings">
                                 <views:AppSettingsView DataContext="{Binding AppSettingsVM}"/>
@@ -316,6 +372,9 @@
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="Bans">
                                         <Setter Property="ContentTemplate" Value="{StaticResource Bans}"/>
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="MemberBackup">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource MemberBackup}"/>
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="AuditLogs">
                                         <Setter Property="ContentTemplate" Value="{StaticResource AuditLogs}"/>
                                     </DataTrigger>
@@ -327,6 +386,9 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="Discord">
                                         <Setter Property="ContentTemplate" Value="{StaticResource Discord}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Security">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Security}"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="AppSettings">
                                         <Setter Property="ContentTemplate" Value="{StaticResource AppSettings}"/>
@@ -340,6 +402,60 @@
                     </ContentControl>
                 </Border>
             </Grid>
+            
+            <!-- Add Group Dialog Overlay -->
+            <Border Grid.RowSpan="2" 
+                    Background="#CC000000" 
+                    Visibility="{Binding IsAddingNewGroup, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
+                <Border Background="#2D2D30" 
+                        Width="450" 
+                        Height="380" 
+                        CornerRadius="8" 
+                        Padding="30"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="Add New Group" 
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White" 
+                                   Margin="0,0,0,20"/>
+                        
+                        <TextBlock Text="Group ID" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding NewGroupId, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="grp_xxxxxxxx-xxxx-xxxx-xxxx"
+                                 FontSize="13"
+                                 Foreground="White"
+                                 CaretBrush="White"
+                                 Margin="0,0,0,15"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        
+                        <TextBlock Text="Group Name (Optional)" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="My Group"
+                                 FontSize="13"
+                                 Foreground="White"
+                                 CaretBrush="White"
+                                 Margin="0,0,0,30"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel"
+                                    Command="{Binding CancelAddGroupCommand}"
+                                    Width="100"
+                                    Height="36"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            <Button Content="Add Group"
+                                    Command="{Binding AddNewGroupCommand}"
+                                    Width="120"
+                                    Height="36"
+                                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
         </Grid>
     </Border>
 </Window>

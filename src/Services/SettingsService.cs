@@ -1,12 +1,21 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
+using VRCGroupTools.Models;
 
 namespace VRCGroupTools.Services;
 
 public interface ISettingsService
 {
     AppSettings Settings { get; }
+    List<GroupConfiguration> ManagedGroups { get; }
+    string? CurrentGroupId { get; set; }
+    GroupConfiguration? GetCurrentGroupConfig();
+    GroupConfiguration? GetGroupConfig(string groupId);
+    void AddOrUpdateGroup(GroupConfiguration config);
+    void RemoveGroup(string groupId);
     void Save();
     void Load();
 }
@@ -16,6 +25,8 @@ public class SettingsService : ISettingsService
     private readonly string _settingsPath;
 
     public AppSettings Settings { get; private set; } = new();
+    public List<GroupConfiguration> ManagedGroups { get; private set; } = new();
+    public string? CurrentGroupId { get; set; }
 
     public SettingsService()
     {
@@ -27,16 +38,56 @@ public class SettingsService : ISettingsService
         Load();
     }
 
+    public GroupConfiguration? GetCurrentGroupConfig()
+    {
+        if (string.IsNullOrEmpty(CurrentGroupId))
+            return null;
+        
+        return ManagedGroups.FirstOrDefault(g => g.GroupId == CurrentGroupId);
+    }
+
+    public GroupConfiguration? GetGroupConfig(string groupId)
+    {
+        return ManagedGroups.FirstOrDefault(g => g.GroupId == groupId);
+    }
+
+    public void AddOrUpdateGroup(GroupConfiguration config)
+    {
+        var existing = ManagedGroups.FirstOrDefault(g => g.GroupId == config.GroupId);
+        if (existing != null)
+        {
+            ManagedGroups.Remove(existing);
+        }
+        
+        config.LastAccessed = DateTime.UtcNow;
+        ManagedGroups.Add(config);
+        Save();
+    }
+
+    public void RemoveGroup(string groupId)
+    {
+        var existing = ManagedGroups.FirstOrDefault(g => g.GroupId == groupId);
+        if (existing != null)
+        {
+            ManagedGroups.Remove(existing);
+            Save();
+        }
+    }
+
     public void Save()
     {
         try
         {
             Console.WriteLine($"[SETTINGS] Saving to: {_settingsPath}");
-            var json = JsonConvert.SerializeObject(Settings, Formatting.Indented);
+            var data = new
+            {
+                GlobalSettings = Settings,
+                ManagedGroups,
+                CurrentGroupId
+            };
+            var json = JsonConvert.SerializeObject(data, Formatting.Indented);
             File.WriteAllText(_settingsPath, json);
-            Console.WriteLine($"[SETTINGS] Settings saved successfully. Webhook URL: {Settings.DiscordWebhookUrl?.Substring(0, Math.Min(50, Settings.DiscordWebhookUrl?.Length ?? 0))}...");
-            Console.WriteLine($"[SETTINGS] NotifyUserJoins: {Settings.DiscordNotifyUserJoins}");
-            Console.WriteLine($"[SETTINGS] NotifyUserLeaves: {Settings.DiscordNotifyUserLeaves}");
+            Console.WriteLine($"[SETTINGS] Settings saved successfully. Managing {ManagedGroups.Count} groups.");
         }
         catch (Exception ex)
         {
@@ -52,13 +103,43 @@ public class SettingsService : ISettingsService
             if (File.Exists(_settingsPath))
             {
                 var json = File.ReadAllText(_settingsPath);
-                Settings = JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
+                var data = JsonConvert.DeserializeObject<dynamic>(json);
+                
+                if (data != null)
+                {
+                    // Load global settings
+                    Settings = data.GlobalSettings?.ToObject<AppSettings>() ?? new AppSettings();
+                    
+                    // Load managed groups
+                    var groups = data.ManagedGroups?.ToObject<List<GroupConfiguration>>();
+                    ManagedGroups = groups ?? new List<GroupConfiguration>();
+                    
+                    // Load current group ID
+                    CurrentGroupId = data.CurrentGroupId?.ToString();
+                    
+                    // If no groups exist but old GroupId setting exists, migrate it
+                    if (ManagedGroups.Count == 0 && !string.IsNullOrEmpty(Settings.GroupId))
+                    {
+                        Console.WriteLine("[SETTINGS] Migrating old group ID to new multi-group system");
+                        var config = new GroupConfiguration
+                        {
+                            GroupId = Settings.GroupId,
+                            GroupName = "My Group",
+                            AddedAt = DateTime.UtcNow,
+                            LastAccessed = DateTime.UtcNow
+                        };
+                        ManagedGroups.Add(config);
+                        CurrentGroupId = Settings.GroupId;
+                        Save();
+                    }
+                }
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to load settings: {ex.Message}");
             Settings = new AppSettings();
+            ManagedGroups = new List<GroupConfiguration>();
         }
     }
 }
@@ -114,6 +195,7 @@ public class AppSettings
     public bool DiscordNotifyInstanceDelete { get; set; } = true;
     public bool DiscordNotifyInstanceOpened { get; set; } = false;
     public bool DiscordNotifyInstanceClosed { get; set; } = false;
+    public bool DiscordNotifyInstanceWarn { get; set; } = true;
     
     // Group Events
     public bool DiscordNotifyGroupUpdate { get; set; } = true;
@@ -145,4 +227,50 @@ public class AppSettings
     public string? DiscordPresenceAppId { get; set; }
         = ""; // Discord Application Client ID
     public bool DiscordPresenceShowRepoButton { get; set; } = true;
+    
+    // Security Settings
+    public bool SecurityMonitoringEnabled { get; set; } = false;
+    public bool SecurityAutoRemoveRoles { get; set; } = true;
+    public string? SecurityAlertWebhookUrl { get; set; }
+    
+    // Instance kick threshold settings
+    public bool SecurityMonitorInstanceKicks { get; set; } = true;
+    public int SecurityInstanceKickThreshold { get; set; } = 10; // Number of instance kicks
+    public int SecurityInstanceKickTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // Group kick threshold settings
+    public bool SecurityMonitorGroupKicks { get; set; } = true;
+    public int SecurityGroupKickThreshold { get; set; } = 5; // Number of group kicks
+    public int SecurityGroupKickTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // Instance ban threshold settings
+    public bool SecurityMonitorInstanceBans { get; set; } = true;
+    public int SecurityInstanceBanThreshold { get; set; } = 10; // Number of instance bans
+    public int SecurityInstanceBanTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // Group ban threshold settings
+    public bool SecurityMonitorGroupBans { get; set; } = true;
+    public int SecurityGroupBanThreshold { get; set; } = 3; // Number of group bans
+    public int SecurityGroupBanTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // Role removal threshold settings
+    public bool SecurityMonitorRoleRemovals { get; set; } = true;
+    public int SecurityRoleRemovalThreshold { get; set; } = 5; // Number of role removals
+    public int SecurityRoleRemovalTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // Invite rejection threshold settings
+    public bool SecurityMonitorInviteRejections { get; set; } = true;
+    public int SecurityInviteRejectionThreshold { get; set; } = 10; // Number of rejections
+    public int SecurityInviteRejectionTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // Post/content deletion threshold settings
+    public bool SecurityMonitorPostDeletions { get; set; } = true;
+    public int SecurityPostDeletionThreshold { get; set; } = 5; // Number of deletions
+    public int SecurityPostDeletionTimeframeMinutes { get; set; } = 10; // Within X minutes
+    
+    // General settings
+    public bool SecurityRequireOwnerRole { get; set; } = true;
+    public bool SecurityNotifyDiscord { get; set; } = true;
+    public bool SecurityLogAllActions { get; set; } = true;
+    public string SecurityOwnerUserId { get; set; } = ""; // VRChat User ID of the owner
 }

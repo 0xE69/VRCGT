@@ -25,6 +25,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
@@ -60,6 +61,15 @@
                         Visibility="{Binding IsScanning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 
                 <Button Grid.Column="2" 
+                    Content="Load Cached"
+                    Command="{Binding LoadFromCacheCommand}"
+                    Width="120"
+                    Height="40"
+                    Margin="10,0,0,0"
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBooleanConverter}}"/>
+
+                <Button Grid.Column="3" 
                         Content="📁 Export CSV"
                         Command="{Binding ExportToCSVCommand}"
                         Width="120"

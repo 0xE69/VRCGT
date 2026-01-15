@@ -6,12 +6,17 @@
 
             <!-- Header with Refresh -->
             <DockPanel Margin="0,0,0,20">
-                <Button Content="⟳ Refresh" 
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button Content="⟳ Refresh" 
                         Command="{Binding RefreshCommand}" 
-                        DockPanel.Dock="Left"
                         Width="100" Height="32" 
                         Background="#7C4DFF" Foreground="White" 
                         FontWeight="SemiBold"/>
+                    <Button Content="Load Cached" 
+                        Command="{Binding LoadFromCacheCommand}" 
+                        Width="110" Height="32"
+                        Margin="10,0,0,0"/>
+                </StackPanel>
                 <TextBlock Text="Loading..." 
                            Foreground="#7C4DFF" 
                            FontSize="14"

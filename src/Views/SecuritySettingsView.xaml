@@ -1,0 +1,742 @@
+<UserControl x:Class="VRCGroupTools.Views.SecuritySettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:converters="clr-namespace:VRCGroupTools.Converters"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20">
+            <!-- Header -->
+            <TextBlock Text="🔒 Security Monitor" 
+                       FontSize="28" 
+                       FontWeight="Bold" 
+                       Foreground="White" 
+                       Margin="0,0,0,10"/>
+            
+            <TextBlock Text="Automatically detect and respond to suspicious user behavior" 
+                       FontSize="14" 
+                       Foreground="#AAA" 
+                       Margin="0,0,0,20"/>
+
+            <!-- Status Message -->
+            <Border Background="#2D2D30" 
+                    CornerRadius="8" 
+                    Padding="15" 
+                    Margin="0,0,0,20"
+                    Visibility="{Binding StatusMessage, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding StatusMessage}" 
+                           Foreground="White" 
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <!-- Master Enable Switch -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Enable Security Monitoring" 
+                                       FontSize="16" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="White"/>
+                            <TextBlock Text="Monitor user actions and automatically respond to suspicious behavior" 
+                                       FontSize="12" 
+                                       Foreground="#AAA" 
+                                       Margin="0,5,0,0"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding SecurityMonitoringEnabled}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"
+                                      VerticalAlignment="Center"
+                                      Margin="10,0,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- General Settings -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="⚙️ General Settings" 
+                               FontSize="18" 
+                               FontWeight="SemiBold" 
+                               Foreground="White" 
+                               Margin="0,0,0,15"/>
+
+                    <!-- Auto Remove Roles -->
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Automatically Remove Roles" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Remove all roles from users who exceed thresholds" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding SecurityAutoRemoveRoles}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <!-- Require Owner Role -->
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Require Owner Role" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Only the group owner can trigger role removals" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding SecurityRequireOwnerRole}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <!-- Owner User ID -->
+                    <StackPanel Margin="0,0,0,15">
+                        <TextBlock Text="Owner User ID (Optional)" 
+                                   Foreground="#AAA" 
+                                   FontSize="12" 
+                                   Margin="0,0,0,5"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding SecurityOwnerUserId, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                     Foreground="White"
+                                     Margin="0,0,10,0"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                            
+                            <Button Grid.Column="1"
+                                    Content="Set Current"
+                                    Command="{Binding SetCurrentUserAsOwnerCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Height="40"/>
+                        </Grid>
+                        <TextBlock Text="If specified, only this user can trigger automatic role removals" 
+                                   FontSize="10" 
+                                   Foreground="#666" 
+                                   Margin="0,5,0,0"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- Notify Discord -->
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Send Discord Alerts" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Send notifications when suspicious behavior is detected" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding SecurityNotifyDiscord}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <!-- Security Alert Webhook -->
+                    <StackPanel Margin="0,0,0,15">
+                        <TextBlock Text="Security Alert Webhook URL (Optional)" 
+                                   Foreground="#AAA" 
+                                   FontSize="12" 
+                                   Margin="0,0,0,5"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding SecurityAlertWebhookUrl, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                                     Foreground="White"
+                                     Margin="0,0,10,0"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                            
+                            <Button Grid.Column="1"
+                                    Content="Test"
+                                    Command="{Binding TestWebhookCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Height="40"/>
+                        </Grid>
+                        <TextBlock Text="If not specified, will use the main Discord webhook" 
+                                   FontSize="10" 
+                                   Foreground="#666" 
+                                   Margin="0,5,0,0"/>
+                    </StackPanel>
+
+                    <!-- Log All Actions -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Log All Actions" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Log all monitored actions to the database (recommended)" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding SecurityLogAllActions}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Threshold Settings -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Instance Kicks -->
+                <Border Grid.Column="0" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="👢" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1" 
+                                       VerticalAlignment="Center">
+                                <Run Text="Instance Kicks" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                                <LineBreak/>
+                                <Run Text="(from instances only)" FontSize="10" Foreground="#999"/>
+                            </TextBlock>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorInstanceKicks}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Instance Kicks" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityInstanceKickThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityInstanceKickTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Group Kicks -->
+                <Border Grid.Column="2" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="🚪" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1" 
+                                       VerticalAlignment="Center">
+                                <Run Text="Group Kicks" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                                <LineBreak/>
+                                <Run Text="(from group permanently)" FontSize="10" Foreground="#999"/>
+                            </TextBlock>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorGroupKicks}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Group Kicks" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityGroupKickThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 5"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityGroupKickTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Instance Bans -->
+                <Border Grid.Column="0" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="🔨" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1" 
+                                       VerticalAlignment="Center">
+                                <Run Text="Instance Bans" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                                <LineBreak/>
+                                <Run Text="(from instances only)" FontSize="10" Foreground="#999"/>
+                            </TextBlock>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorInstanceBans}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Instance Bans" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityInstanceBanThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityInstanceBanTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Group Bans -->
+                <Border Grid.Column="2" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="🚫" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1" 
+                                       VerticalAlignment="Center">
+                                <Run Text="Group Bans" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                                <LineBreak/>
+                                <Run Text="(from group permanently)" FontSize="10" Foreground="#999"/>
+                            </TextBlock>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorGroupBans}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Group Bans" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityGroupBanThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 3"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityGroupBanTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Role Removals -->
+                <Border Grid.Column="0" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="👤" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                       Text="Role Removal Threshold" 
+                                       FontSize="16" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="White" 
+                                       VerticalAlignment="Center"/>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorRoleRemovals}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Role Removals" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityRoleRemovalThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 5"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityRoleRemovalTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Post Deletions -->
+                <Border Grid.Column="2" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="🗑️" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                       Text="Post Deletion Threshold" 
+                                       FontSize="16" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="White" 
+                                       VerticalAlignment="Center"/>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorPostDeletions}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Deletions" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityPostDeletionThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 5"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityPostDeletionTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Invite Rejections -->
+                <Border Grid.Column="0" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                       Text="✉️" 
+                                       FontSize="20" 
+                                       VerticalAlignment="Center" 
+                                       Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                       Text="Invite Rejection Threshold" 
+                                       FontSize="16" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="White" 
+                                       VerticalAlignment="Center"/>
+                            
+                            <ToggleButton Grid.Column="2" 
+                                          IsChecked="{Binding SecurityMonitorInviteRejections}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Max Rejections" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityInviteRejectionThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityInviteRejectionTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Placeholder for symmetry -->
+                <Border Grid.Column="2" Background="Transparent"/>
+            </Grid>
+
+            <!-- Save Button -->
+            <Button Content="💾 Save Security Settings"
+                    Command="{Binding SaveSettingsCommand}"
+                    Height="50"
+                    FontSize="16"
+                    FontWeight="SemiBold"
+                    Margin="0,0,0,20"
+                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+
+            <!-- Recent Incidents -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20">
+                <StackPanel>
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBlock Grid.Column="0"
+                                   Text="📊 Recent Security Incidents" 
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White" 
+                                   VerticalAlignment="Center"/>
+                        
+                        <Button Grid.Column="1"
+                                Content="🔄 Refresh"
+                                Command="{Binding LoadRecentIncidentsCommand}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Height="36"/>
+                    </Grid>
+
+                    <!-- Loading Indicator -->
+                    <ProgressBar IsIndeterminate="True"
+                                 Height="4"
+                                 Margin="0,10"
+                                 Visibility="{Binding IsLoadingIncidents, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <!-- Incidents List -->
+                    <ItemsControl ItemsSource="{Binding RecentIncidents}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#252526" 
+                                        CornerRadius="6" 
+                                        Padding="15" 
+                                        Margin="0,0,0,10">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Header -->
+                                        <Grid Grid.Row="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding IncidentType}" 
+                                                           FontWeight="SemiBold" 
+                                                           Foreground="#F44336" 
+                                                           FontSize="14"/>
+                                                <TextBlock Foreground="#AAA" FontSize="11">
+                                                    <Run Text="{Binding ActorDisplayName}"/>
+                                                    <Run Text="(" Foreground="#666"/>
+                                                    <Run Text="{Binding ActorUserId}" Foreground="#666"/>
+                                                    <Run Text=")" Foreground="#666"/>
+                                                </TextBlock>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Border Background="#4CAF50" 
+                                                        CornerRadius="3" 
+                                                        Padding="6,3"
+                                                        Margin="5,0"
+                                                        Visibility="{Binding RolesRemoved, Converter={StaticResource BoolToVisibility}}">
+                                                    <TextBlock Text="Roles Removed" 
+                                                               Foreground="White" 
+                                                               FontSize="10"/>
+                                                </Border>
+
+                                                <Border Background="#2196F3" 
+                                                        CornerRadius="3" 
+                                                        Padding="6,3"
+                                                        Margin="5,0"
+                                                        Visibility="{Binding DiscordNotified, Converter={StaticResource BoolToVisibility}}">
+                                                    <TextBlock Text="Discord Notified" 
+                                                               Foreground="White" 
+                                                               FontSize="10"/>
+                                                </Border>
+
+                                                <Border Background="#4CAF50" 
+                                                        CornerRadius="3" 
+                                                        Padding="6,3"
+                                                        Margin="5,0"
+                                                        Visibility="{Binding IsResolved, Converter={StaticResource BoolToVisibility}}">
+                                                    <TextBlock Text="Resolved" 
+                                                               Foreground="White" 
+                                                               FontSize="10"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <!-- Stats -->
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
+                                            <TextBlock Foreground="#AAA" FontSize="11" Margin="0,0,15,0">
+                                                <Run Text="Actions:"/>
+                                                <Run Text="{Binding ActionCount}" Foreground="White" FontWeight="SemiBold"/>
+                                                <Run Text="/"/>
+                                                <Run Text="{Binding Threshold}" Foreground="White"/>
+                                            </TextBlock>
+
+                                            <TextBlock Foreground="#AAA" FontSize="11" Margin="0,0,15,0">
+                                                <Run Text="Timeframe:"/>
+                                                <Run Text="{Binding TimeframeMinutes}" Foreground="White" FontWeight="SemiBold"/>
+                                                <Run Text="min"/>
+                                            </TextBlock>
+
+                                            <TextBlock Foreground="#AAA" FontSize="11">
+                                                <Run Text="Detected:"/>
+                                                <Run Text="{Binding DetectedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Foreground="White"/>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <!-- Details -->
+                                        <TextBlock Grid.Row="2"
+                                                   Text="{Binding Details}" 
+                                                   Foreground="#999" 
+                                                   FontSize="11" 
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,10,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- No Incidents Message -->
+                    <TextBlock Text="No recent incidents found" 
+                               Foreground="#666" 
+                               FontStyle="Italic" 
+                               HorizontalAlignment="Center"
+                               Margin="0,20"
+                               Visibility="{Binding RecentIncidents.Count, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RecentIncidents.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

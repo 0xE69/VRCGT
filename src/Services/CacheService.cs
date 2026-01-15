@@ -27,6 +27,9 @@ public interface ICacheService
     Task<int> AppendAuditLogsAsync(string groupId, List<AuditLogEntry> newLogs);
     Task<DateTime?> GetLastAuditLogTimestampAsync(string groupId);
     Task<int> GetAuditLogCountAsync(string groupId);
+    Task<List<AuditLogEntry>> GetUnsentDiscordLogsAsync(string groupId, int limit = 100);
+    Task MarkLogAsSentToDiscordAsync(string auditLogId);
+    Task MarkLogsAsSentToDiscordAsync(IEnumerable<string> auditLogIds);
     
     // Group Members
     Task SaveGroupMembersAsync(string groupId, List<GroupMemberInfo> members);
@@ -256,6 +259,22 @@ public class CacheService : ICacheService
     public async Task<int> GetAuditLogCountAsync(string groupId)
     {
         return await _db.GetAuditLogCountAsync(groupId);
+    }
+
+    public async Task<List<AuditLogEntry>> GetUnsentDiscordLogsAsync(string groupId, int limit = 100)
+    {
+        var entities = await _db.GetUnsentDiscordLogsAsync(groupId, limit);
+        return entities.Select(EntityToEntry).ToList();
+    }
+
+    public async Task MarkLogAsSentToDiscordAsync(string auditLogId)
+    {
+        await _db.MarkLogAsSentToDiscordAsync(auditLogId);
+    }
+
+    public async Task MarkLogsAsSentToDiscordAsync(IEnumerable<string> auditLogIds)
+    {
+        await _db.MarkLogsAsSentToDiscordAsync(auditLogIds);
     }
 
     private static AuditLogEntry EntityToEntry(AuditLogEntity entity)

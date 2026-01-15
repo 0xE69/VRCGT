@@ -59,6 +59,9 @@ public partial class DiscordSettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _notifyInstanceClosed;
 
+    [ObservableProperty]
+    private bool _notifyInstanceWarn;
+
     // Group Events
     [ObservableProperty]
     private bool _notifyGroupUpdate;
@@ -149,6 +152,7 @@ public partial class DiscordSettingsViewModel : ObservableObject
         NotifyInstanceDelete = settings.DiscordNotifyInstanceDelete;
         NotifyInstanceOpened = settings.DiscordNotifyInstanceOpened;
         NotifyInstanceClosed = settings.DiscordNotifyInstanceClosed;
+        NotifyInstanceWarn = settings.DiscordNotifyInstanceWarn;
         
         // Group Events
         NotifyGroupUpdate = settings.DiscordNotifyGroupUpdate;
@@ -204,6 +208,7 @@ public partial class DiscordSettingsViewModel : ObservableObject
     partial void OnNotifyInstanceDeleteChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyInstanceOpenedChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyInstanceClosedChanged(bool value) => AutoSaveSettings();
+    partial void OnNotifyInstanceWarnChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyGroupUpdateChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyInviteCreateChanged(bool value) => AutoSaveSettings();
     partial void OnNotifyInviteAcceptChanged(bool value) => AutoSaveSettings();
@@ -250,16 +255,18 @@ public partial class DiscordSettingsViewModel : ObservableObject
         IsTesting = true;
         StatusMessage = "Testing webhook...";
 
-        var success = await _discordService.TestWebhookAsync(WebhookUrl);
+        var result = await _discordService.TestWebhookAsync(WebhookUrl);
 
-        if (success)
+        if (result.Success)
         {
             StatusMessage = "✅ Webhook connected successfully!";
             IsWebhookValid = true;
         }
         else
         {
-            StatusMessage = "❌ Failed to connect. Check the webhook URL.";
+            var status = result.StatusCode.HasValue ? $" (HTTP {result.StatusCode})" : "";
+            var error = string.IsNullOrWhiteSpace(result.ErrorMessage) ? "" : $" {result.ErrorMessage}";
+            StatusMessage = $"❌ Failed to connect{status}.{error}";
             IsWebhookValid = false;
         }
 
@@ -272,7 +279,7 @@ public partial class DiscordSettingsViewModel : ObservableObject
         Console.WriteLine("[DISCORD-VM] SaveSettings called");
         var settings = _settingsService.Settings;
         settings.DiscordWebhookUrl = WebhookUrl;
-        Console.WriteLine($"[DISCORD-VM] Saving webhook URL: {WebhookUrl?.Substring(0, Math.Min(50, WebhookUrl?.Length ?? 0))}...");
+        Console.WriteLine("[DISCORD-VM] Saving webhook URL (redacted)");
         
         // User Events
         settings.DiscordNotifyUserJoins = NotifyUserJoins;
@@ -293,6 +300,7 @@ public partial class DiscordSettingsViewModel : ObservableObject
         settings.DiscordNotifyInstanceDelete = NotifyInstanceDelete;
         settings.DiscordNotifyInstanceOpened = NotifyInstanceOpened;
         settings.DiscordNotifyInstanceClosed = NotifyInstanceClosed;
+        settings.DiscordNotifyInstanceWarn = NotifyInstanceWarn;
         
         // Group Events
         settings.DiscordNotifyGroupUpdate = NotifyGroupUpdate;
@@ -348,6 +356,7 @@ public partial class DiscordSettingsViewModel : ObservableObject
         NotifyInstanceDelete = true;
         NotifyInstanceOpened = true;
         NotifyInstanceClosed = true;
+        NotifyInstanceWarn = true;
         
         // Group Events
         NotifyGroupUpdate = true;
@@ -393,6 +402,7 @@ public partial class DiscordSettingsViewModel : ObservableObject
         NotifyInstanceDelete = false;
         NotifyInstanceOpened = false;
         NotifyInstanceClosed = false;
+        NotifyInstanceWarn = false;
         
         // Group Events
         NotifyGroupUpdate = false;

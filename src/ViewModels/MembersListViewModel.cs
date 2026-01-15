@@ -13,6 +13,7 @@ public partial class MembersListViewModel : ObservableObject
 {
     private readonly IVRChatApiService _apiService;
     private readonly MainViewModel _mainViewModel;
+    private readonly ICacheService _cacheService;
 
     [ObservableProperty] private ObservableCollection<GroupMember> _members = new();
     [ObservableProperty] private string _status = string.Empty;
@@ -33,6 +34,7 @@ public partial class MembersListViewModel : ObservableObject
     {
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
+        _cacheService = App.Services.GetRequiredService<ICacheService>();
     }
 
     public IEnumerable<GroupMember> FilteredMembers => Members.Where(m =>
@@ -40,6 +42,50 @@ public partial class MembersListViewModel : ObservableObject
             (m.DisplayName ?? string.Empty).Contains(Filter, StringComparison.OrdinalIgnoreCase) ||
             (m.UserId ?? string.Empty).Contains(Filter, StringComparison.OrdinalIgnoreCase)) &&
         (SelectedRole == "(All)" || m.RoleIds?.Contains(SelectedRole) == true));
+
+    [RelayCommand]
+    private async Task LoadFromCacheAsync()
+    {
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            Status = "Set a Group ID first.";
+            return;
+        }
+
+        IsBusy = true;
+        Status = "Loading members from cache...";
+        Members.Clear();
+        RoleFilters.Clear();
+        RoleFilters.Add("(All)");
+
+        var cached = await _cacheService.LoadAsync<List<GroupMember>>($"group_members_{groupId}");
+        if (cached == null || cached.Count == 0)
+        {
+            Status = "No cached members found. Use Refresh to fetch from API.";
+            IsBusy = false;
+            return;
+        }
+
+        foreach (var member in cached)
+        {
+            Members.Add(member);
+            if (member.RoleIds != null)
+            {
+                foreach (var role in member.RoleIds)
+                {
+                    if (!string.IsNullOrWhiteSpace(role) && !RoleFilters.Contains(role))
+                    {
+                        RoleFilters.Add(role);
+                    }
+                }
+            }
+        }
+
+        Status = $"Loaded {cached.Count} members from cache.";
+        IsBusy = false;
+        OnPropertyChanged(nameof(FilteredMembers));
+    }
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -78,6 +124,7 @@ public partial class MembersListViewModel : ObservableObject
         }
 
         Status = list.Count == 0 ? "No members found." : $"Loaded {list.Count} members.";
+        await _cacheService.SaveAsync($"group_members_{groupId}", list);
         IsBusy = false;
         OnPropertyChanged(nameof(FilteredMembers));
     }
@@ -215,19 +262,40 @@ public partial class MembersListViewModel : ObservableObject
         var groupId = _mainViewModel.GroupId;
         if (string.IsNullOrWhiteSpace(groupId)) return;
         
+        // Show moderation dialog
+        var request = await Helpers.ModerationDialogHelper.ShowModerationDialogAsync(
+            "kick",
+            groupId,
+            SelectedMember.UserId,
+            SelectedMember.DisplayName
+        );
+        
+        if (request == null) return; // User cancelled
+        
         IsBusy = true;
         Status = $"Kicking {SelectedMember.DisplayName}...";
         
         try
         {
-            var success = await _apiService.KickGroupMemberAsync(groupId, SelectedMember.UserId);
+            var moderationService = App.Services.GetRequiredService<IModerationService>();
+            
+            // Log the moderation action
+            await moderationService.LogModerationActionAsync(
+                groupId,
+                request,
+                _apiService.CurrentUserId ?? "unknown",
+                _apiService.CurrentUserDisplayName ?? "Unknown"
+            );
+            
+            // Execute the kick
+            var success = await _apiService.KickGroupMemberAsync(groupId, SelectedMember.UserId, request.Reason, request.Description);
             if (success)
             {
                 Members.Remove(SelectedMember);
                 OnPropertyChanged(nameof(FilteredMembers));
                 ShowMemberPanel = false;
                 SelectedMember = null;
-                Status = "Member kicked from group.";
+                Status = $"Member kicked: {request.Reason}";
             }
             else
             {
@@ -252,23 +320,119 @@ public partial class MembersListViewModel : ObservableObject
         var groupId = _mainViewModel.GroupId;
         if (string.IsNullOrWhiteSpace(groupId)) return;
         
+        // Show moderation dialog
+        var request = await Helpers.ModerationDialogHelper.ShowModerationDialogAsync(
+            "ban",
+            groupId,
+            SelectedMember.UserId,
+            SelectedMember.DisplayName
+        );
+        
+        if (request == null) return; // User cancelled
+        
         IsBusy = true;
         Status = $"Banning {SelectedMember.DisplayName}...";
         
         try
         {
-            var success = await _apiService.BanGroupMemberAsync(groupId, SelectedMember.UserId);
+            var moderationService = App.Services.GetRequiredService<IModerationService>();
+            
+            // Log the moderation action
+            await moderationService.LogModerationActionAsync(
+                groupId,
+                request,
+                _apiService.CurrentUserId ?? "unknown",
+                _apiService.CurrentUserDisplayName ?? "Unknown"
+            );
+            
+            // Execute the ban
+            var success = await _apiService.BanGroupMemberAsync(groupId, SelectedMember.UserId, request.Reason, request.Description);
             if (success)
             {
                 Members.Remove(SelectedMember);
                 OnPropertyChanged(nameof(FilteredMembers));
                 ShowMemberPanel = false;
                 SelectedMember = null;
-                Status = "Member banned from group.";
+                Status = $"Member banned: {request.Reason}";
             }
             else
             {
                 Status = "Failed to ban member.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task WarnMemberAsync()
+    {
+        if (SelectedMember == null) return;
+        
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+        
+        // Show moderation dialog
+        var request = await Helpers.ModerationDialogHelper.ShowModerationDialogAsync(
+            "warning",
+            groupId,
+            SelectedMember.UserId,
+            SelectedMember.DisplayName
+        );
+        
+        if (request == null) return; // User cancelled
+        
+        IsBusy = true;
+        Status = $"Warning {SelectedMember.DisplayName}...";
+        
+        try
+        {
+            var moderationService = App.Services.GetRequiredService<IModerationService>();
+            
+            // Log the warning
+            await moderationService.LogModerationActionAsync(
+                groupId,
+                request,
+                _apiService.CurrentUserId ?? "unknown",
+                _apiService.CurrentUserDisplayName ?? "Unknown"
+            );
+            
+            // Send warning notification via API (this just logs locally)
+            var success = await _apiService.WarnUserAsync(groupId, SelectedMember.UserId, request.Reason, request.Description);
+            if (success)
+            {
+                Status = $"Warning issued: {request.Reason}";
+                
+                // Optionally send Discord notification
+                try
+                {
+                    var discordService = App.Services.GetService<IDiscordWebhookService>();
+                    if (discordService != null && discordService.IsConfigured)
+                    {
+                        var history = await moderationService.GetInfractionHistoryAsync(groupId, SelectedMember.UserId);
+                        await discordService.SendModerationActionAsync(
+                            "warning",
+                            SelectedMember.DisplayName,
+                            _apiService.CurrentUserDisplayName ?? "Unknown",
+                            request.Reason,
+                            request.Description,
+                            DateTime.UtcNow,
+                            null,
+                            history.TotalWarnings
+                        );
+                    }
+                }
+                catch { /* Discord notification failed, but warning was logged */ }
+            }
+            else
+            {
+                Status = "Failed to issue warning.";
             }
         }
         catch (Exception ex)

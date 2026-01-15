@@ -29,6 +29,15 @@ public partial class MemberWithRoles : ObservableObject
     private bool _isSelected = true;
 }
 
+public partial class RoleSelectionItem : ObservableObject
+{
+    public string RoleId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    private bool _isSelected = true;
+}
+
 /// <summary>
 /// Display model for a role snapshot (for restoration)
 /// </summary>
@@ -71,9 +80,11 @@ public partial class KillSwitchViewModel : ObservableObject
 {
     private readonly IVRChatApiService _apiService;
     private readonly MainViewModel _mainViewModel;
+    private readonly ICacheService _cacheService;
 
     [ObservableProperty] private ObservableCollection<MemberWithRoles> _membersWithRoles = new();
     [ObservableProperty] private ObservableCollection<GroupRoleDisplay> _allRoles = new();
+    [ObservableProperty] private ObservableCollection<RoleSelectionItem> _roleSelections = new();
     [ObservableProperty] private ObservableCollection<SnapshotDisplay> _snapshots = new();
     [ObservableProperty] private ObservableCollection<SnapshotUserRoles> _snapshotUsers = new();
     
@@ -92,14 +103,106 @@ public partial class KillSwitchViewModel : ObservableObject
     
     [ObservableProperty] private int _totalMembersWithRoles;
     [ObservableProperty] private int _totalRoleAssignments;
+    [ObservableProperty] private int _selectedMembersCount;
+    [ObservableProperty] private int _selectedRoleAssignmentsToRemove;
+    [ObservableProperty] private int _selectedRolesCount;
 
     public KillSwitchViewModel()
     {
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
+        _cacheService = App.Services.GetRequiredService<ICacheService>();
     }
 
     public IEnumerable<MemberWithRoles> SelectedMembers => MembersWithRoles.Where(m => m.IsSelected);
+
+    [RelayCommand]
+    private async Task LoadMembersFromCacheAsync()
+    {
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            Status = "Set a Group ID first.";
+            return;
+        }
+
+        IsBusy = true;
+        Status = "Loading cached roles and members...";
+        MembersWithRoles.Clear();
+        AllRoles.Clear();
+        RoleSelections.Clear();
+
+        var cachedRoles = await _cacheService.LoadAsync<List<GroupRole>>($"group_roles_{groupId}") ?? new List<GroupRole>();
+        foreach (var role in cachedRoles)
+        {
+            var roleName = role.Name ?? "Unknown";
+            AllRoles.Add(new GroupRoleDisplay { RoleId = role.RoleId, Name = roleName });
+            var roleSelection = new RoleSelectionItem { RoleId = role.RoleId, Name = roleName, IsSelected = true };
+            roleSelection.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(RoleSelectionItem.IsSelected))
+                {
+                    UpdateSelectionStats();
+                }
+            };
+            RoleSelections.Add(roleSelection);
+        }
+
+        var cachedMembers = await _cacheService.LoadAsync<List<GroupMember>>($"group_members_{groupId}");
+        if (cachedMembers == null || cachedMembers.Count == 0)
+        {
+            Status = "No cached members found. Use Refresh to fetch from API.";
+            IsBusy = false;
+            return;
+        }
+
+        int totalAssignments = 0;
+        foreach (var member in cachedMembers)
+        {
+            if (member.RoleIds == null || member.RoleIds.Count == 0)
+                continue;
+
+            var memberRoles = new ObservableCollection<GroupRoleDisplay>();
+            foreach (var roleId in member.RoleIds)
+            {
+                var role = AllRoles.FirstOrDefault(r => r.RoleId == roleId);
+                if (role != null)
+                {
+                    if (role.Name?.Equals("Member", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
+                    memberRoles.Add(new GroupRoleDisplay { RoleId = role.RoleId, Name = role.Name ?? "Unknown" });
+                }
+            }
+
+            if (memberRoles.Count > 0)
+            {
+                var newMember = new MemberWithRoles
+                {
+                    UserId = member.UserId ?? string.Empty,
+                    DisplayName = member.DisplayName ?? "Unknown",
+                    Roles = memberRoles
+                };
+                newMember.PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName == nameof(MemberWithRoles.IsSelected))
+                    {
+                        UpdateSelectionStats();
+                    }
+                };
+                MembersWithRoles.Add(newMember);
+                totalAssignments += memberRoles.Count;
+            }
+        }
+
+        TotalMembersWithRoles = MembersWithRoles.Count;
+        TotalRoleAssignments = totalAssignments;
+        UpdateSelectionStats();
+        Status = MembersWithRoles.Count == 0
+            ? "No members with special roles found in cache."
+            : $"Loaded {MembersWithRoles.Count} members with {totalAssignments} role assignments from cache.";
+
+        IsBusy = false;
+    }
 
     [RelayCommand]
     private async Task LoadMembersWithRolesAsync()
@@ -115,6 +218,7 @@ public partial class KillSwitchViewModel : ObservableObject
         Status = "Loading group roles...";
         MembersWithRoles.Clear();
         AllRoles.Clear();
+        RoleSelections.Clear();
 
         try
         {
@@ -122,8 +226,20 @@ public partial class KillSwitchViewModel : ObservableObject
             var roles = await _apiService.GetGroupRolesAsync(groupId);
             foreach (var role in roles)
             {
-                AllRoles.Add(new GroupRoleDisplay { RoleId = role.RoleId, Name = role.Name });
+                var roleName = role.Name ?? "Unknown";
+                AllRoles.Add(new GroupRoleDisplay { RoleId = role.RoleId, Name = roleName });
+                var roleSelection = new RoleSelectionItem { RoleId = role.RoleId, Name = roleName, IsSelected = true };
+                roleSelection.PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName == nameof(RoleSelectionItem.IsSelected))
+                    {
+                        UpdateSelectionStats();
+                    }
+                };
+                RoleSelections.Add(roleSelection);
             }
+
+            await _cacheService.SaveAsync($"group_roles_{groupId}", roles);
             
             Status = "Loading members...";
             
@@ -132,6 +248,8 @@ public partial class KillSwitchViewModel : ObservableObject
             {
                 Status = $"Loaded {count} members...";
             });
+
+            await _cacheService.SaveAsync($"group_members_{groupId}", members);
 
             // Filter to only members with roles (excluding the default "member" role if it's the only one)
             int totalAssignments = 0;
@@ -163,12 +281,20 @@ public partial class KillSwitchViewModel : ObservableObject
                         DisplayName = member.DisplayName ?? "Unknown",
                         Roles = memberRoles
                     });
+                    MembersWithRoles.Last().PropertyChanged += (_, args) =>
+                    {
+                        if (args.PropertyName == nameof(MemberWithRoles.IsSelected))
+                        {
+                            UpdateSelectionStats();
+                        }
+                    };
                     totalAssignments += memberRoles.Count;
                 }
             }
 
             TotalMembersWithRoles = MembersWithRoles.Count;
             TotalRoleAssignments = totalAssignments;
+            UpdateSelectionStats();
             Status = MembersWithRoles.Count == 0 
                 ? "No members with special roles found." 
                 : $"Found {MembersWithRoles.Count} members with {totalAssignments} role assignments.";
@@ -271,6 +397,9 @@ public partial class KillSwitchViewModel : ObservableObject
             return;
         }
 
+        var selectedRoleIds = RoleSelections.Where(r => r.IsSelected).Select(r => r.RoleId).ToHashSet();
+        var hasRoleFilter = selectedRoleIds.Count > 0;
+
         ShowConfirmPanel = false;
         IsRemoving = true;
         IsBusy = true;
@@ -307,7 +436,9 @@ public partial class KillSwitchViewModel : ObservableObject
             Status = "Snapshot saved. Removing roles...";
             
             // Now remove all roles
-            int totalRoles = selectedMembers.Sum(m => m.Roles.Count);
+            int totalRoles = selectedMembers.Sum(m => hasRoleFilter
+                ? m.Roles.Count(r => selectedRoleIds.Contains(r.RoleId))
+                : m.Roles.Count);
             ProgressTotal = totalRoles;
             ProgressCurrent = 0;
             
@@ -316,7 +447,11 @@ public partial class KillSwitchViewModel : ObservableObject
             
             foreach (var member in selectedMembers)
             {
-                foreach (var role in member.Roles.ToList())
+                var rolesToRemove = hasRoleFilter
+                    ? member.Roles.Where(r => selectedRoleIds.Contains(r.RoleId)).ToList()
+                    : member.Roles.ToList();
+
+                foreach (var role in rolesToRemove)
                 {
                     ProgressText = $"Removing {role.Name} from {member.DisplayName}...";
                     
@@ -349,6 +484,7 @@ public partial class KillSwitchViewModel : ObservableObject
 
             TotalMembersWithRoles = MembersWithRoles.Count;
             TotalRoleAssignments = MembersWithRoles.Sum(m => m.Roles.Count);
+            UpdateSelectionStats();
             
             Status = $"Kill Switch complete! Removed {successCount} roles. {failCount} failed. Snapshot saved for restoration.";
             ProgressText = string.Empty;
@@ -367,6 +503,41 @@ public partial class KillSwitchViewModel : ObservableObject
             ProgressCurrent = 0;
             ProgressTotal = 0;
         }
+    }
+
+    [RelayCommand]
+    private void SelectAllRoles()
+    {
+        foreach (var role in RoleSelections)
+        {
+            role.IsSelected = true;
+        }
+        UpdateSelectionStats();
+    }
+
+    [RelayCommand]
+    private void DeselectAllRoles()
+    {
+        foreach (var role in RoleSelections)
+        {
+            role.IsSelected = false;
+        }
+        UpdateSelectionStats();
+    }
+
+    private void UpdateSelectionStats()
+    {
+        SelectedMembersCount = MembersWithRoles.Count(m => m.IsSelected);
+
+        var selectedRoleIds = RoleSelections.Where(r => r.IsSelected).Select(r => r.RoleId).ToHashSet();
+        SelectedRolesCount = selectedRoleIds.Count;
+
+        var hasRoleFilter = selectedRoleIds.Count > 0;
+        SelectedRoleAssignmentsToRemove = MembersWithRoles
+            .Where(m => m.IsSelected)
+            .Sum(m => hasRoleFilter
+                ? m.Roles.Count(r => selectedRoleIds.Contains(r.RoleId))
+                : m.Roles.Count);
     }
 
     [RelayCommand]
@@ -547,6 +718,7 @@ public partial class KillSwitchViewModel : ObservableObject
         {
             member.IsSelected = true;
         }
+        UpdateSelectionStats();
     }
 
     [RelayCommand]
@@ -556,5 +728,6 @@ public partial class KillSwitchViewModel : ObservableObject
         {
             member.IsSelected = false;
         }
+        UpdateSelectionStats();
     }
 }

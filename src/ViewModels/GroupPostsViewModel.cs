@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ public partial class GroupPostsViewModel : ObservableObject
 {
     private readonly IVRChatApiService _apiService;
     private readonly MainViewModel _mainViewModel;
+    private readonly ICacheService _cacheService;
 
     [ObservableProperty] private ObservableCollection<GroupPostItem> _posts = new();
     [ObservableProperty] private bool _isLoading;
@@ -35,6 +37,7 @@ public partial class GroupPostsViewModel : ObservableObject
     {
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
+        _cacheService = App.Services.GetRequiredService<ICacheService>();
     }
 
     [RelayCommand]
@@ -61,6 +64,7 @@ public partial class GroupPostsViewModel : ObservableObject
             }
             _offset = posts.Count;
             CanLoadMore = posts.Count >= PageSize;
+            await _cacheService.SaveAsync($"group_posts_{groupId}", Posts.ToList());
             Status = posts.Count == 0 ? "No posts found" : $"Loaded {posts.Count} posts";
         }
         catch (Exception ex)
@@ -92,6 +96,7 @@ public partial class GroupPostsViewModel : ObservableObject
             }
             _offset += posts.Count;
             CanLoadMore = posts.Count >= PageSize;
+            await _cacheService.SaveAsync($"group_posts_{groupId}", Posts.ToList());
             Status = $"Loaded {Posts.Count} posts total";
         }
         catch (Exception ex)
@@ -102,6 +107,35 @@ public partial class GroupPostsViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task LoadFromCacheAsync()
+    {
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            Status = "Please set a Group ID first";
+            return;
+        }
+
+        Status = "Loading cached posts...";
+        var cached = await _cacheService.LoadAsync<List<GroupPostItem>>($"group_posts_{groupId}");
+        if (cached == null || cached.Count == 0)
+        {
+            Status = "No cached posts found";
+            return;
+        }
+
+        Posts.Clear();
+        foreach (var item in cached)
+        {
+            Posts.Add(item);
+        }
+
+        _offset = Posts.Count;
+        CanLoadMore = Posts.Count >= PageSize;
+        Status = $"Loaded {Posts.Count} cached posts";
     }
 
     [RelayCommand]

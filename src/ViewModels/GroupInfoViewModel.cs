@@ -13,6 +13,7 @@ public partial class GroupInfoViewModel : ObservableObject
     private readonly IVRChatApiService _apiService;
     private readonly MainViewModel _mainViewModel;
     private readonly IDiscordPresenceService _discordPresence;
+    private readonly ICacheService _cacheService;
 
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _name = string.Empty;
@@ -32,6 +33,7 @@ public partial class GroupInfoViewModel : ObservableObject
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
         _discordPresence = App.Services.GetRequiredService<IDiscordPresenceService>();
+        _cacheService = App.Services.GetRequiredService<ICacheService>();
     }
 
     /// <summary>
@@ -124,6 +126,20 @@ public partial class GroupInfoViewModel : ObservableObject
                     bannerUrl: info.BannerUrl ?? string.Empty);
             });
 
+            await _cacheService.SaveAsync($"group_info_{groupId}", new GroupInfoCache
+            {
+                Name = info.Name ?? string.Empty,
+                GroupId = info.Id ?? string.Empty,
+                MemberCount = info.MemberCount,
+                OnlineCount = info.OnlineCount,
+                CreatedAt = createdAt,
+                JoinedAt = joinedAt,
+                GroupUrl = groupUrl,
+                Description = info.Description ?? string.Empty,
+                IconUrl = info.IconUrl ?? string.Empty,
+                BannerUrl = info.BannerUrl ?? string.Empty
+            });
+
             _discordPresence.UpdateGroupPresence(info.Name ?? string.Empty, info.Id ?? string.Empty, info.MemberCount, info.OnlineCount);
             LoggingService.Info("GroupInfo", "Refresh complete");
         }
@@ -137,5 +153,53 @@ public partial class GroupInfoViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task LoadFromCacheAsync()
+    {
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId))
+        {
+            ErrorMessage = "Set a Group ID first.";
+            return;
+        }
+
+        ErrorMessage = string.Empty;
+        var cached = await _cacheService.LoadAsync<GroupInfoCache>($"group_info_{groupId}");
+        if (cached == null)
+        {
+            ErrorMessage = "No cached group info found.";
+            return;
+        }
+
+        await Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            ApplyGroupData(
+                name: cached.Name,
+                groupId: cached.GroupId,
+                memberCount: cached.MemberCount,
+                onlineCount: cached.OnlineCount,
+                createdAt: cached.CreatedAt,
+                joinedAt: cached.JoinedAt,
+                groupUrl: cached.GroupUrl,
+                description: cached.Description,
+                iconUrl: cached.IconUrl,
+                bannerUrl: cached.BannerUrl);
+        });
+    }
+
+    private class GroupInfoCache
+    {
+        public string Name { get; set; } = string.Empty;
+        public string GroupId { get; set; } = string.Empty;
+        public int MemberCount { get; set; }
+        public int OnlineCount { get; set; }
+        public string CreatedAt { get; set; } = string.Empty;
+        public string JoinedAt { get; set; } = string.Empty;
+        public string GroupUrl { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string IconUrl { get; set; } = string.Empty;
+        public string BannerUrl { get; set; } = string.Empty;
     }
 }

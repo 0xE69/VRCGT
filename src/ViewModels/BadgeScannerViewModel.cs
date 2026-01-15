@@ -13,6 +13,7 @@ public partial class BadgeScannerViewModel : ObservableObject
 {
     private readonly IVRChatApiService _apiService;
     private readonly ISettingsService _settingsService;
+    private readonly ICacheService _cacheService;
     private CancellationTokenSource? _cancellationTokenSource;
 
     [ObservableProperty]
@@ -58,6 +59,7 @@ public partial class BadgeScannerViewModel : ObservableObject
     {
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _settingsService = App.Services.GetRequiredService<ISettingsService>();
+        _cacheService = App.Services.GetRequiredService<ICacheService>();
         GroupId = _settingsService.Settings.GroupId ?? "";
     }
 
@@ -92,14 +94,7 @@ public partial class BadgeScannerViewModel : ObservableObject
             return;
         }
 
-        // Clean up group ID (extract from URL if needed)
-        var cleanGroupId = GroupId;
-        if (GroupId.Contains("vrchat.com"))
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(GroupId, @"grp_[a-f0-9-]+");
-            if (match.Success)
-                cleanGroupId = match.Value;
-        }
+        var cleanGroupId = NormalizeGroupId(GroupId);
 
         IsScanning = true;
         _cancellationTokenSource = new CancellationTokenSource();
@@ -168,7 +163,11 @@ public partial class BadgeScannerViewModel : ObservableObject
                 });
             }
 
-            StatusMessage = $"Scan complete! {verified} verified, {unverified} unverified out of {TotalMembers} members";
+            if (!_cancellationTokenSource.Token.IsCancellationRequested)
+            {
+                await _cacheService.SaveAsync($"badge_scan_{cleanGroupId}", AllResults.ToList());
+                StatusMessage = $"Scan complete! {verified} verified, {unverified} unverified out of {TotalMembers} members";
+            }
         }
         catch (Exception ex)
         {
@@ -187,6 +186,56 @@ public partial class BadgeScannerViewModel : ObservableObject
     {
         _cancellationTokenSource?.Cancel();
         StatusMessage = "Scan cancelled";
+    }
+
+    [RelayCommand]
+    private async Task LoadFromCacheAsync()
+    {
+        if (string.IsNullOrWhiteSpace(GroupId))
+        {
+            StatusMessage = "Please enter a Group ID";
+            return;
+        }
+
+        var cleanGroupId = NormalizeGroupId(GroupId);
+        StatusMessage = "Loading cached scan results...";
+        var cached = await _cacheService.LoadAsync<List<MemberScanResult>>($"badge_scan_{cleanGroupId}");
+        if (cached == null || cached.Count == 0)
+        {
+            StatusMessage = "No cached scan results found";
+            return;
+        }
+
+        AllResults.Clear();
+        FilteredResults.Clear();
+
+        foreach (var item in cached)
+        {
+            AllResults.Add(item);
+        }
+
+        TotalMembers = AllResults.Count;
+        ScannedMembers = AllResults.Count;
+        VerifiedCount = AllResults.Count(r => r.IsAgeVerified == true);
+        UnverifiedCount = AllResults.Count(r => r.IsAgeVerified == false);
+        KickedCount = AllResults.Count(r => r.WasKicked);
+        ProgressPercent = TotalMembers > 0 ? 100 : 0;
+        ApplyFilter();
+
+        StatusMessage = $"Loaded {AllResults.Count} cached results";
+    }
+
+    private static string NormalizeGroupId(string groupId)
+    {
+        var cleanGroupId = groupId;
+        if (groupId.Contains("vrchat.com"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(groupId, @"grp_[a-f0-9-]+");
+            if (match.Success)
+                cleanGroupId = match.Value;
+        }
+
+        return cleanGroupId;
     }
 
     [RelayCommand]
@@ -291,14 +340,7 @@ public partial class BadgeScannerViewModel : ObservableObject
             return;
         }
 
-        // Clean up group ID
-        var cleanGroupId = GroupId;
-        if (GroupId.Contains("vrchat.com"))
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(GroupId, @"grp_[a-f0-9-]+");
-            if (match.Success)
-                cleanGroupId = match.Value;
-        }
+        var cleanGroupId = NormalizeGroupId(GroupId);
 
         IsKicking = true;
         StatusMessage = $"Kicking {selected.Count} selected members...";
@@ -357,14 +399,7 @@ public partial class BadgeScannerViewModel : ObservableObject
             return;
         }
 
-        // Clean up group ID
-        var cleanGroupId = GroupId;
-        if (GroupId.Contains("vrchat.com"))
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(GroupId, @"grp_[a-f0-9-]+");
-            if (match.Success)
-                cleanGroupId = match.Value;
-        }
+        var cleanGroupId = NormalizeGroupId(GroupId);
 
         IsKicking = true;
         StatusMessage = $"Kicking {unverified.Count} unverified members...";

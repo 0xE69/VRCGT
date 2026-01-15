@@ -37,6 +37,7 @@
             <converters:DayToggleConverter x:Key="DayToggleConverter"/>
             <converters:DaysOfWeekStringConverter x:Key="DaysOfWeekStringConverter"/>
             <converters:BoolToTestButtonConverter x:Key="BoolToTestButtonConverter"/>
+            <converters:ActionTypeToColorConverter x:Key="ActionTypeToColorConverter"/>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
             
             <!-- Custom Styles -->

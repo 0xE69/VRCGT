@@ -17,6 +17,9 @@ public interface IDatabaseService
     Task<int> SaveAuditLogsAsync(IEnumerable<AuditLogEntity> logs);
     Task<DateTime?> GetLastAuditLogTimestampAsync(string groupId);
     Task<int> GetAuditLogCountAsync(string groupId);
+    Task<List<AuditLogEntity>> GetUnsentDiscordLogsAsync(string groupId, int limit = 100);
+    Task MarkLogAsSentToDiscordAsync(string auditLogId);
+    Task MarkLogsAsSentToDiscordAsync(IEnumerable<string> auditLogIds);
     
     // Group Members
     Task<List<GroupMemberEntity>> GetGroupMembersAsync(string groupId);
@@ -64,6 +67,10 @@ public class DatabaseService : IDatabaseService
         {
             using var context = new AppDbContext();
             await context.Database.EnsureCreatedAsync();
+            
+            // Add missing columns for existing databases
+            await MigrateSchemaAsync(context);
+            
             Console.WriteLine("[DATABASE] Database initialized successfully");
             _initialized = true;
         }
@@ -71,6 +78,83 @@ public class DatabaseService : IDatabaseService
         {
             Console.WriteLine($"[DATABASE] Error initializing database: {ex.Message}");
             throw;
+        }
+    }
+
+    private async Task MigrateSchemaAsync(AppDbContext context)
+    {
+        try
+        {
+            // Check if DiscordSentAt column exists in AuditLogs table
+            var connection = context.Database.GetDbConnection();
+            await connection.OpenAsync();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(AuditLogs)";
+            
+            var hasDiscordSentAt = false;
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    var columnName = reader.GetString(1); // Column name is at index 1
+                    if (columnName == "DiscordSentAt")
+                    {
+                        hasDiscordSentAt = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Add DiscordSentAt column if it doesn't exist
+            if (!hasDiscordSentAt)
+            {
+                Console.WriteLine("[DATABASE] Adding DiscordSentAt column to AuditLogs table...");
+                using var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = "ALTER TABLE AuditLogs ADD COLUMN DiscordSentAt TEXT NULL";
+                await alterCommand.ExecuteNonQueryAsync();
+                Console.WriteLine("[DATABASE] DiscordSentAt column added successfully");
+            }
+
+            // Ensure MemberBackups table exists (older databases won't have it)
+            using var tableCheck = connection.CreateCommand();
+            tableCheck.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='MemberBackups'";
+            var tableName = await tableCheck.ExecuteScalarAsync();
+            if (tableName == null)
+            {
+                Console.WriteLine("[DATABASE] Creating MemberBackups table...");
+                using var createTable = connection.CreateCommand();
+                createTable.CommandText = @"
+CREATE TABLE IF NOT EXISTS MemberBackups (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    BackupId TEXT NOT NULL,
+    GroupId TEXT NOT NULL,
+    UserId TEXT NOT NULL,
+    DisplayName TEXT,
+    ProfilePicUrl TEXT,
+    RoleIds TEXT,
+    RoleNames TEXT,
+    JoinedAt TEXT,
+    BackupCreatedAt TEXT NOT NULL,
+    BackupDescription TEXT,
+    WasReInvited INTEGER NOT NULL,
+    ReInvitedAt TEXT,
+    IsCurrentMember INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_MemberBackups_BackupId ON MemberBackups(BackupId);
+CREATE INDEX IF NOT EXISTS IX_MemberBackups_GroupId ON MemberBackups(GroupId);
+CREATE INDEX IF NOT EXISTS IX_MemberBackups_BackupId_UserId ON MemberBackups(BackupId, UserId);
+CREATE INDEX IF NOT EXISTS IX_MemberBackups_BackupCreatedAt ON MemberBackups(BackupCreatedAt);
+CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReInvited);
+";
+                await createTable.ExecuteNonQueryAsync();
+                Console.WriteLine("[DATABASE] MemberBackups table created successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DATABASE] Schema migration error: {ex.Message}");
+            // Don't throw - allow app to continue
         }
     }
 
@@ -171,6 +255,46 @@ public class DatabaseService : IDatabaseService
     {
         using var context = new AppDbContext();
         return await context.AuditLogs.CountAsync(l => l.GroupId == groupId);
+    }
+
+    public async Task<List<AuditLogEntity>> GetUnsentDiscordLogsAsync(string groupId, int limit = 100)
+    {
+        using var context = new AppDbContext();
+        return await context.AuditLogs
+            .Where(l => l.GroupId == groupId && l.DiscordSentAt == null)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task MarkLogAsSentToDiscordAsync(string auditLogId)
+    {
+        using var context = new AppDbContext();
+        var log = await context.AuditLogs.FirstOrDefaultAsync(l => l.AuditLogId == auditLogId);
+        if (log != null)
+        {
+            log.DiscordSentAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+        }
+    }
+
+    public async Task MarkLogsAsSentToDiscordAsync(IEnumerable<string> auditLogIds)
+    {
+        using var context = new AppDbContext();
+        var logs = await context.AuditLogs
+            .Where(l => auditLogIds.Contains(l.AuditLogId))
+            .ToListAsync();
+
+        foreach (var log in logs)
+        {
+            log.DiscordSentAt = DateTime.UtcNow;
+        }
+
+        if (logs.Any())
+        {
+            await context.SaveChangesAsync();
+            Console.WriteLine($"[DATABASE] Marked {logs.Count} logs as sent to Discord");
+        }
     }
 
     #endregion

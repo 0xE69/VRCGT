@@ -18,6 +18,10 @@
                 <Button Content="Refresh Bans"
                         Command="{Binding RefreshCommand}"
                         Style="{StaticResource MaterialDesignRaisedButton}" Height="32" Width="120"/>
+                <Button Content="Load Cached"
+                    Command="{Binding LoadFromCacheCommand}"
+                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="32" Width="120"
+                    Margin="10,0,0,0"/>
                 <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
                          materialDesign:HintAssist.Hint="Filter by name or userId"
                          Width="220"
@@ -25,6 +29,30 @@
                          Style="{StaticResource MaterialDesignFilledTextBox}"
                          Foreground="White" CaretBrush="White"/>
                 <TextBlock Text="{Binding Status}" Foreground="#7C4DFF" Margin="10,6,0,0" FontWeight="SemiBold"/>
+            </StackPanel>
+            
+            <!-- Filter Options -->
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <TextBlock Text="Show:" Foreground="#AAA" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <CheckBox Content="Instance Bans" 
+                          IsChecked="{Binding ShowInstanceBans}"
+                          Foreground="White"
+                          Margin="0,0,15,0"
+                          Style="{StaticResource MaterialDesignCheckBox}"/>
+                <CheckBox Content="Group Bans" 
+                          IsChecked="{Binding ShowGroupBans}"
+                          Foreground="White"
+                          Margin="0,0,15,0"
+                          Style="{StaticResource MaterialDesignCheckBox}"/>
+                <CheckBox Content="Members" 
+                          IsChecked="{Binding ShowMemberBans}"
+                          Foreground="White"
+                          Margin="0,0,15,0"
+                          Style="{StaticResource MaterialDesignCheckBox}"/>
+                <CheckBox Content="Non-Members" 
+                          IsChecked="{Binding ShowNonMemberBans}"
+                          Foreground="White"
+                          Style="{StaticResource MaterialDesignCheckBox}"/>
             </StackPanel>
         </StackPanel>
 
@@ -196,6 +224,8 @@
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="*"/>
                 <DataGridTextColumn Header="User ID" Binding="{Binding UserId}" Width="2*"/>
+                <DataGridTextColumn Header="Ban Type" Binding="{Binding BanTypeDisplay}" Width="*"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding MembershipDisplay}" Width="*"/>
                 <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="2*"/>
                 <DataGridTextColumn Header="Banned At" Binding="{Binding BannedAt}" Width="*"/>
                 <DataGridTextColumn Header="Expires" Binding="{Binding ExpiresAt}" Width="*"/>

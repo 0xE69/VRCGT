@@ -70,4 +70,13 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         e.Handled = true;
     }
+
+    private void Overlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Close dialog when clicking the overlay background
+        if (e.Source == sender)
+        {
+            _viewModel.CancelAddGroupCommand.Execute(null);
+        }
+    }
 }

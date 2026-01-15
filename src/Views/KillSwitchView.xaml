@@ -27,6 +27,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -62,8 +63,39 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Role Filter -->
+                    <Border Grid.Row="2" Background="#2D2D30" CornerRadius="8" Padding="12" Margin="0,0,0,15">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="🎯 Roles to Remove" Foreground="White" FontWeight="SemiBold"/>
+                                <TextBlock Text=" (leave all checked to remove all roles)" Foreground="#888" Margin="6,0,0,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Content="Select All Roles" Command="{Binding SelectAllRolesCommand}"
+                                        Height="30" Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                <Button Content="Deselect All Roles" Command="{Binding DeselectAllRolesCommand}"
+                                        Margin="10,0,0,0" Height="30" Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding RoleSelections}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Name}"
+                                                  IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                                  Foreground="White"
+                                                  Margin="0,0,12,6"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Members List -->
-                    <Border Grid.Row="2" Background="#2D2D30" CornerRadius="8" Padding="0">
+                    <Border Grid.Row="3" Background="#2D2D30" CornerRadius="8" Padding="0">
                         <DataGrid ItemsSource="{Binding MembersWithRoles}"
                                   AutoGenerateColumns="False"
                                   HeadersVisibility="Column"
@@ -93,7 +125,7 @@
                     </Border>
 
                     <!-- Kill Switch Button -->
-                    <Grid Grid.Row="3" Margin="0,15,0,0">
+                    <Grid Grid.Row="4" Margin="0,15,0,0">
                         <Button Content="🚨 REMOVE ALL SELECTED ROLES 🚨"
                                 Command="{Binding ShowConfirmCommand}"
                                 IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"
@@ -211,7 +243,7 @@
                         <LineBreak/><LineBreak/>
                         This action will:
                         <LineBreak/>• Save a snapshot of current role assignments
-                        <LineBreak/>• Remove all selected roles from selected members
+                        <LineBreak/>• Remove selected roles from selected members
                         <LineBreak/><LineBreak/>
                         You can restore roles later using the saved snapshot.
                     </TextBlock>
@@ -220,11 +252,15 @@
                         <StackPanel>
                             <TextBlock Foreground="#F44336" FontWeight="Bold">
                                 <Run Text="Members affected: "/>
-                                <Run Text="{Binding TotalMembersWithRoles, Mode=OneWay}"/>
+                                <Run Text="{Binding SelectedMembersCount, Mode=OneWay}"/>
                             </TextBlock>
                             <TextBlock Foreground="#F44336" FontWeight="Bold" Margin="0,5,0,0">
                                 <Run Text="Roles to remove: "/>
-                                <Run Text="{Binding TotalRoleAssignments, Mode=OneWay}"/>
+                                <Run Text="{Binding SelectedRoleAssignmentsToRemove, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Foreground="#888" Margin="0,5,0,0">
+                                <Run Text="Role filters selected: "/>
+                                <Run Text="{Binding SelectedRolesCount, Mode=OneWay}"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>

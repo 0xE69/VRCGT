@@ -93,6 +93,7 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 - Auto-refresh toggle
 - Fetch complete history
 - Cached locally for speed
+- **Real-time Security Monitoring:** Automatically tracks suspicious actions
 
 ### 🔍 18+ Badge Scanner
 - Scan entire group for age verification status
@@ -123,7 +124,33 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 - Progress tracking with success/failure counts
 - Excludes default "Member" role from removal
 
-### 🔔 Discord Webhooks
+### � **NEW: Member Backup & Recovery System**
+- **Create Snapshots:** Save complete member lists with roles and join dates
+- **Disaster Recovery:** Restore members after mass removals or attacks
+- **Smart Comparison:** See exactly who's missing vs who's new
+- **Selective Restore:** Re-invite only missing members or everyone
+- **Backup History:** Keep multiple snapshots with custom descriptions
+- **Progress Tracking:** Real-time progress for backup/restore operations
+- **Rate Limited:** Automatic delays to respect VRChat API limits
+- **Status Tracking:** See which members were successfully re-invited
+
+### 🔒 **NEW: Security Monitor**
+- **Automated Threat Detection:** Monitor and respond to suspicious moderator behavior
+- **Configurable Thresholds:** Set limits for kicks, bans, role removals, and more
+- **Automatic Response:** Remove roles from users exceeding thresholds
+- **Discord Alerts:** Receive rich notifications when incidents are detected
+- **Owner Protection:** Require owner role for automatic actions
+- **Incident History:** View all security events with full details
+- **Action Tracking:** Every monitored action logged to database
+- **Multiple Categories:**
+  - Excessive kicks (e.g., 5 kicks in 10 minutes)
+  - Excessive bans (e.g., 3 bans in 10 minutes)
+  - Mass role removals (e.g., 5 removals in 10 minutes)
+  - Bulk invite rejections (e.g., 10 rejections in 10 minutes)
+  - Content deletions (e.g., 5 posts deleted in 10 minutes)
+- **Separate Webhook:** Configure dedicated security alert webhook
+
+### �🔔 Discord Webhooks
 - Configure webhook URL (supports discord.com and discordapp.com)
 - **Comprehensive Event Notifications:**
   - **Member Events:** Joins, leaves, updates, role assignments
@@ -132,7 +159,8 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
   - **Group Events:** Name, description, icon, banner, privacy changes
   - **Invite & Join Events:** Requests, invites, approvals, rejections
   - **Announcement Events:** Create, update, delete announcements
-  - **Gallery Events:** Image submissions, approvals, deletions
+  - **Gallery Events:** Image submissions, approv
+  - **Security Events:** Threshold violations and automatic responses (via separate webhook)als, deletions
   - **Post Events:** Create, update, delete posts
 - **Bulk Controls:**
   - Select All / Deselect All toggles
@@ -159,9 +187,24 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 
 1. **Download:** Get the latest release from [Releases](../../releases) or build from source
 2. **Run:** Launch `VRCGroupTools.exe`
+   - **Windows SmartScreen Warning?** This appears because the app isn't code-signed (signing certificates cost $$$). The app is safe and open source. Click **"More info"** → **"Run anyway"**
 3. **Login:** Enter your VRChat credentials + 2FA code
 4. **Set Group:** Enter your Group ID (`grp_...` or short code) in the sidebar
 5. **Explore:** Navigate modules from the left sidebar
+
+### 🛡️ Security Note
+
+**Windows SmartScreen Warning:** The application may show "Windows protected your PC" on first run. This is normal for unsigned applications. To proceed:
+1. Click **"More info"**
+2. Click **"Run anyway"**
+
+The application is:
+- ✅ **Open Source** - All code is visible on GitHub
+- ✅ **Scanned by GitHub Actions** - Built in a clean environment
+- ✅ **No Telemetry** - Your data stays local
+- ✅ **Community Verified** - Check the issues and discussions
+
+**Why unsigned?** Code signing certificates cost $300-500/year. Once the project grows, we'll invest in proper signing.
 
 ---
 
@@ -224,8 +267,8 @@ This project includes automated builds via GitHub Actions:
 
 To create a release:
 ```cmd
-git tag v1.0.5
-git push origin v1.0.5
+git tag v1.0.7
+git push origin v1.0.7
 ```
 
 ---
@@ -234,7 +277,7 @@ git push origin v1.0.5
 
 All data is stored locally in `%LocalAppData%\VRCGroupTools\`:
 - `settings.json` - App configuration
-- `cache.db` - SQLite database for caching
+- `vrcgrouptools.db` - SQLite database for caching, security logs, and backups
 - `Logs/` - Application logs
 - `CrashReports/` - Error reports
 
@@ -242,6 +285,7 @@ All data is stored locally in `%LocalAppData%\VRCGroupTools\`:
 - Credentials are sent directly to VRChat's official API
 - No data is sent to third parties
 - Discord webhooks are configured and stored locally
+- All security monitoring and backups stored locally
 
 ---
 
@@ -266,3 +310,58 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+---
+
+## 📋 Changelog
+
+### v1.0.7 (2026-01-15)
+**🔧 Stability & Caching**
+
+**Improvements:**
+- Prevent duplicate Discord audit webhook posts
+- Added cache load options for group info, posts, bans, and badge scans
+
+### v1.0.6 (2025-01-14)
+**🔒 Security & Recovery Features**
+
+**New Features:**
+- **Security Monitor System** 🔒
+  - Automatic detection of suspicious moderator behavior
+  - Configurable thresholds for kicks, bans, role removals, invite rejections, and content deletions
+  - Automatic role removal for users exceeding limits
+  - Dedicated Discord webhook for security alerts
+  - Owner-only protection mode
+  - Complete incident history and action logging
+  - Real-time monitoring integrated with audit logs
+
+- **Member Backup & Recovery System** 💾
+  - Create complete snapshots of all group members with roles
+  - Smart comparison between backups and current membership
+  - Selective member restoration (missing only or all)
+  - Multiple backup history with custom descriptions
+  - Progress tracking for backup/restore operations
+  - Visual status indicators (missing/re-invited)
+  - Rate-limited API calls for safe restoration
+
+**Improvements:**
+- Enhanced database schema with security and backup tables
+- Additional VRChat API methods for member role management
+- Improved error handling and logging throughout
+- Better performance with indexed database queries
+
+### v1.0.5 (2025-12-XX)
+- Initial public release
+- Core group management features
+- Discord webhook integration
+- Kill Switch functionality
+- 18+ Badge Scanner
+- Calendar events and posts management
+
+---
+
+## 🙏 Acknowledgments
+
+- VRChat community for feedback and testing
+- Material Design In XAML for UI components
+- All contributors and supporters
