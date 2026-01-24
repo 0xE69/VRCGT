@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Timers;
 using System.Linq;
+using VRCGroupTools.Data.Models;
 using Timer = System.Timers.Timer;
 
 namespace VRCGroupTools.Services;
@@ -35,6 +36,7 @@ public class AuditLogService : IAuditLogService, IDisposable
     private readonly ICacheService _cacheService;
     private readonly IDiscordWebhookService _discordService;
     private readonly ISecurityMonitorService? _securityMonitor;
+    private readonly ISettingsService _settingsService;
     private Timer? _pollingTimer;
     private string? _currentGroupId;
     private bool _isPolling;
@@ -48,11 +50,12 @@ public class AuditLogService : IAuditLogService, IDisposable
     public bool IsPolling => _isPolling;
     public int TotalLogCount => _totalLogCount;
 
-    public AuditLogService(IVRChatApiService apiService, ICacheService cacheService, IDiscordWebhookService discordService, ISecurityMonitorService? securityMonitor = null)
+    public AuditLogService(IVRChatApiService apiService, ICacheService cacheService, IDiscordWebhookService discordService, ISettingsService settingsService, ISecurityMonitorService? securityMonitor = null)
     {
         _apiService = apiService;
         _cacheService = cacheService;
         _discordService = discordService;
+        _settingsService = settingsService;
         _securityMonitor = securityMonitor;
     }
 
@@ -80,15 +83,13 @@ public class AuditLogService : IAuditLogService, IDisposable
             StatusChanged?.Invoke(this, "No cached logs. Click 'Fetch History' to download.");
         }
 
-        // Check for unsent Discord logs and send them
-        if (_discordService.IsConfigured)
-        {
-            await SendUnsentDiscordLogsAsync();
-        }
+        // Don't send unsent logs on initial load - only send newly fetched logs going forward
+        // This prevents spamming Discord with old logs when app starts
 
-        // Start polling timer (60 seconds)
+        // Start polling timer with configurable interval
+        var pollingIntervalMs = _settingsService.Settings.AuditLogPollingIntervalSeconds * 1000;
         _pollingTimer?.Dispose();
-        _pollingTimer = new Timer(60000); // 60 seconds
+        _pollingTimer = new Timer(pollingIntervalMs);
         _pollingTimer.Elapsed += async (s, e) => await PollForNewLogsAsync();
         _pollingTimer.AutoReset = true;
         _pollingTimer.Start();
@@ -98,8 +99,8 @@ public class AuditLogService : IAuditLogService, IDisposable
         Console.WriteLine("[AUDIT-SVC] Starting initial poll...");
         await PollForNewLogsAsync();
         
-        Console.WriteLine("[AUDIT-SVC] Polling timer started (60 second interval)");
-        StatusChanged?.Invoke(this, $"▶ Polling active - auto-checking every 60s | Total: {_totalLogCount} logs");
+        Console.WriteLine($"[AUDIT-SVC] Polling timer started ({_settingsService.Settings.AuditLogPollingIntervalSeconds} second interval)");
+        StatusChanged?.Invoke(this, $"▶ Polling active - auto-checking every {_settingsService.Settings.AuditLogPollingIntervalSeconds}s | Total: {_totalLogCount} logs");
     }
 
     public void StopPolling()
@@ -156,8 +157,11 @@ public class AuditLogService : IAuditLogService, IDisposable
             
             if (newLogs.Count > 0)
             {
-                // Find truly new logs (not in existing)
-                var trulyNewLogs = newLogs.Where(l => !existingIds.Contains(l.Id)).ToList();
+                // Find truly new logs (not in existing) AND not older than configured max age
+                var maxAgeMinutes = _settingsService.Settings.AuditLogDiscordNotificationMaxAgeMinutes;
+                var cutoffTime = DateTime.UtcNow.AddMinutes(-maxAgeMinutes);
+                var trulyNewLogs = newLogs.Where(l => !existingIds.Contains(l.Id) && l.CreatedAt >= cutoffTime).ToList();
+                Console.WriteLine($"[AUDIT-SVC] Found {trulyNewLogs.Count} new logs within last {maxAgeMinutes} minutes (filtered from {newLogs.Where(l => !existingIds.Contains(l.Id)).Count()} total new logs)");
                 
                 var savedCount = await _cacheService.AppendAuditLogsAsync(_currentGroupId, newLogs);
                 _totalLogCount = await _cacheService.GetAuditLogCountAsync(_currentGroupId);
@@ -497,6 +501,29 @@ public class AuditLogService : IAuditLogService, IDisposable
         }
     }
 
+    private async Task<bool> SendDiscordNotificationAsync(AuditLogEntity log)
+    {
+        try
+        {
+            if (_discordService is DiscordWebhookService discordSvc)
+            {
+                var success = await discordSvc.SendAuditEventAsync(
+                    log.EventType,
+                    log.ActorName ?? "Unknown",
+                    log.TargetName,
+                    log.Description
+                );
+                return success;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AUDIT-SVC] Discord notification failed: {ex.Message}");
+            return false;
+        }
+    }
+
     private async Task SendUnsentDiscordLogsAsync()
     {
         if (string.IsNullOrEmpty(_currentGroupId))
@@ -596,6 +623,25 @@ public class AuditLogService : IAuditLogService, IDisposable
     }
 
     private static string BuildDiscordDedupKey(AuditLogEntry log)
+    {
+        if (!string.IsNullOrWhiteSpace(log.RawData))
+        {
+            using var sha = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(log.RawData);
+            return Convert.ToHexString(sha.ComputeHash(bytes));
+        }
+
+        return string.Join("|", new[]
+        {
+            log.EventType,
+            log.ActorId ?? string.Empty,
+            log.TargetId ?? string.Empty,
+            log.Description ?? string.Empty,
+            log.CreatedAt.ToUniversalTime().ToString("o")
+        });
+    }
+
+    private static string BuildDiscordDedupKey(AuditLogEntity log)
     {
         if (!string.IsNullOrWhiteSpace(log.RawData))
         {

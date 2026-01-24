@@ -352,8 +352,32 @@ public partial class MembersListViewModel : ObservableObject
                 Members.Remove(SelectedMember);
                 OnPropertyChanged(nameof(FilteredMembers));
                 ShowMemberPanel = false;
+                var bannedUserName = SelectedMember.DisplayName;
+                var bannedUserId = SelectedMember.UserId;
                 SelectedMember = null;
                 Status = $"Member banned: {request.Reason}";
+                
+                // Send Discord notification
+                try
+                {
+                    var discordService = App.Services.GetService<IDiscordWebhookService>();
+                    if (discordService != null && discordService.IsConfigured)
+                    {
+                        var history = await moderationService.GetInfractionHistoryAsync(groupId, bannedUserId);
+                        await discordService.SendModerationActionAsync(
+                            "ban",
+                            bannedUserId,
+                            bannedUserName,
+                            _apiService.CurrentUserDisplayName ?? "Unknown",
+                            request.Reason,
+                            request.Description,
+                            DateTime.UtcNow,
+                            null,
+                            history.TotalBans
+                        );
+                    }
+                }
+                catch { /* Discord notification failed, but ban was successful */ }
             }
             else
             {
@@ -418,6 +442,7 @@ public partial class MembersListViewModel : ObservableObject
                         var history = await moderationService.GetInfractionHistoryAsync(groupId, SelectedMember.UserId);
                         await discordService.SendModerationActionAsync(
                             "warning",
+                            SelectedMember.UserId,
                             SelectedMember.DisplayName,
                             _apiService.CurrentUserDisplayName ?? "Unknown",
                             request.Reason,
@@ -453,5 +478,22 @@ public partial class MembersListViewModel : ObservableObject
     partial void OnSelectedRoleChanged(string value)
     {
         OnPropertyChanged(nameof(FilteredMembers));
+    }
+
+    [RelayCommand]
+    private void ViewFullProfile()
+    {
+        if (SelectedMember == null) return;
+        
+        try
+        {
+            var vm = new UserProfileViewModel(SelectedMember.UserId, _apiService);
+            var window = new VRCGroupTools.Views.UserProfileWindow(vm);
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Failed to open profile: {ex.Message}");
+        }
     }
 }

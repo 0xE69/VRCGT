@@ -259,6 +259,11 @@ public partial class App : Application
         services.AddTransient<InviteToGroupViewModel>();
         services.AddTransient<KillSwitchViewModel>();
         services.AddTransient<AppSettingsViewModel>();
+        services.AddSingleton<IInstanceInviterService, InstanceInviterService>();
+        services.AddTransient<InstanceInviterViewModel>();
+        services.AddTransient<FriendInviterViewModel>();
+        services.AddTransient<InviterHubViewModel>();
+        services.AddTransient<GroupJoinRequestsViewModel>();
         
         LoggingService.Debug("APP", "All services registered");
     }

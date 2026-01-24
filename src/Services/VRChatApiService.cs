@@ -61,6 +61,11 @@ public interface IVRChatApiService
     Task<List<GroupPost>> GetGroupPostsAsync(string groupId, int n = 60, int offset = 0, bool publicOnly = false);
     Task<bool> DeleteGroupPostAsync(string groupId, string postId);
     Task<GroupPost?> UpdateGroupPostAsync(string groupId, string postId, string title, string text, string visibility = "public", bool sendNotification = false);
+    Task<List<FriendInfo>> GetFriendsAsync(bool onlineOnly = false, int n = 100, int offset = 0);
+    Task<InstanceDetails?> GetInstanceAsync(string worldId, string instanceId);
+    Task<bool> InviteUserToInstanceAsync(string userId, string worldId, string instanceId);
+    Task<List<GroupJoinRequest>> GetGroupJoinRequestsAsync(string groupId);
+    Task<bool> RespondToGroupJoinRequestAsync(string groupId, string userId, string action);
     string? GetAuthCookie();
     string? GetTwoFactorCookie();
     void Logout();
@@ -1948,6 +1953,227 @@ public class VRChatApiService : IVRChatApiService
         _twoFactorToken = null;
         _cookieContainer.GetCookies(new Uri(BaseUrl)).Cast<Cookie>().ToList().ForEach(c => c.Expired = true);
     }
+
+    public async Task<List<FriendInfo>> GetFriendsAsync(bool onlineOnly = false, int n = 100, int offset = 0)
+    {
+        var friends = new List<FriendInfo>();
+        try
+        {
+            await RateLimitAsync();
+            
+            var url = onlineOnly
+                ? $"auth/user/friends?apiKey={ApiKey}&offline=false&n={n}&offset={offset}"
+                : $"auth/user/friends?apiKey={ApiKey}&n={n}&offset={offset}";
+            
+            var response = await _httpClient.GetAsync(url);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[FRIENDS-API] Error: {response.StatusCode}");
+                return friends;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var users = JsonConvert.DeserializeObject<List<JObject>>(content) ?? new List<JObject>();
+
+            foreach (var user in users)
+            {
+                var profilePic = user["userIcon"]?.ToString();
+                if (string.IsNullOrEmpty(profilePic))
+                {
+                    profilePic = user["currentAvatarThumbnailImageUrl"]?.ToString();
+                }
+
+                var tags = user["tags"]?.ToObject<List<string>>() ?? new List<string>();
+                var isAgeVerified = tags.Contains("system_age_verified") || tags.Contains("system_age_verification_approved");
+                
+                friends.Add(new FriendInfo
+                {
+                    UserId = user["id"]?.ToString() ?? string.Empty,
+                    DisplayName = user["displayName"]?.ToString() ?? string.Empty,
+                    ProfilePicUrl = profilePic,
+                    StatusDescription = user["statusDescription"]?.ToString(),
+                    Status = user["status"]?.ToString() ?? "offline",
+                    Location = user["location"]?.ToString() ?? string.Empty,
+                    IsAgeVerified = isAgeVerified,
+                    Tags = tags
+                });
+            }
+
+            Console.WriteLine($"[FRIENDS-API] Retrieved {friends.Count} friends");
+            return friends;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FRIENDS-API] Exception: {ex.Message}");
+            return friends;
+        }
+    }
+
+    public async Task<InstanceDetails?> GetInstanceAsync(string worldId, string instanceId)
+    {
+        try
+        {
+            await RateLimitAsync();
+            
+            var url = $"instances/{worldId}:{instanceId}?apiKey={ApiKey}";
+            var response = await _httpClient.GetAsync(url);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[INSTANCE-API] Error: {response.StatusCode}");
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var data = JsonConvert.DeserializeObject<JObject>(content);
+
+            if (data == null)
+                return null;
+
+            return new InstanceDetails
+            {
+                InstanceId = data["id"]?.ToString() ?? string.Empty,
+                WorldId = data["worldId"]?.ToString() ?? string.Empty,
+                Name = data["name"]?.ToString() ?? string.Empty,
+                Region = data["region"]?.ToString() ?? string.Empty,
+                Capacity = data["capacity"]?.Value<int>() ?? 0,
+                UserCount = data["n_users"]?.Value<int>() ?? 0,
+                OwnerId = data["ownerId"]?.ToString(),
+                Tags = data["tags"]?.ToObject<List<string>>() ?? new List<string>()
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[INSTANCE-API] Exception: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> InviteUserToInstanceAsync(string userId, string worldId, string instanceId)
+    {
+        try
+        {
+            await RateLimitAsync();
+
+            var payload = new
+            {
+                instanceId = $"{worldId}:{instanceId}"
+            };
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"invite/{userId}?apiKey={ApiKey}")
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json")
+            };
+
+            var response = await _httpClient.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+            
+            Console.WriteLine($"[INVITE-API] Invite status: {response.StatusCode}");
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[INVITE-API] Error: {content}");
+                return false;
+            }
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[INVITE-API] Exception: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<List<GroupJoinRequest>> GetGroupJoinRequestsAsync(string groupId)
+    {
+        try
+        {
+            await RateLimitAsync();
+            var url = $"groups/{groupId}/requests?apiKey={ApiKey}";
+            var response = await _httpClient.GetAsync(url);
+            var content = await response.Content.ReadAsStringAsync();
+            
+            LogHttp("GROUP-REQUESTS", url, response, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[GROUP-REQUESTS] Failed to get join requests: {response.StatusCode}");
+                return new List<GroupJoinRequest>();
+            }
+
+            var json = JsonConvert.DeserializeObject<JArray>(content);
+            if (json == null)
+            {
+                return new List<GroupJoinRequest>();
+            }
+
+            var requests = new List<GroupJoinRequest>();
+            foreach (var item in json)
+            {
+                var userObj = item["user"] as JObject;
+                if (userObj == null) continue;
+
+                var tags = userObj["tags"]?.ToObject<List<string>>() ?? new List<string>();
+                var isAgeVerified = tags.Any(t => t.Contains("system_age_verified") || t.Contains("age_verified"));
+
+                requests.Add(new GroupJoinRequest
+                {
+                    UserId = userObj["id"]?.ToString() ?? "",
+                    DisplayName = userObj["displayName"]?.ToString() ?? "",
+                    ProfilePicUrl = userObj["currentAvatarImageUrl"]?.ToString() ?? userObj["profilePicOverride"]?.ToString(),
+                    CreatedAt = item["createdAt"]?.ToString(),
+                    IsAgeVerified = isAgeVerified,
+                    Tags = tags
+                });
+            }
+
+            return requests;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-REQUESTS] Exception: {ex.Message}");
+            return new List<GroupJoinRequest>();
+        }
+    }
+
+    public async Task<bool> RespondToGroupJoinRequestAsync(string groupId, string userId, string action)
+    {
+        try
+        {
+            await RateLimitAsync();
+
+            var payload = new
+            {
+                action = action // "accept" or "reject"
+            };
+
+            var url = $"groups/{groupId}/requests/{userId}?apiKey={ApiKey}";
+            var request = new HttpRequestMessage(HttpMethod.Put, url)
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json")
+            };
+
+            var response = await _httpClient.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-REQUEST-RESPOND", url, response, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[GROUP-REQUEST-RESPOND] Failed to {action} user {userId}: {response.StatusCode}");
+                return false;
+            }
+
+            Console.WriteLine($"[GROUP-REQUEST-RESPOND] Successfully {action}ed user {userId}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-REQUEST-RESPOND] Exception: {ex.Message}");
+            return false;
+        }
+    }
 }
 
 public class LoginResult
@@ -1985,6 +2211,16 @@ public class GroupBanEntry
     
     public string BanTypeDisplay => IsInstanceBan ? "Instance Ban" : "Group Ban";
     public string MembershipDisplay => WasMember ? "Was Member" : "Not Member";
+}
+
+public class GroupJoinRequest
+{
+    public string UserId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string? ProfilePicUrl { get; set; }
+    public string? CreatedAt { get; set; }
+    public bool IsAgeVerified { get; set; }
+    public List<string> Tags { get; set; } = new();
 }
 
 public class GroupRole
@@ -2108,4 +2344,31 @@ public class WorldInfo
 
     [JsonProperty("thumbnailImageUrl")]
     public string? ThumbnailImageUrl { get; set; }
+}
+
+public class FriendInfo
+{
+    public string UserId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string? ProfilePicUrl { get; set; }
+    public string? StatusDescription { get; set; }
+    public string Status { get; set; } = "offline";
+    public string Location { get; set; } = string.Empty;
+    public bool IsAgeVerified { get; set; }
+    public List<string> Tags { get; set; } = new();
+    
+    public bool IsOnline => Status == "active" || Status == "join me" || Status == "ask me";
+    public bool IsInInstance => !string.IsNullOrEmpty(Location) && Location != "offline" && Location != "private";
+}
+
+public class InstanceDetails
+{
+    public string InstanceId { get; set; } = string.Empty;
+    public string WorldId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Region { get; set; } = string.Empty;
+    public int Capacity { get; set; }
+    public int UserCount { get; set; }
+    public string? OwnerId { get; set; }
+    public List<string> Tags { get; set; } = new();
 }

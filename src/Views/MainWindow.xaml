@@ -170,15 +170,22 @@
                                         Height="40"
                                         Margin="0,0,0,5"
                                         Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="White"/>
-                                    <Button Content="📨  Invite To Group"
+                                        Foreground="White"/>                                    <Button Content="📥  Join Requests"
                                         Command="{Binding SelectModuleCommand}"
-                                        CommandParameter="InviteToGroup"
+                                        CommandParameter="GroupJoinRequests"
                                         HorizontalContentAlignment="Left"
                                         Height="40"
                                         Margin="0,0,0,5"
                                         Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="White"/>
+                                        Foreground="White"/>                                    <Button Content="�  Inviter Hub"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="InviterHub"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#7C4DFF"
+                                        FontWeight="SemiBold"/>
                                     <Button Content="🔍  18+ Badge Scanner"
                                         Command="{Binding SelectModuleCommand}"
                                         CommandParameter="BadgeScanner"
@@ -306,8 +313,11 @@
                             <DataTemplate x:Key="GroupPosts">
                                 <views:GroupPostsView DataContext="{Binding GroupPostsVM}"/>
                             </DataTemplate>
-                            <DataTemplate x:Key="InviteToGroup">
-                                <views:InviteToGroupView DataContext="{Binding InviteToGroupVM}"/>
+                            <DataTemplate x:Key="GroupJoinRequests">
+                                <views:GroupJoinRequestsView DataContext="{Binding GroupJoinRequestsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="InviterHub">
+                                <views:InviterHubView DataContext="{Binding InviterHubVM}"/>
                             </DataTemplate>
                             <DataTemplate x:Key="BadgeScanner">
                                 <views:BadgeScannerView DataContext="{Binding BadgeScannerVM}"/>
@@ -357,8 +367,11 @@
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="GroupPosts">
                                         <Setter Property="ContentTemplate" Value="{StaticResource GroupPosts}"/>
                                     </DataTrigger>
-                                    <DataTrigger Binding="{Binding CurrentModule}" Value="InviteToGroup">
-                                        <Setter Property="ContentTemplate" Value="{StaticResource InviteToGroup}"/>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="GroupJoinRequests">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource GroupJoinRequests}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="InviterHub">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource InviterHub}"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="BadgeScanner">
                                         <Setter Property="ContentTemplate" Value="{StaticResource BadgeScanner}"/>

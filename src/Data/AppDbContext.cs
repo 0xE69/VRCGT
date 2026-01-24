@@ -27,6 +27,7 @@ public class AppDbContext : DbContext
     public DbSet<SecurityIncidentEntity> SecurityIncidents { get; set; } = null!;
     public DbSet<MemberBackupEntity> MemberBackups { get; set; } = null!;
     public DbSet<ModerationActionEntity> ModerationActions { get; set; } = null!;
+    public DbSet<InvitedUser> InvitedUsers { get; set; } = null!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -137,6 +138,15 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.IsActive);
             entity.HasIndex(e => new { e.GroupId, e.TargetUserId, e.ActionType });
             entity.HasIndex(e => new { e.GroupId, e.TargetUserId, e.Reason, e.ActionTime });
+        });
+        
+        // InvitedUser configuration
+        modelBuilder.Entity<InvitedUser>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.InvitedAt);
+            entity.HasIndex(e => new { e.UserId, e.WorldId, e.InstanceId });
         });
     }
 }

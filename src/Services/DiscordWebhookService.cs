@@ -8,7 +8,7 @@ public interface IDiscordWebhookService
 {
     Task<bool> SendMessageAsync(string title, string description, int color, string? thumbnailUrl = null);
     Task<WebhookTestResult> TestWebhookAsync(string webhookUrl);
-    Task<bool> SendModerationActionAsync(string actionType, string targetName, string actorName, string reason, string? description, DateTime actionTime, DateTime? expiresAt = null, int? infractionCount = null);
+    Task<bool> SendModerationActionAsync(string actionType, string targetUserId, string targetName, string actorName, string reason, string? description, DateTime actionTime, DateTime? expiresAt = null, int? infractionCount = null);
     Task<bool> SendWebhookAsync(string webhookUrl, object payload);
     bool IsConfigured { get; }
 }
@@ -155,16 +155,21 @@ public class DiscordWebhookService : IDiscordWebhookService
         var settings = _settingsService.Settings;
         return eventType switch
         {
-            // User Events
-            "group.user.join" => settings.DiscordNotifyUserJoins,
-            "group.user.leave" => settings.DiscordNotifyUserLeaves,
-            "group.user.kick" => settings.DiscordNotifyUserKicked,
-            "group.user.ban" => settings.DiscordNotifyUserBanned,
-            "group.user.unban" => settings.DiscordNotifyUserUnbanned,
-            "group.user.role.add" => settings.DiscordNotifyUserRoleAdd,
-            "group.user.role.remove" => settings.DiscordNotifyUserRoleRemove,
-            "group.user.join_request" => settings.DiscordNotifyJoinRequests,
-            "group.joinRequest" => settings.DiscordNotifyJoinRequests,
+            // Member Events - support both group.user.* and group.member.* formats
+            "group.member.join" or "group.user.join" => settings.DiscordNotifyUserJoins,
+            "group.member.leave" or "group.user.leave" => settings.DiscordNotifyUserLeaves,
+            "group.member.kick" or "group.user.kick" => settings.DiscordNotifyUserKicked,
+            "group.member.ban" or "group.user.ban" => settings.DiscordNotifyUserBanned,
+            "group.member.unban" or "group.user.unban" => settings.DiscordNotifyUserUnbanned,
+            "group.member.role.add" or "group.user.role.add" => settings.DiscordNotifyUserRoleAdd,
+            "group.member.role.remove" or "group.user.role.remove" => settings.DiscordNotifyUserRoleRemove,
+            
+            // Join Request Events (actual VRChat event types)
+            "group.request.create" => settings.DiscordNotifyJoinRequests,
+            "group.request.accept" => settings.DiscordNotifyJoinRequests,
+            "group.request.reject" => settings.DiscordNotifyJoinRequests,
+            "group.request.block" => settings.DiscordNotifyJoinRequests,
+            "group.request.unblock" => settings.DiscordNotifyJoinRequests,
 
             // Role Events
             "group.role.create" => settings.DiscordNotifyRoleCreate,
@@ -292,6 +297,7 @@ public class DiscordWebhookService : IDiscordWebhookService
     // Helper method to send moderation action notifications with timestamps
     public async Task<bool> SendModerationActionAsync(
         string actionType,
+        string targetUserId,
         string targetName,
         string actorName,
         string reason,
@@ -314,7 +320,9 @@ public class DiscordWebhookService : IDiscordWebhookService
         };
         
         var desc = new StringBuilder();
-        desc.AppendLine($"**Target:** {targetName}");
+        var vrchatUrl = $"https://vrchat.com/home/user/{targetUserId}";
+        desc.AppendLine($"**Target:** [{targetName}]({vrchatUrl})");
+        desc.AppendLine($"**User ID:** `{targetUserId}`");
         desc.AppendLine($"**Moderator:** {actorName}");
         desc.AppendLine($"**Reason:** {reason}");
         

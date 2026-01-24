@@ -218,6 +218,16 @@ public class AppSettings
     public bool DiscordNotifyPostCreate { get; set; } = true;
     public bool DiscordNotifyPostDelete { get; set; } = true;
 
+    // Audit Log Settings
+    public int AuditLogPollingIntervalSeconds { get; set; } = 60; // How often to check for new logs
+    public int AuditLogDiscordNotificationMaxAgeMinutes { get; set; } = 10; // Only send Discord notifications for logs newer than this
+
+    // Instance Inviter Settings
+    public bool InstanceInviterOnly18Plus { get; set; } = false;
+    public bool InstanceInviterShowOfflineFriends { get; set; } = false;
+    public bool InstanceInviterAutoRefresh { get; set; } = true;
+    public int InstanceInviterRefreshIntervalSeconds { get; set; } = 30;
+
     // Calendar settings
     public bool AutoGenerateRecurringEvents { get; set; } = true;
     public int RecurringGenerationDaysAhead { get; set; } = 30;

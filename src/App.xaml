@@ -38,7 +38,13 @@
             <converters:DaysOfWeekStringConverter x:Key="DaysOfWeekStringConverter"/>
             <converters:BoolToTestButtonConverter x:Key="BoolToTestButtonConverter"/>
             <converters:ActionTypeToColorConverter x:Key="ActionTypeToColorConverter"/>
+            <converters:InitialsConverter x:Key="InitialsConverter"/>
+            <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
+            <converters:EqualityToVisibilityConverter x:Key="EqualityToVisibilityConverter"/>
+            <converters:InverseEqualityToVisibilityConverter x:Key="InverseEqualityToVisibilityConverter"/>
+            <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
             
             <!-- Custom Styles -->
             <Style x:Key="CardStyle" TargetType="Border">

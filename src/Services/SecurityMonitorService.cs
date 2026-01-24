@@ -14,6 +14,8 @@ public interface ISecurityMonitorService
     Task<bool> TrackActionAsync(string groupId, string actorUserId, string actorDisplayName, string actionType, string? targetUserId = null, string? targetDisplayName = null, object? additionalData = null);
     Task<List<SecurityIncidentEntity>> GetRecentIncidentsAsync(string groupId, int daysBack = 7);
     Task<List<SecurityActionEntity>> GetUserActionsAsync(string groupId, string userId, int hoursBack = 24);
+    Task<List<SecurityActionEntity>> GetAllSecurityActionsAsync(string groupId, int daysBack = 7);
+    Task<int> ClearOldSecurityActionsAsync(string groupId, int daysOld = 7);
     Task<bool> ResolveIncidentAsync(string incidentId);
     Task<bool> IsEnabled { get; }
 }
@@ -446,6 +448,53 @@ public class SecurityMonitorService : ISecurityMonitorService
         {
             LoggingService.Error("SECURITY", ex, $"Failed to resolve incident {incidentId}");
             return false;
+        }
+    }
+
+    public async Task<List<SecurityActionEntity>> GetAllSecurityActionsAsync(string groupId, int daysBack = 7)
+    {
+        try
+        {
+            var cutoffTime = DateTime.UtcNow.AddDays(-daysBack);
+            using var context = new AppDbContext();
+            
+            return await context.SecurityActions
+                .Where(a => a.GroupId == groupId && a.ActionTime >= cutoffTime)
+                .OrderByDescending(a => a.ActionTime)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            LoggingService.Error("SECURITY", ex, "Failed to get all security actions");
+            return new List<SecurityActionEntity>();
+        }
+    }
+
+    public async Task<int> ClearOldSecurityActionsAsync(string groupId, int daysOld = 7)
+    {
+        try
+        {
+            var cutoffTime = DateTime.UtcNow.AddDays(-daysOld);
+            using var context = new AppDbContext();
+            
+            var oldActions = await context.SecurityActions
+                .Where(a => a.GroupId == groupId && a.ActionTime < cutoffTime)
+                .ToListAsync();
+
+            var count = oldActions.Count;
+            if (count > 0)
+            {
+                context.SecurityActions.RemoveRange(oldActions);
+                await context.SaveChangesAsync();
+                LoggingService.Info("SECURITY", $"Cleared {count} old security actions (older than {daysOld} days)");
+            }
+
+            return count;
+        }
+        catch (Exception ex)
+        {
+            LoggingService.Error("SECURITY", ex, "Failed to clear old security actions");
+            return 0;
         }
     }
 }

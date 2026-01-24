@@ -89,6 +89,15 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private KillSwitchViewModel? _killSwitchVM;
 
+    [ObservableProperty]
+    private InstanceInviterViewModel? _instanceInviterVM;
+
+    [ObservableProperty]
+    private InviterHubViewModel? _inviterHubVM;
+
+    [ObservableProperty]
+    private GroupJoinRequestsViewModel? _groupJoinRequestsVM;
+
     public string AppVersion => $"v{App.Version}";
 
     public event Action? LogoutRequested;
@@ -136,7 +145,10 @@ public partial class MainViewModel : ObservableObject
         BansListVM = App.Services.GetRequiredService<BansListViewModel>();
         MemberBackupVM = App.Services.GetRequiredService<MemberBackupViewModel>();
         KillSwitchVM = App.Services.GetRequiredService<KillSwitchViewModel>();
+        InstanceInviterVM = App.Services.GetRequiredService<InstanceInviterViewModel>();
         AppSettingsVM = App.Services.GetRequiredService<AppSettingsViewModel>();
+        InviterHubVM = App.Services.GetRequiredService<InviterHubViewModel>();
+        GroupJoinRequestsVM = App.Services.GetRequiredService<GroupJoinRequestsViewModel>();
         
         // Sync group ID to badge scanner and API service
         BadgeScannerVM!.GroupId = GroupId;
@@ -161,6 +173,7 @@ public partial class MainViewModel : ObservableObject
         {
             GroupId = value.GroupId;
             _settingsService.CurrentGroupId = value.GroupId;
+            _settingsService.Settings.GroupId = value.GroupId; // Sync legacy setting
             _settingsService.Save();
             
             // Update API service
@@ -182,6 +195,12 @@ public partial class MainViewModel : ObservableObject
             if (AuditLogVM != null)
             {
                 _ = AuditLogVM.InitializeAsync();
+            }
+
+            // Refresh join requests
+            if (GroupJoinRequestsVM != null)
+            {
+                _ = GroupJoinRequestsVM.RefreshCommand.ExecuteAsync(null);
             }
             
             Console.WriteLine($"[DEBUG] Switched to group: {value.GroupName} ({value.GroupId})");
@@ -348,6 +367,13 @@ public partial class MainViewModel : ObservableObject
         {
             Console.WriteLine("[DEBUG] Initializing AuditLogVM...");
             _ = AuditLogVM.InitializeAsync();  // Fire and forget
+        }
+
+        // Initialize GroupJoinRequests when switching to it
+        if (module == "GroupJoinRequests" && GroupJoinRequestsVM != null)
+        {
+            Console.WriteLine("[DEBUG] Refreshing GroupJoinRequestsVM...");
+            _ = GroupJoinRequestsVM.RefreshCommand.ExecuteAsync(null);
         }
     }
 
