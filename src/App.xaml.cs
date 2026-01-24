@@ -68,8 +68,14 @@ public partial class App : Application
             await cacheService.InitializeAsync();
             LoggingService.Debug("APP", "Database initialized");
 
+            // Prevent app from shutting down when the update prompt (the only window) closes
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
             // Check for updates BEFORE showing login window (to block startup if update needed)
             await CheckForUpdatesAsync();
+
+            // Restore normal shutdown behavior
+            ShutdownMode = ShutdownMode.OnLastWindowClose;
 
             // Create and show the login window
             LoggingService.Debug("APP", "Creating LoginWindow...");
