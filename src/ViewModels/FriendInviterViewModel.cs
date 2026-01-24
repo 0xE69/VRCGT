@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -98,10 +99,35 @@ public partial class FriendInviterViewModel : ObservableObject
             IsLoading = true;
             StatusMessage = "Loading friends...";
 
-            var friendsList = await _apiService.GetFriendsAsync(OnlineOnly);
-
             Friends.Clear();
-            foreach (var friend in friendsList)
+
+            var allFriends = new List<FriendInfo>();
+            int offset = 0;
+            int n = 100;
+            
+            while (true)
+            {
+                var friendsList = await _apiService.GetFriendsAsync(OnlineOnly, n, offset);
+                
+                if (friendsList.Count == 0)
+                    break;
+                
+                allFriends.AddRange(friendsList);
+                
+                if (friendsList.Count < n)
+                    break;
+                
+                offset += n;
+                
+                // Update status if taking a while
+                StatusMessage = $"Loading friends... ({allFriends.Count})";
+
+                // Safety limit to prevent infinite loops if API behaves weirdly
+                if (allFriends.Count >= 5000)
+                    break;
+            }
+
+            foreach (var friend in allFriends)
             {
                 Friends.Add(CreateFriendViewModel(friend));
             }

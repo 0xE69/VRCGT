@@ -42,6 +42,20 @@
                               Style="{StaticResource MaterialDesignFilledComboBox}"
                               Foreground="White"
                               Margin="0,0,0,10"/>
+                              
+                    <TextBlock Text="Primary Color" Foreground="#AAA" FontSize="12" Margin="0,0,0,3"/>
+                    <ComboBox ItemsSource="{Binding Colors}"
+                              SelectedItem="{Binding SelectedPrimaryColor}"
+                              Style="{StaticResource MaterialDesignFilledComboBox}"
+                              Foreground="White"
+                              Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Secondary Color" Foreground="#AAA" FontSize="12" Margin="0,0,0,3"/>
+                    <ComboBox ItemsSource="{Binding Colors}"
+                              SelectedItem="{Binding SelectedSecondaryColor}"
+                              Style="{StaticResource MaterialDesignFilledComboBox}"
+                              Foreground="White"
+                              Margin="0,0,0,10"/>
                     
                     <TextBlock Text="UI Zoom Level" Foreground="#AAA" FontSize="12" Margin="0,0,0,3"/>
                     <Grid Margin="0,0,0,10">

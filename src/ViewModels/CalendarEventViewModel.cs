@@ -92,6 +92,12 @@ public partial class CalendarEventViewModel : ObservableObject
     [ObservableProperty]
     private string _recurrenceHint = "Choose recurrence pattern";
 
+    // Automation
+    [ObservableProperty] private ObservableCollection<EventAutomationRule> _automationRules = new();
+    [ObservableProperty] private EventAutomationRule? _selectedAutomationRule;
+    [ObservableProperty] private ObservableCollection<string> _availableTimeZones = new();
+    [ObservableProperty] private ObservableCollection<string> _managedGroupIds = new();
+
     // Language search for Events
     [ObservableProperty] private string _languageSearchText = "";
     [ObservableProperty] private bool _showLanguageSuggestions;
@@ -111,6 +117,8 @@ public partial class CalendarEventViewModel : ObservableObject
     public ObservableCollection<LanguageOption> TemplateLanguageOptions { get; } = new();
 
     public IReadOnlyList<string> VisibilityOptions { get; } = new[] { "Public", "Group" };
+    
+    public IReadOnlyList<AutomationTriggerType> TriggerTypes { get; } = Enum.GetValues<AutomationTriggerType>().Cast<AutomationTriggerType>().ToList();
 
     public IReadOnlyList<string> Categories { get; } = new[]
     {
@@ -126,8 +134,26 @@ public partial class CalendarEventViewModel : ObservableObject
         _apiService = App.Services.GetRequiredService<IVRChatApiService>();
         _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
         InitializeLanguages();
+        InitializeTimeZones();
         SyncDraftUi(Draft);
         SyncTemplateUi(TemplateDraft);
+    }
+
+    private void InitializeTimeZones()
+    {
+        var zones = TimeZoneInfo.GetSystemTimeZones().Select(z => z.Id).ToList();
+        AvailableTimeZones = new ObservableCollection<string>(zones);
+    }
+    
+    private void RefreshGroups()
+    {
+        var groups = _mainViewModel.ManagedGroups.Select(g => g.GroupId).ToList();
+        // Add current group if not in list
+        if (!string.IsNullOrEmpty(_mainViewModel.GroupId) && !groups.Contains(_mainViewModel.GroupId))
+        {
+            groups.Add(_mainViewModel.GroupId);
+        }
+        ManagedGroupIds = new ObservableCollection<string>(groups);
     }
 
     partial void OnLanguageSearchTextChanged(string value)
@@ -222,10 +248,16 @@ public partial class CalendarEventViewModel : ObservableObject
     private async Task LoadAsync()
     {
         IsBusy = true;
+        RefreshGroups();
+        
         var events = await _eventService.GetEventsAsync();
         var templates = await _eventService.GetTemplatesAsync();
+        var rules = await _eventService.GetAutomationRulesAsync();
+        
         Events = new ObservableCollection<CalendarEvent>(events);
         Templates = new ObservableCollection<EventTemplate>(templates);
+        AutomationRules = new ObservableCollection<EventAutomationRule>(rules);
+        
         IsBusy = false;
     }
 
@@ -249,6 +281,13 @@ public partial class CalendarEventViewModel : ObservableObject
         }
 
         IsBusy = true;
+        
+        // Ensure GroupId is set if not already
+        if (string.IsNullOrEmpty(Draft.GroupId))
+        {
+            Draft.GroupId = _mainViewModel.GroupId;
+        }
+        
         await _eventService.AddOrUpdateEventAsync(Draft);
         await PublishToVrChatAsync(Draft);
         await _eventService.GenerateRecurringEventsAsync();
@@ -272,6 +311,86 @@ public partial class CalendarEventViewModel : ObservableObject
         LanguageSearchText = "";
         IsBusy = false;
     }
+    
+    [RelayCommand]
+    private async Task AddAutomationRuleAsync()
+    {
+        var rule = new EventAutomationRule { Name = "New Rule" };
+        await _eventService.AddOrUpdateAutomationRuleAsync(rule);
+        await LoadAsync();
+        SelectedAutomationRule = AutomationRules.FirstOrDefault(r => r.Id == rule.Id);
+    }
+    
+    [RelayCommand]
+    private async Task SaveAutomationRuleAsync()
+    {
+        if (SelectedAutomationRule == null) return;
+        await _eventService.AddOrUpdateAutomationRuleAsync(SelectedAutomationRule);
+        StatusMessage = "Rule saved.";
+        await LoadAsync();
+    }
+    
+    [RelayCommand]
+    private async Task DeleteAutomationRuleAsync()
+    {
+        if (SelectedAutomationRule == null) return;
+        await _eventService.DeleteAutomationRuleAsync(SelectedAutomationRule.Id);
+        await LoadAsync();
+        SelectedAutomationRule = null;
+    }
+    
+    [RelayCommand]
+    private async Task ExportDataAsync()
+    {
+        var dialog = new SaveFileDialog { Filter = "JSON files (*.json)|*.json", FileName = "VRCGroupTools_Events.json" };
+        if (dialog.ShowDialog() == true)
+        {
+            await _eventService.ExportDataAsync(dialog.FileName);
+            StatusMessage = "Export complete.";
+        }
+    }
+    
+    [RelayCommand]
+    private async Task ImportDataAsync()
+    {
+        var dialog = new OpenFileDialog { Filter = "JSON files (*.json)|*.json" };
+        if (dialog.ShowDialog() == true)
+        {
+            if (System.Windows.MessageBox.Show("Importing data will merge with existing events. Continue?", "Import", System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
+            {
+                await _eventService.ImportDataAsync(dialog.FileName);
+                await LoadAsync();
+                StatusMessage = "Import complete.";
+            }
+        }
+    }
+    
+    [RelayCommand]
+    private async Task UploadImageForDraftAsync()
+    {
+        var dialog = new OpenFileDialog { Filter = "Images|*.png;*.jpg;*.jpeg;*.gif" };
+        if (dialog.ShowDialog() == true)
+        {
+             StatusMessage = "Uploading image...";
+             try
+             {
+                 var imageId = await _apiService.UploadImageAsync(dialog.FileName);
+                 if (imageId != null)
+                 {
+                     Draft.ExternalImageId = imageId;
+                     StatusMessage = "Image uploaded successfully.";
+                 }
+                 else
+                 {
+                     StatusMessage = "Image upload failed.";
+                 }
+             }
+             catch (Exception ex)
+             {
+                 StatusMessage = $"Upload error: {ex.Message}";
+             }
+        }
+    }
 
     [RelayCommand]
     private async Task DeleteEventAsync(CalendarEvent? evt)
@@ -291,6 +410,20 @@ public partial class CalendarEventViewModel : ObservableObject
         await LoadAsync();
         StatusMessage = "Event deleted.";
         IsBusy = false;
+    }
+
+    [RelayCommand]
+    private void EditEvent(CalendarEvent? evt)
+    {
+        if (evt == null) return;
+        // Deep clone via JSON
+        var json = System.Text.Json.JsonSerializer.Serialize(evt);
+        var clone = System.Text.Json.JsonSerializer.Deserialize<CalendarEvent>(json);
+        if (clone != null)
+        {
+            Draft = clone;
+            StatusMessage = "Event loaded for editing.";
+        }
     }
 
     [RelayCommand]
@@ -585,10 +718,10 @@ public partial class CalendarEventViewModel : ObservableObject
 
     private async Task PublishToVrChatAsync(CalendarEvent evt)
     {
-        var groupId = _mainViewModel.GroupId;
+        var groupId = !string.IsNullOrEmpty(evt.GroupId) ? evt.GroupId : _mainViewModel.GroupId;
         if (string.IsNullOrWhiteSpace(groupId))
         {
-            StatusMessage = "Set a Group ID first (sidebar) to publish to VRChat.";
+            StatusMessage = "Set a Group ID first (sidebar or dropdown) to publish to VRChat.";
             return;
         }
 

@@ -11,6 +11,8 @@
             </ResourceDictionary.MergedDictionaries>
             
             <!-- Converters -->
+            <converters:BoolToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            <converters:ObjectToVisibilityConverter x:Key="ObjectToVisibilityConverter"/>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <converters:InverseBoolToVisConverter x:Key="InverseBoolToVisConverter"/>
             <converters:BoolToLoginTextConverter x:Key="BoolToLoginTextConverter"/>
@@ -43,8 +45,6 @@
             <converters:EqualityToVisibilityConverter x:Key="EqualityToVisibilityConverter"/>
             <converters:InverseEqualityToVisibilityConverter x:Key="InverseEqualityToVisibilityConverter"/>
             <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
-            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
-            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
             
             <!-- Custom Styles -->
             <Style x:Key="CardStyle" TargetType="Border">

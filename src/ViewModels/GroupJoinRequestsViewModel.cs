@@ -134,14 +134,17 @@ public partial class GroupJoinRequestsViewModel : ObservableObject
 
             var requests = await _apiService.GetGroupJoinRequestsAsync(groupId);
 
-            JoinRequests.Clear();
-            foreach (var request in requests)
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                JoinRequests.Add(new JoinRequestItemViewModel(request, this));
-            }
+                JoinRequests.Clear();
+                foreach (var request in requests)
+                {
+                    JoinRequests.Add(new JoinRequestItemViewModel(request, this));
+                }
 
-            TotalRequests = JoinRequests.Count;
-            ApplyFilters();
+                TotalRequests = JoinRequests.Count;
+                ApplyFilters();
+            });
 
             StatusMessage = $"Loaded {TotalRequests} join requests";
 

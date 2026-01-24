@@ -153,19 +153,25 @@ public class DiscordWebhookService : IDiscordWebhookService
     public bool ShouldSendAuditEvent(string eventType)
     {
         var settings = _settingsService.Settings;
-        return eventType switch
+        var type = eventType.ToLowerInvariant();
+        
+        // Handle common variations
+        if (type.StartsWith("group.member.")) 
+            type = type.Replace("group.member.", "group.user.");
+
+        return type switch
         {
-            // Member Events - support both group.user.* and group.member.* formats
-            "group.member.join" or "group.user.join" => settings.DiscordNotifyUserJoins,
-            "group.member.leave" or "group.user.leave" => settings.DiscordNotifyUserLeaves,
-            "group.member.kick" or "group.user.kick" => settings.DiscordNotifyUserKicked,
-            "group.member.ban" or "group.user.ban" => settings.DiscordNotifyUserBanned,
-            "group.member.unban" or "group.user.unban" => settings.DiscordNotifyUserUnbanned,
-            "group.member.role.add" or "group.user.role.add" => settings.DiscordNotifyUserRoleAdd,
-            "group.member.role.remove" or "group.user.role.remove" => settings.DiscordNotifyUserRoleRemove,
+            // Member Events
+            "group.user.join" => settings.DiscordNotifyUserJoins,
+            "group.user.leave" => settings.DiscordNotifyUserLeaves,
+            "group.user.kick" => settings.DiscordNotifyUserKicked,
+            "group.user.ban" => settings.DiscordNotifyUserBanned,
+            "group.user.unban" => settings.DiscordNotifyUserUnbanned,
+            "group.user.role.add" => settings.DiscordNotifyUserRoleAdd,
+            "group.user.role.remove" => settings.DiscordNotifyUserRoleRemove,
             
-            // Join Request Events (actual VRChat event types)
-            "group.request.create" => settings.DiscordNotifyJoinRequests,
+            // Join Request Events
+            "group.request.create" or "group.joinrequest" => settings.DiscordNotifyJoinRequests,
             "group.request.accept" => settings.DiscordNotifyJoinRequests,
             "group.request.reject" => settings.DiscordNotifyJoinRequests,
             "group.request.block" => settings.DiscordNotifyJoinRequests,
@@ -187,8 +193,7 @@ public class DiscordWebhookService : IDiscordWebhookService
             "group.update" => settings.DiscordNotifyGroupUpdate,
 
             // Invite Events
-            "group.invite.create" => settings.DiscordNotifyInviteCreate,
-            "group.user.invite" => settings.DiscordNotifyInviteCreate,
+            "group.invite.create" or "group.user.invite" => settings.DiscordNotifyInviteCreate,
             "group.invite.accept" => settings.DiscordNotifyInviteAccept,
             "group.invite.reject" => settings.DiscordNotifyInviteReject,
 
@@ -211,7 +216,11 @@ public class DiscordWebhookService : IDiscordWebhookService
     // Helper method to send audit log events
     public async Task<bool> SendAuditEventAsync(string eventType, string actorName, string? targetName, string? description)
     {
-        Console.WriteLine($"[DISCORD] SendAuditEventAsync called - EventType: {eventType}, IsConfigured: {IsConfigured}");
+        var type = eventType.ToLowerInvariant();
+        if (type.StartsWith("group.member.")) 
+            type = type.Replace("group.member.", "group.user.");
+
+        Console.WriteLine($"[DISCORD] SendAuditEventAsync called - EventType: {type} (raw: {eventType}), IsConfigured: {IsConfigured}");
         
         if (!IsConfigured)
         {
@@ -219,20 +228,17 @@ public class DiscordWebhookService : IDiscordWebhookService
             return false;
         }
         
-        Console.WriteLine("[DISCORD] Webhook URL configured: true");
-        
-        // Check if this event type is enabled
+        // check with original eventType as ShouldSendAuditEvent now handles logic
         bool shouldSend = ShouldSendAuditEvent(eventType);
 
-        Console.WriteLine($"[DISCORD] Event type '{eventType}' shouldSend: {shouldSend}");
-        
         if (!shouldSend)
         {
             Console.WriteLine($"[DISCORD] Event type '{eventType}' is disabled in settings, skipping");
             return false;
         }
-
-        var (title, color, emoji) = eventType switch
+        
+        // Use normalized type for formatting switch
+        var (title, color, emoji) = type switch
         {
             // User Events
             "group.user.join" => ("Member Joined", 0x4CAF50, "👋"),
@@ -242,9 +248,14 @@ public class DiscordWebhookService : IDiscordWebhookService
             "group.user.unban" => ("Member Unbanned", 0x4CAF50, "✅"),
             "group.user.role.add" => ("Role Added", 0x9C27B0, "➕"),
             "group.user.role.remove" => ("Role Removed", 0xFF5722, "➖"),
-            "group.user.join_request" => ("Join Request", 0x7C4DFF, "📥"),
-            "group.joinRequest" => ("Join Request", 0x7C4DFF, "📥"),
             
+            // Join Request Events
+            "group.request.create" or "group.joinrequest" => ("Join Request", 0x7C4DFF, "📥"),
+            "group.request.accept" => ("Request Accepted", 0x4CAF50, "✅"),
+            "group.request.reject" => ("Request Rejected", 0xF44336, "❌"),
+            "group.request.block" => ("Request Blocked", 0xD32F2F, "🚫"),
+            "group.request.unblock" => ("Request Unblocked", 0x8BC34A, "🔓"),
+
             // Role Events
             "group.role.create" => ("Role Created", 0x00BCD4, "🎭"),
             "group.role.update" => ("Role Updated", 0x9C27B0, "🏷️"),
@@ -261,8 +272,7 @@ public class DiscordWebhookService : IDiscordWebhookService
             "group.update" => ("Group Updated", 0xFFC107, "⚙️"),
             
             // Invite Events
-            "group.invite.create" => ("Invite Sent", 0x8BC34A, "💌"),
-            "group.user.invite" => ("Invite Sent", 0x8BC34A, "💌"),
+            "group.invite.create" or "group.user.invite" => ("Invite Sent", 0x8BC34A, "💌"),
             "group.invite.accept" => ("Invite Accepted", 0x4CAF50, "✔️"),
             "group.invite.reject" => ("Invite Rejected", 0xFF5722, "❌"),
             
@@ -278,7 +288,7 @@ public class DiscordWebhookService : IDiscordWebhookService
             "group.post.create" => ("Post Created", 0x2196F3, "📝"),
             "group.post.delete" => ("Post Deleted", 0x757575, "🗑️"),
             
-            _ => ("Event", 0x757575, "📋")
+            _ => ($"Event: {eventType}", 0x757575, "📋")
         };
 
         var desc = new StringBuilder();
@@ -288,7 +298,7 @@ public class DiscordWebhookService : IDiscordWebhookService
         if (!string.IsNullOrEmpty(description))
             desc.AppendLine($"**Details:** {description}");
 
-        Console.WriteLine($"[DISCORD] Sending message: {emoji} {title}");
+        Console.WriteLine($"[DISCORD] Sending message: {emoji} {title} (Color: {color})");
         var success = await SendMessageAsync($"{emoji} {title}", desc.ToString(), color);
         Console.WriteLine($"[DISCORD] Message send result: {success}");
         return success;

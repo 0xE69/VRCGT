@@ -154,6 +154,8 @@ public class AppSettings
 
     // Appearance & defaults
     public string Theme { get; set; } = "Dark";
+    public string PrimaryColor { get; set; } = "DeepPurple";
+    public string SecondaryColor { get; set; } = "Teal";
     public string TimeZoneId { get; set; } = TimeZoneInfo.Local.Id;
     public string DefaultRegion { get; set; } = "US West";
     
