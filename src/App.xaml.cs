@@ -25,7 +25,7 @@ public partial class App : Application
     private static extern bool FreeConsole();
 
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string Version => "1.1.3";
+    public static string Version => "1.1.4";
     public static string GitHubRepo => "0xE69/VRCGT";
     public static string BindingLogPath { get; private set; } = string.Empty;
 
@@ -72,7 +72,12 @@ public partial class App : Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             // Check for updates BEFORE showing login window (to block startup if update needed)
-            await CheckForUpdatesAsync();
+            bool updateInitiated = await CheckForUpdatesAsync();
+            if (updateInitiated)
+            {
+                LoggingService.Info("APP", "Update initiated, shutting down...");
+                return;
+            }
 
             // Restore normal shutdown behavior
             ShutdownMode = ShutdownMode.OnLastWindowClose;
@@ -274,7 +279,7 @@ public partial class App : Application
         LoggingService.Debug("APP", "All services registered");
     }
 
-    private async Task CheckForUpdatesAsync()
+    private async Task<bool> CheckForUpdatesAsync()
     {
         try
         {
@@ -306,6 +311,7 @@ public partial class App : Application
                 {
                     LoggingService.Info("APP", "User accepted update, starting download...");
                     await updateService.DownloadAndInstallUpdateAsync();
+                    return true;
                 }
             }
             else
@@ -317,6 +323,8 @@ public partial class App : Application
         {
             LoggingService.Warn("APP", $"Update check failed: {ex.Message}");
         }
+        
+        return false;
     }
 }
 

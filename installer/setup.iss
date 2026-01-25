@@ -2,7 +2,7 @@
 ; Download Inno Setup from: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "VRC Group Tools"
-#define MyAppVersion "1.1.3"
+#define MyAppVersion "1.1.4"
 #define MyAppPublisher "VRCGT"
 #define MyAppURL "https://github.com/0xE69/VRCGT"
 #define MyAppExeName "VRCGroupTools.exe"
