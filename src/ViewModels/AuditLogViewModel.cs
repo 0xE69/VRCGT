@@ -239,7 +239,9 @@ public partial class AuditLogViewModel : ObservableObject
                 EventColor = GetEventColor(l.EventType),
                 ActorName = l.ActorName ?? "Unknown",
                 TargetName = l.TargetName,
-                Description = l.Description
+                Description = l.Description,
+                InstanceId = l.InstanceId,
+                WorldName = l.WorldName
             })
             .ToList();
 
@@ -426,11 +428,11 @@ public partial class AuditLogViewModel : ObservableObject
                 else
                 {
                     var csv = new System.Text.StringBuilder();
-                    csv.AppendLine("Timestamp,Event Type,Actor,Target,Description");
+                    csv.AppendLine("Timestamp,Event Type,Actor,Target,Description,Instance ID,World Name");
                     
                     foreach (var log in _allLogs.OrderByDescending(l => l.CreatedAt))
                     {
-                        csv.AppendLine($"\"{ log.CreatedAt:yyyy-MM-dd HH:mm:ss}\",\"{log.EventType}\",\"{log.ActorName ?? ""}\",\"{log.TargetName ?? ""}\",\"{log.Description.Replace("\"", "\"\"")}\"");
+                        csv.AppendLine($"\"{log.CreatedAt:yyyy-MM-dd HH:mm:ss}\",\"{log.EventType}\",\"{log.ActorName ?? ""}\",\"{log.TargetName ?? ""}\",\"{log.Description.Replace("\"", "\"\"")}\",\"{log.InstanceId ?? ""}\",\"{log.WorldName ?? ""}\"");
                     }
                     
                     await System.IO.File.WriteAllTextAsync(dialog.FileName, csv.ToString());
@@ -463,4 +465,6 @@ public class AuditLogDisplayItem
     public string ActorName { get; set; } = "";
     public string? TargetName { get; set; }
     public string Description { get; set; } = "";
+    public string? InstanceId { get; set; }
+    public string? WorldName { get; set; }
 }

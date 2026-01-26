@@ -285,4 +285,19 @@ public class AppSettings
     public bool SecurityNotifyDiscord { get; set; } = true;
     public bool SecurityLogAllActions { get; set; } = true;
     public string SecurityOwnerUserId { get; set; } = ""; // VRChat User ID of the owner
+    
+    // Trusted users exempt from security monitoring
+    public List<string> SecurityTrustedUserIds { get; set; } = new(); // User IDs exempt from thresholds
+    
+    // Preemptive ban settings (banning non-group-members)
+    public bool SecurityMonitorPreemptiveBans { get; set; } = true;
+    public int SecurityPreemptiveBanThreshold { get; set; } = 20; // Higher threshold for preemptive bans
+    public int SecurityPreemptiveBanTimeframeMinutes { get; set; } = 10;
+    
+    // Auto Closer - automatically close non-age-gated instances
+    public bool AutoCloserEnabled { get; set; } = false;
+    public bool AutoCloserRequireAgeGate { get; set; } = true; // Close instances without age gate
+    public int AutoCloserCheckIntervalSeconds { get; set; } = 60; // How often to check for instances
+    public bool AutoCloserNotifyDiscord { get; set; } = true;
+    public string AutoCloserAllowedRegions { get; set; } = ""; // Comma-separated regions to allow (empty = all)
 }

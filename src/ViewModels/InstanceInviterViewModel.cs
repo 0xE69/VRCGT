@@ -82,6 +82,9 @@ public partial class InstanceInviterViewModel : ObservableObject
     [ObservableProperty]
     private int _instanceUserSelectedCount;
 
+    [ObservableProperty]
+    private InstanceDetails? _currentInstanceDetails;
+
     public InstanceInviterViewModel(
         IVRChatApiService apiService, 
         ISettingsService settingsService,
@@ -214,6 +217,9 @@ public partial class InstanceInviterViewModel : ObservableObject
             CurrentInstanceDisplay = $"Current Instance: {CurrentInstance.WorldId} (Detected at {CurrentInstance.DetectedAt:HH:mm:ss})";
             StatusMessage = "Ready to send invites";
             
+            // Fetch instance details (including world owner) asynchronously
+            _ = FetchInstanceDetailsAsync();
+            
             // Load instance users
             _ = RefreshInstanceUsersAsync();
         }
@@ -221,7 +227,27 @@ public partial class InstanceInviterViewModel : ObservableObject
         {
             CurrentInstanceDisplay = "No instance detected. Please join a VRChat world.";
             StatusMessage = "Not in an instance";
+            CurrentInstanceDetails = null;
             InstanceUsers.Clear();
+        }
+    }
+
+    private async Task FetchInstanceDetailsAsync()
+    {
+        if (CurrentInstance == null) return;
+        
+        try
+        {
+            CurrentInstanceDetails = await _apiService.GetInstanceAsync(CurrentInstance.WorldId, CurrentInstance.InstanceId);
+            if (CurrentInstanceDetails != null)
+            {
+                Console.WriteLine($"[INSTANCE-VM] Instance details fetched. World owner: {CurrentInstanceDetails.OwnerId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[INSTANCE-VM] Error fetching instance details: {ex.Message}");
+            CurrentInstanceDetails = null;
         }
     }
 
@@ -521,6 +547,32 @@ public partial class InstanceInviterViewModel : ObservableObject
                 MessageBox.Show("No group configured. Please set up a group first.", "No Group", MessageBoxButton.OK, MessageBoxImage.Warning);
             else
                 StatusMessage = "Auto-invite failed: No group configured";
+            return;
+        }
+
+        // Check if the current instance allows group invites (anti-abuse restriction)
+        // Only allow invites from: the group's own instances OR non-group instances
+        // Exception: World owners can always send invites from their own worlds
+        // Block invites when in another group's instance to prevent abuse
+        var isWorldOwner = !string.IsNullOrEmpty(_apiService.CurrentUserId) && 
+                          CurrentInstanceDetails?.OwnerId == _apiService.CurrentUserId;
+        
+        if (CurrentInstance != null && !isWorldOwner && !CurrentInstance.IsGroupInviteAllowed(groupId))
+        {
+            var instanceGroupId = CurrentInstance.GetInstanceGroupId();
+            if (!silent)
+                MessageBox.Show(
+                    $"Instance invite is restricted when you're in another group's instance.\n\n" +
+                    $"You can only send group invites from:\n" +
+                    $"• Your own group's instances\n" +
+                    $"• Non-group (public/friends/private) instances\n" +
+                    $"• Worlds you own (any instance type)\n\n" +
+                    $"Current instance belongs to group: {instanceGroupId}",
+                    "Instance Restriction",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            else
+                StatusMessage = "Auto-invite blocked: Cannot invite from another group's instance";
             return;
         }
 

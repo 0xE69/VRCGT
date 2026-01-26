@@ -109,6 +109,20 @@ public partial class SecuritySettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _securityOwnerUserId = string.Empty;
 
+    // Trusted users
+    [ObservableProperty]
+    private string _trustedUserIdsText = string.Empty;
+
+    // Preemptive ban settings
+    [ObservableProperty]
+    private bool _securityMonitorPreemptiveBans;
+
+    [ObservableProperty]
+    private int _securityPreemptiveBanThreshold;
+
+    [ObservableProperty]
+    private int _securityPreemptiveBanTimeframeMinutes;
+
     [ObservableProperty]
     private string _statusMessage = "";
 
@@ -172,6 +186,14 @@ public partial class SecuritySettingsViewModel : ObservableObject
         SecurityNotifyDiscord = settings.SecurityNotifyDiscord;
         SecurityLogAllActions = settings.SecurityLogAllActions;
         SecurityOwnerUserId = settings.SecurityOwnerUserId ?? "";
+        
+        // Trusted users (convert list to newline-separated text)
+        TrustedUserIdsText = string.Join("\n", settings.SecurityTrustedUserIds ?? new List<string>());
+        
+        // Preemptive ban settings
+        SecurityMonitorPreemptiveBans = settings.SecurityMonitorPreemptiveBans;
+        SecurityPreemptiveBanThreshold = settings.SecurityPreemptiveBanThreshold;
+        SecurityPreemptiveBanTimeframeMinutes = settings.SecurityPreemptiveBanTimeframeMinutes;
     }
 
     [RelayCommand]
@@ -217,6 +239,18 @@ public partial class SecuritySettingsViewModel : ObservableObject
             settings.SecurityNotifyDiscord = SecurityNotifyDiscord;
             settings.SecurityLogAllActions = SecurityLogAllActions;
             settings.SecurityOwnerUserId = SecurityOwnerUserId;
+            
+            // Parse trusted user IDs from text (newline or comma separated)
+            settings.SecurityTrustedUserIds = TrustedUserIdsText
+                .Split(new[] { '\n', '\r', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => id.Trim())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToList();
+            
+            // Preemptive ban settings
+            settings.SecurityMonitorPreemptiveBans = SecurityMonitorPreemptiveBans;
+            settings.SecurityPreemptiveBanThreshold = SecurityPreemptiveBanThreshold;
+            settings.SecurityPreemptiveBanTimeframeMinutes = SecurityPreemptiveBanTimeframeMinutes;
 
             _settingsService.Save();
 

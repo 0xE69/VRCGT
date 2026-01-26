@@ -385,6 +385,36 @@ public class AuditLogService : IAuditLogService, IDisposable
                 log.TargetName = targetName.GetString();
             }
 
+            // Parse instance and world info from data object (if present)
+            if (entry.TryGetProperty("data", out var dataObj))
+            {
+                // Try to get instance ID
+                if (dataObj.TryGetProperty("instanceId", out var instanceId))
+                {
+                    log.InstanceId = instanceId.GetString();
+                }
+                // Try to get world name
+                if (dataObj.TryGetProperty("worldName", out var worldName))
+                {
+                    log.WorldName = worldName.GetString();
+                }
+                // Some events have world info nested in instance object
+                if (dataObj.TryGetProperty("instance", out var instanceObj))
+                {
+                    if (string.IsNullOrEmpty(log.InstanceId) && instanceObj.TryGetProperty("instanceId", out var nestedInstanceId))
+                    {
+                        log.InstanceId = nestedInstanceId.GetString();
+                    }
+                    if (string.IsNullOrEmpty(log.WorldName) && instanceObj.TryGetProperty("world", out var worldObj))
+                    {
+                        if (worldObj.TryGetProperty("name", out var nestedWorldName))
+                        {
+                            log.WorldName = nestedWorldName.GetString();
+                        }
+                    }
+                }
+            }
+
             // Parse description
             if (entry.TryGetProperty("description", out var desc))
             {
@@ -676,23 +706,55 @@ public class AuditLogService : IAuditLogService, IDisposable
         if (string.IsNullOrEmpty(log.ActorId))
             return;
 
-        // Check if this is an instance-specific action by looking for instanceId in RawData
+        // Check if this is an instance-specific action and if target was a member
         bool isInstanceAction = false;
+        bool isPreemptiveBan = false;
+        
         if (!string.IsNullOrEmpty(log.RawData))
         {
             try
             {
                 var additionalData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(log.RawData);
                 isInstanceAction = additionalData?.ContainsKey("instanceId") == true;
+                
+                // Check if this is a preemptive ban (target was not a group member)
+                // VRChat may include "wasMember" or similar field, or we check if target had no role
+                if (additionalData != null && log.EventType.ToLower() == "group.user.ban")
+                {
+                    // If the data contains wasMember field
+                    if (additionalData.TryGetValue("wasMember", out var wasMemberEl))
+                    {
+                        isPreemptiveBan = !wasMemberEl.GetBoolean();
+                    }
+                    // Alternative: check if targetMembershipStatus exists
+                    else if (additionalData.TryGetValue("targetMembershipStatus", out var statusEl))
+                    {
+                        var status = statusEl.GetString();
+                        isPreemptiveBan = status != "member";
+                    }
+                    // Alternative: check data.member field
+                    else if (additionalData.TryGetValue("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Object)
+                    {
+                        var dataDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(dataEl.GetRawText());
+                        if (dataDict != null && dataDict.TryGetValue("member", out var memberEl))
+                        {
+                            // If member is null or false, it's a preemptive ban
+                            isPreemptiveBan = memberEl.ValueKind == JsonValueKind.Null || 
+                                              (memberEl.ValueKind == JsonValueKind.False);
+                        }
+                    }
+                }
             }
             catch { /* Ignore parse errors */ }
         }
 
-        // Map audit log event types to security action types, with instance vs group distinction
-        var actionType = log.EventType.ToLower() switch
+        // Map audit log event types to security action types, with instance vs group vs preemptive distinction
+        string? actionType = log.EventType.ToLower() switch
         {
             "group.user.kick" => isInstanceAction ? "instance_kick" : "group_kick",
-            "group.user.ban" => isInstanceAction ? "instance_ban" : "group_ban",
+            "group.user.ban" when isInstanceAction => "instance_ban",
+            "group.user.ban" when isPreemptiveBan => "preemptive_ban",
+            "group.user.ban" => "group_ban",
             "group.user.role.remove" or "group.role.remove" => "role_remove",
             "group.invite.reject" => "invite_reject",
             "group.post.delete" => "post_delete",
@@ -710,7 +772,7 @@ public class AuditLogService : IAuditLogService, IDisposable
                 actionType,
                 log.TargetId,
                 log.TargetName,
-                new { EventType = log.EventType, Timestamp = log.CreatedAt, IsInstanceAction = isInstanceAction }
+                new { EventType = log.EventType, Timestamp = log.CreatedAt, IsInstanceAction = isInstanceAction, IsPreemptiveBan = isPreemptiveBan }
             );
         }
     }

@@ -1,0 +1,303 @@
+<UserControl x:Class="VRCGroupTools.Views.AutoCloserView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:converters="clr-namespace:VRCGroupTools.Converters"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:InverseBooleanConverter x:Key="InverseBool"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20">
+            <!-- Header -->
+            <TextBlock Text="🚫 Instance Auto Closer" 
+                       FontSize="28" 
+                       FontWeight="Bold" 
+                       Foreground="White" 
+                       Margin="0,0,0,10"/>
+            
+            <TextBlock Text="Automatically close group instances that don't meet your requirements (e.g., non-age-gated)" 
+                       FontSize="14" 
+                       Foreground="#AAA" 
+                       Margin="0,0,0,20"
+                       TextWrapping="Wrap"/>
+
+            <!-- Status Bar -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="15" Margin="0,0,0,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="12" Height="12" 
+                                 Fill="{Binding IsMonitoring, Converter={StaticResource BoolToPollingColorConverter}}"
+                                 Margin="0,0,10,0"/>
+                        <TextBlock Text="{Binding StatusMessage}" 
+                                   Foreground="White" 
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Column="1" 
+                               Text="{Binding ClosedInstanceCount, StringFormat='Closed: {0}'}"
+                               Foreground="#7C4DFF"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="20,0"/>
+                    
+                    <Button Grid.Column="2"
+                            Content="{Binding IsMonitoring, Converter={StaticResource BoolToPausePlayConverter}}"
+                            Command="{Binding ToggleMonitoringCommand}"
+                            Width="40" Height="40"
+                            Margin="5,0"
+                            ToolTip="Start/Stop monitoring"
+                            Foreground="White"
+                            Style="{StaticResource MaterialDesignIconButton}"/>
+                    
+                    <Button Grid.Column="3"
+                            Content="🔄"
+                            Command="{Binding RefreshInstancesCommand}"
+                            Width="40" Height="40"
+                            ToolTip="Refresh instances"
+                            Foreground="White"
+                            Style="{StaticResource MaterialDesignIconButton}"/>
+                </Grid>
+            </Border>
+
+            <!-- Settings Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="⚙️ Auto Closer Settings" 
+                               FontSize="18" 
+                               FontWeight="SemiBold" 
+                               Foreground="White" 
+                               Margin="0,0,0,15"/>
+
+                    <!-- Enable Auto Closer -->
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Enable Auto Closer" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Automatically close instances that don't meet requirements" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding AutoCloserEnabled}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <!-- Require Age Gate -->
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Require Age Gate (18+)" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Close instances that are not age-gated" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding AutoCloserRequireAgeGate}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <!-- Discord Notifications -->
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Discord Notifications" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Send a Discord notification when an instance is closed" 
+                                       FontSize="11" 
+                                       Foreground="#AAA" 
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        
+                        <ToggleButton Grid.Column="1" 
+                                      IsChecked="{Binding AutoCloserNotifyDiscord}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <!-- Check Interval -->
+                    <StackPanel Margin="0,0,0,15">
+                        <TextBlock Text="Check Interval (seconds)" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding AutoCloserCheckIntervalSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="e.g., 60"
+                                 Foreground="White"
+                                 Width="200"
+                                 HorizontalAlignment="Left"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    </StackPanel>
+
+                    <!-- Allowed Regions -->
+                    <StackPanel Margin="0,0,0,15">
+                        <TextBlock Text="Allowed Regions (optional, comma-separated)" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding AutoCloserAllowedRegions, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="e.g., us, eu (leave empty for all)"
+                                 Foreground="White"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        <TextBlock Text="Leave empty to allow all regions. Instances in non-allowed regions will be closed." 
+                                   FontSize="10" 
+                                   Foreground="#666" 
+                                   Margin="0,5,0,0"/>
+                    </StackPanel>
+
+                    <!-- Save Button -->
+                    <Button Content="💾  Save Settings"
+                            Command="{Binding SaveSettingsCommand}"
+                            Background="#7C4DFF"
+                            Foreground="White"
+                            Height="40"
+                            Padding="20,0"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Active Instances Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20">
+                <StackPanel>
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBlock Grid.Column="0"
+                                   Text="🌐 Active Group Instances" 
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White"/>
+                        
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding ActiveInstances.Count, StringFormat='({0} instances)'}"
+                                   Foreground="#888"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Loading Indicator -->
+                    <StackPanel Visibility="{Binding IsLoadingInstances, Converter={StaticResource BoolToVisibility}}"
+                                HorizontalAlignment="Center"
+                                Margin="0,20">
+                        <ProgressBar IsIndeterminate="True" Width="200"/>
+                        <TextBlock Text="Loading instances..." 
+                                   Foreground="#888" 
+                                   HorizontalAlignment="Center"
+                                   Margin="0,10,0,0"/>
+                    </StackPanel>
+
+                    <!-- Instances List -->
+                    <ItemsControl ItemsSource="{Binding ActiveInstances}"
+                                  Visibility="{Binding IsLoadingInstances, Converter={StaticResource InverseBool}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#3D3D40" CornerRadius="6" Padding="15" Margin="0,0,0,10">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- World Name -->
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding WorldName}" 
+                                                       Foreground="White" 
+                                                       FontWeight="SemiBold"
+                                                       FontSize="14"/>
+                                            <TextBlock Text="{Binding InstanceId}" 
+                                                       Foreground="#666" 
+                                                       FontSize="10"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Region -->
+                                        <Border Grid.Column="1" 
+                                                Background="#444" 
+                                                CornerRadius="4" 
+                                                Padding="8,4" 
+                                                Margin="10,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Region}" 
+                                                       Foreground="White" 
+                                                       FontSize="11"/>
+                                        </Border>
+                                        
+                                        <!-- User Count -->
+                                        <StackPanel Grid.Column="2" 
+                                                    Orientation="Horizontal" 
+                                                    VerticalAlignment="Center"
+                                                    Margin="10,0">
+                                            <TextBlock Text="👥" Margin="0,0,5,0"/>
+                                            <TextBlock Text="{Binding UserCount}" Foreground="White"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Age Gate Status -->
+                                        <Border Grid.Column="3" 
+                                                Background="{Binding AgeGatedColor}" 
+                                                CornerRadius="4" 
+                                                Padding="8,4" 
+                                                Margin="10,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding AgeGatedDisplay}" 
+                                                       Foreground="White" 
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"/>
+                                        </Border>
+                                        
+                                        <!-- Close Button -->
+                                        <Button Grid.Column="4"
+                                                Content="Close"
+                                                Command="{Binding DataContext.CloseInstanceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding InstanceId}"
+                                                Background="#F44336"
+                                                Foreground="White"
+                                                Height="30"
+                                                Padding="15,0"
+                                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Empty State -->
+                    <TextBlock Text="No active instances found. Click the refresh button to check."
+                               Foreground="#666"
+                               HorizontalAlignment="Center"
+                               Margin="0,20"
+                               Visibility="{Binding ActiveInstances.Count, Converter={StaticResource ZeroToVisibilityConverter}, FallbackValue=Collapsed}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

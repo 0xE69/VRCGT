@@ -55,6 +55,8 @@ public class AuditLogEntry
     public DateTime CreatedAt { get; set; }
     public string? EventColor { get; set; }
     public string? RawData { get; set; }
+    public string? InstanceId { get; set; }
+    public string? WorldName { get; set; }
 }
 
 /// <summary>
@@ -245,7 +247,9 @@ public class CacheService : ICacheService
             TargetId = l.TargetId,
             TargetName = l.TargetName,
             CreatedAt = l.CreatedAt,
-            RawData = l.RawData
+            RawData = l.RawData,
+            InstanceId = l.InstanceId,
+            WorldName = l.WorldName
         });
 
         return await _db.SaveAuditLogsAsync(entities);
@@ -290,7 +294,9 @@ public class CacheService : ICacheService
             TargetName = entity.TargetName,
             CreatedAt = entity.CreatedAt,
             EventColor = GetEventColor(entity.EventType),
-            RawData = entity.RawData
+            RawData = entity.RawData,
+            InstanceId = entity.InstanceId,
+            WorldName = entity.WorldName
         };
     }
 

@@ -17,14 +17,19 @@ public partial class InviterHubViewModel : ObservableObject
     [ObservableProperty]
     private FriendInviterViewModel? _friendInviterVM;
 
+    [ObservableProperty]
+    private GameLogViewModel? _gameLogVM;
+
     public InviterHubViewModel(
         InviteToGroupViewModel inviteToGroupVM,
         InstanceInviterViewModel instanceInviterVM,
-        FriendInviterViewModel friendInviterVM)
+        FriendInviterViewModel friendInviterVM,
+        GameLogViewModel gameLogVM)
     {
         InviteToGroupVM = inviteToGroupVM;
         InstanceInviterVM = instanceInviterVM;
         FriendInviterVM = friendInviterVM;
+        GameLogVM = gameLogVM;
     }
 
     [RelayCommand]

@@ -25,7 +25,7 @@ public partial class App : Application
     private static extern bool FreeConsole();
 
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string Version => "1.1.5";
+    public static string Version => "1.1.6";
     public static string GitHubRepo => "0xE69/VRCGT";
     public static string BindingLogPath { get; private set; } = string.Empty;
 
@@ -248,6 +248,7 @@ public partial class App : Application
         services.AddSingleton<IDiscordPresenceService, DiscordPresenceService>();
         services.AddSingleton<ICalendarEventService, CalendarEventService>();
         services.AddSingleton<IModerationService, ModerationService>();
+        services.AddSingleton<IAutoCloserService, AutoCloserService>();
 
         // ViewModels - use Singleton for ViewModels that need event subscriptions
         services.AddSingleton<LoginViewModel>();
@@ -273,8 +274,10 @@ public partial class App : Application
         services.AddSingleton<IInstanceInviterService, InstanceInviterService>();
         services.AddTransient<InstanceInviterViewModel>();
         services.AddTransient<FriendInviterViewModel>();
+        services.AddTransient<GameLogViewModel>();
         services.AddTransient<InviterHubViewModel>();
         services.AddTransient<GroupJoinRequestsViewModel>();
+        services.AddTransient<AutoCloserViewModel>();
         
         LoggingService.Debug("APP", "All services registered");
     }

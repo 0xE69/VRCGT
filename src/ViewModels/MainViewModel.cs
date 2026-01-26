@@ -98,6 +98,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private GroupJoinRequestsViewModel? _groupJoinRequestsVM;
 
+    [ObservableProperty]
+    private AutoCloserViewModel? _autoCloserVM;
+
     public string AppVersion => $"v{App.Version}";
 
     public event Action? LogoutRequested;
@@ -149,6 +152,7 @@ public partial class MainViewModel : ObservableObject
         AppSettingsVM = App.Services.GetRequiredService<AppSettingsViewModel>();
         InviterHubVM = App.Services.GetRequiredService<InviterHubViewModel>();
         GroupJoinRequestsVM = App.Services.GetRequiredService<GroupJoinRequestsViewModel>();
+        AutoCloserVM = App.Services.GetRequiredService<AutoCloserViewModel>();
         
         // Sync group ID to badge scanner and API service
         BadgeScannerVM!.GroupId = GroupId;

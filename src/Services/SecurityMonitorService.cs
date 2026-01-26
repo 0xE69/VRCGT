@@ -60,6 +60,16 @@ public class SecurityMonitorService : ISecurityMonitorService
                 return false;
             }
 
+            // Check if actor is a trusted user (exempt from monitoring)
+            if (settings.SecurityTrustedUserIds.Contains(actorUserId))
+            {
+                if (settings.SecurityLogAllActions)
+                {
+                    LoggingService.Info("SECURITY", $"Skipping action by trusted user: {actorDisplayName} ({actorUserId})");
+                }
+                return false;
+            }
+
             // Check if this action type is monitored
             bool shouldMonitor = actionType.ToLower() switch
             {
@@ -67,6 +77,7 @@ public class SecurityMonitorService : ISecurityMonitorService
                 "group_kick" => settings.SecurityMonitorGroupKicks,
                 "instance_ban" => settings.SecurityMonitorInstanceBans,
                 "group_ban" => settings.SecurityMonitorGroupBans,
+                "preemptive_ban" => settings.SecurityMonitorPreemptiveBans,
                 "role_remove" or "group.role.remove" => settings.SecurityMonitorRoleRemovals,
                 "invite_reject" or "group.invite.reject" => settings.SecurityMonitorInviteRejections,
                 "post_delete" or "group.post.delete" or "group.announcement.delete" or "group.gallery.delete" => settings.SecurityMonitorPostDeletions,
@@ -126,6 +137,7 @@ public class SecurityMonitorService : ISecurityMonitorService
                 "group_kick" => (settings.SecurityGroupKickThreshold, settings.SecurityGroupKickTimeframeMinutes, "excessive_group_kicks"),
                 "instance_ban" => (settings.SecurityInstanceBanThreshold, settings.SecurityInstanceBanTimeframeMinutes, "excessive_instance_bans"),
                 "group_ban" => (settings.SecurityGroupBanThreshold, settings.SecurityGroupBanTimeframeMinutes, "excessive_group_bans"),
+                "preemptive_ban" => (settings.SecurityPreemptiveBanThreshold, settings.SecurityPreemptiveBanTimeframeMinutes, "excessive_preemptive_bans"),
                 "role_remove" or "group.role.remove" => (settings.SecurityRoleRemovalThreshold, settings.SecurityRoleRemovalTimeframeMinutes, "excessive_role_removals"),
                 "invite_reject" or "group.invite.reject" => (settings.SecurityInviteRejectionThreshold, settings.SecurityInviteRejectionTimeframeMinutes, "excessive_invite_rejections"),
                 "post_delete" or "group.post.delete" or "group.announcement.delete" or "group.gallery.delete" => (settings.SecurityPostDeletionThreshold, settings.SecurityPostDeletionTimeframeMinutes, "excessive_deletions"),

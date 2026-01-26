@@ -423,6 +423,107 @@
                 </Border>
             </Grid>
 
+            <!-- Preemptive Bans Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBlock Grid.Column="0"
+                                   Text="🛡️" 
+                                   FontSize="20" 
+                                   VerticalAlignment="Center" 
+                                   Margin="0,0,10,0"/>
+                        
+                        <TextBlock Grid.Column="1" 
+                                   VerticalAlignment="Center">
+                            <Run Text="Preemptive Bans" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="(banning users who are NOT group members)" FontSize="10" Foreground="#999"/>
+                        </TextBlock>
+                        
+                        <ToggleButton Grid.Column="2" 
+                                      IsChecked="{Binding SecurityMonitorPreemptiveBans}"
+                                      Style="{StaticResource MaterialDesignSwitchToggleButton}"/>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Max Preemptive Bans" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityPreemptiveBanThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 20"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Within Minutes" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding SecurityPreemptiveBanTimeframeMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                     materialDesign:HintAssist.Hint="e.g., 10"
+                                     Foreground="White"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <TextBlock Text="💡 Tip: Preemptive bans have a separate, higher threshold since banning non-members (e.g., known trolls) is common practice." 
+                               Foreground="#666" 
+                               FontSize="11" 
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Trusted Users Section -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBlock Grid.Column="0"
+                                   Text="⭐" 
+                                   FontSize="20" 
+                                   VerticalAlignment="Center" 
+                                   Margin="0,0,10,0"/>
+                        
+                        <TextBlock Grid.Column="1" 
+                                   VerticalAlignment="Center">
+                            <Run Text="Trusted Users" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                            <LineBreak/>
+                            <Run Text="These users are exempt from all security threshold limits" FontSize="10" Foreground="#999"/>
+                        </TextBlock>
+                    </Grid>
+
+                    <TextBlock Text="User IDs (one per line or comma-separated)" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                    <TextBox Text="{Binding TrustedUserIdsText, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                             Foreground="White"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             Height="100"
+                             VerticalScrollBarVisibility="Auto"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <TextBlock Text="💡 Add user IDs of highly trusted staff who may perform bulk moderation actions without triggering security alerts." 
+                               Foreground="#666" 
+                               FontSize="11" 
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
+            </Border>
+
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

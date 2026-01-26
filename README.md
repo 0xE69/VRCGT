@@ -43,7 +43,12 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
     - Filter by Trust Level (Visitor, New User, User, Known, Trusted).
     - **18+ Only Filter**: Only show users with confirmed 18+ age verification.
     - "Select All" and bulk invite capabilities.
+    - **Anti-abuse protection**: Prevents sending group invites from another group's instance.
 - **Friend Inviter**: Quickly invite your online friends to your group.
+- **Game Log Scanner**: Parse VRChat game logs to find and invite users you've recently encountered.
+    - Filter by 18+ verification status.
+    - View trust levels and last seen timestamps.
+    - Bulk invite capabilities.
 - **Join Requests**: Monitor and process group join requests.
     - Filter requests by 18+ status (age verification check).
     - Approve or block users directly.
@@ -105,6 +110,8 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 - Fetch complete history
 - Cached locally for speed
 - **Real-time Security Monitoring:** Automatically tracks suspicious actions
+- **Instance & World Info:** View instance IDs and world names for relevant log entries
+- **Enhanced CSV Export:** Export logs with instance and world data
 
 ### 🔍 18+ Badge Scanner
 - Scan entire group for age verification status
@@ -148,6 +155,8 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 ### 🔒 **NEW: Security Monitor**
 - **Automated Threat Detection:** Monitor and respond to suspicious moderator behavior
 - **Configurable Thresholds:** Set limits for kicks, bans, role removals, and more
+- **Preemptive Ban Tracking:** Separate thresholds for banning non-group-members vs group members
+- **Trusted User Exclusions:** Exempt specific trusted users from all security threshold monitoring
 - **Automatic Response:** Remove roles from users exceeding thresholds
 - **Discord Alerts:** Receive rich notifications when incidents are detected
 - **Owner Protection:** Require owner role for automatic actions
@@ -160,6 +169,14 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
   - Bulk invite rejections (e.g., 10 rejections in 10 minutes)
   - Content deletions (e.g., 5 posts deleted in 10 minutes)
 - **Separate Webhook:** Configure dedicated security alert webhook
+
+### 🚫 **NEW: Instance Auto Closer**
+- **Age Gate Enforcement:** Automatically close group instances that aren't age-gated (18+)
+- **Region Restrictions:** Optionally restrict instances to specific regions (US, EU, JP)
+- **Configurable Intervals:** Set how often to check for non-compliant instances
+- **Discord Notifications:** Receive alerts when instances are auto-closed
+- **Manual Override:** View and manually close any active group instance
+- **Real-time Monitoring:** Toggle monitoring on/off with status tracking
 
 ### �🔔 Discord Webhooks
 - Configure webhook URL (supports discord.com and discordapp.com)
@@ -325,6 +342,40 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ---
 
 ## 📋 Changelog
+
+### v1.1.5 (2026-01-26)
+**🔒 Security Enhancements & Auto Closer**
+
+**New Features:**
+- **Instance Auto Closer** 🚫
+  - Automatically close non-age-gated (18+) group instances
+  - Optional region restrictions for instances
+  - Configurable check intervals
+  - Discord notifications when instances are closed
+  - Manual instance management with refresh and close buttons
+  - Real-time monitoring toggle
+
+- **Game Log Scanner** 📜
+  - New tab in Inviter Hub to parse VRChat game logs
+  - Find and invite users you've recently encountered
+  - Filter by 18+ verification status
+  - View trust levels and last seen timestamps
+  - Bulk invite capabilities
+
+- **Trusted User Exclusions** ⭐
+  - Add trusted staff user IDs exempt from all security thresholds
+  - Useful for staff who perform bulk moderation actions
+
+- **Preemptive Ban Differentiation** 🛡️
+  - Separate threshold settings for preemptive bans (banning non-members)
+  - Higher default threshold (20) since banning known troublemakers is common
+  - Distinguishes between group member bans vs non-member bans in security tracking
+
+**Improvements:**
+- **Audit Logs**: Now display instance ID and world name for relevant events
+- **CSV Export**: Audit log exports include instance and world data
+- **Instance Inviter**: Anti-abuse protection prevents invites from other groups' instances
+- **Security Monitor**: Better differentiation between action types
 
 ### v1.1.0 (2026-01-24)
 **📬 Inviter Hub & Moderation**

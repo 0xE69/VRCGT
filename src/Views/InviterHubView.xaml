@@ -42,12 +42,13 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
                     <Button Grid.Column="0" 
                            Command="{Binding SelectModeCommand}"
                            CommandParameter="GroupInviter"
-                           Margin="0,0,10,0"
+                           Margin="0,0,5,0"
                            Height="60">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
@@ -62,7 +63,7 @@
                         <StackPanel Orientation="Vertical">
                             <TextBlock Text="📨" FontSize="20" HorizontalAlignment="Center"/>
                             <TextBlock Text="Group Inviter" 
-                                      FontSize="13" 
+                                      FontSize="12" 
                                       FontWeight="SemiBold"
                                       HorizontalAlignment="Center"
                                       Margin="0,4,0,0"/>
@@ -87,7 +88,7 @@
                         <StackPanel Orientation="Vertical">
                             <TextBlock Text="💌" FontSize="20" HorizontalAlignment="Center"/>
                             <TextBlock Text="Instance Inviter" 
-                                      FontSize="13" 
+                                      FontSize="12" 
                                       FontWeight="SemiBold"
                                       HorizontalAlignment="Center"
                                       Margin="0,4,0,0"/>
@@ -97,7 +98,7 @@
                     <Button Grid.Column="2" 
                            Command="{Binding SelectModeCommand}"
                            CommandParameter="FriendInviter"
-                           Margin="10,0,0,0"
+                           Margin="5,0"
                            Height="60">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
@@ -112,7 +113,32 @@
                         <StackPanel Orientation="Vertical">
                             <TextBlock Text="👥" FontSize="20" HorizontalAlignment="Center"/>
                             <TextBlock Text="Friend Manager" 
-                                      FontSize="13" 
+                                      FontSize="12" 
+                                      FontWeight="SemiBold"
+                                      HorizontalAlignment="Center"
+                                      Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Grid.Column="3" 
+                           Command="{Binding SelectModeCommand}"
+                           CommandParameter="GameLog"
+                           Margin="5,0,0,0"
+                           Height="60">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                <Setter Property="Background" Value="#424242"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedMode}" Value="GameLog">
+                                        <Setter Property="Background" Value="#7C4DFF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="📜" FontSize="20" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Game Log" 
+                                      FontSize="12" 
                                       FontWeight="SemiBold"
                                       HorizontalAlignment="Center"
                                       Margin="0,4,0,0"/>
@@ -135,6 +161,9 @@
                     <DataTemplate DataType="{x:Type viewmodels:FriendInviterViewModel}">
                         <views:FriendInviterView/>
                     </DataTemplate>
+                    <DataTemplate DataType="{x:Type viewmodels:GameLogViewModel}">
+                        <views:GameLogView/>
+                    </DataTemplate>
                 </ContentControl.Resources>
                 <ContentControl.Style>
                     <Style TargetType="ContentControl">
@@ -148,6 +177,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding SelectedMode}" Value="FriendInviter">
                                 <Setter Property="Content" Value="{Binding FriendInviterVM}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedMode}" Value="GameLog">
+                                <Setter Property="Content" Value="{Binding GameLogVM}"/>
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>

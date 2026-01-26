@@ -66,6 +66,8 @@ public interface IVRChatApiService
     Task<bool> InviteUserToInstanceAsync(string userId, string worldId, string instanceId);
     Task<List<GroupJoinRequest>> GetGroupJoinRequestsAsync(string groupId);
     Task<bool> RespondToGroupJoinRequestAsync(string groupId, string userId, string action);
+    Task<List<GroupInstanceDetails>> GetGroupInstancesAsync(string groupId);
+    Task<bool> DeleteGroupInstanceAsync(string groupId, string instanceId);
     string? GetAuthCookie();
     string? GetTwoFactorCookie();
     void Logout();
@@ -79,6 +81,21 @@ public class InstanceCreateResult
     public string? ShortName { get; set; }
     public string? SecureName { get; set; }
     public string? DisplayName { get; set; }
+}
+
+public class GroupInstanceDetails
+{
+    public string InstanceId { get; set; } = string.Empty;
+    public string WorldId { get; set; } = string.Empty;
+    public string WorldName { get; set; } = string.Empty;
+    public string Region { get; set; } = string.Empty;
+    public bool AgeGated { get; set; }
+    public int UserCount { get; set; }
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public string? AccessType { get; set; }
+    public bool QueueEnabled { get; set; }
 }
 
 public class GroupInfo
@@ -2174,6 +2191,134 @@ public class VRChatApiService : IVRChatApiService
             return false;
         }
     }
+
+    public async Task<List<GroupInstanceDetails>> GetGroupInstancesAsync(string groupId)
+    {
+        var instances = new List<GroupInstanceDetails>();
+        
+        try
+        {
+            await RateLimitAsync();
+            
+            var url = $"groups/{groupId}/instances?apiKey={ApiKey}";
+            Console.WriteLine($"[GROUP-INSTANCES] Fetching instances for group: {groupId}");
+            
+            var response = await _httpClient.GetAsync(url);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-INSTANCES", url, response, content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[GROUP-INSTANCES] Failed to get instances: {response.StatusCode}");
+                return instances;
+            }
+            
+            var json = JArray.Parse(content);
+            
+            foreach (var item in json)
+            {
+                try
+                {
+                    var instance = new GroupInstanceDetails
+                    {
+                        InstanceId = item["instanceId"]?.ToString() ?? item["id"]?.ToString() ?? "",
+                        WorldId = item["worldId"]?.ToString() ?? item["location"]?.ToString()?.Split(':').FirstOrDefault() ?? "",
+                        Region = item["region"]?.ToString() ?? "unknown",
+                        UserCount = item["userCount"]?.Value<int>() ?? item["n_users"]?.Value<int>() ?? 0,
+                        OwnerId = item["ownerId"]?.ToString() ?? "",
+                        QueueEnabled = item["queueEnabled"]?.Value<bool>() ?? false
+                    };
+                    
+                    // Try to get age gate info
+                    if (item["ageGate"] != null)
+                    {
+                        instance.AgeGated = item["ageGate"].Value<bool>();
+                    }
+                    else if (item["ageVerified"] != null)
+                    {
+                        instance.AgeGated = item["ageVerified"].Value<bool>();
+                    }
+                    
+                    // Try to get world name from nested world object or separate field
+                    if (item["world"] != null)
+                    {
+                        instance.WorldName = item["world"]["name"]?.ToString() ?? "";
+                    }
+                    else if (item["worldName"] != null)
+                    {
+                        instance.WorldName = item["worldName"].ToString();
+                    }
+                    
+                    // Try to get owner name
+                    if (item["owner"] != null)
+                    {
+                        instance.OwnerName = item["owner"]["displayName"]?.ToString() ?? "";
+                    }
+                    else if (item["ownerDisplayName"] != null)
+                    {
+                        instance.OwnerName = item["ownerDisplayName"].ToString();
+                    }
+                    
+                    // Try to get creation time
+                    if (item["createdAt"] != null || item["created_at"] != null)
+                    {
+                        var createdAtStr = item["createdAt"]?.ToString() ?? item["created_at"]?.ToString();
+                        if (DateTime.TryParse(createdAtStr, out var createdAt))
+                        {
+                            instance.CreatedAt = createdAt;
+                        }
+                    }
+                    
+                    // Get access type
+                    instance.AccessType = item["groupAccessType"]?.ToString() ?? item["accessType"]?.ToString();
+                    
+                    instances.Add(instance);
+                }
+                catch (Exception parseEx)
+                {
+                    Console.WriteLine($"[GROUP-INSTANCES] Failed to parse instance: {parseEx.Message}");
+                }
+            }
+            
+            Console.WriteLine($"[GROUP-INSTANCES] Found {instances.Count} instances");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-INSTANCES] Exception: {ex.Message}");
+        }
+        
+        return instances;
+    }
+
+    public async Task<bool> DeleteGroupInstanceAsync(string groupId, string instanceId)
+    {
+        try
+        {
+            await RateLimitAsync();
+            
+            var url = $"groups/{groupId}/instances/{instanceId}?apiKey={ApiKey}";
+            Console.WriteLine($"[GROUP-INSTANCE-DELETE] Deleting instance: {instanceId}");
+            
+            var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            var response = await _httpClient.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-INSTANCE-DELETE", url, response, content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[GROUP-INSTANCE-DELETE] Failed to delete instance: {response.StatusCode}");
+                return false;
+            }
+            
+            Console.WriteLine($"[GROUP-INSTANCE-DELETE] Successfully deleted instance: {instanceId}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GROUP-INSTANCE-DELETE] Exception: {ex.Message}");
+            return false;
+        }
+    }
 }
 
 public class LoginResult
@@ -2248,6 +2393,8 @@ public class UserSearchResult
     public string DisplayName { get; set; } = "";
     public string? ProfilePicUrl { get; set; }
     public string? StatusDescription { get; set; }
+    public bool IsAgeVerified { get; set; }
+    public List<string> Tags { get; set; } = new();
 }
 
 public class GroupMemberApiResult

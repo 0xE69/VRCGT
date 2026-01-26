@@ -268,7 +268,16 @@
                                         Style="{StaticResource MaterialDesignFlatButton}"
                                         Foreground="#FFC107"
                                         FontWeight="SemiBold"/>
-                                <Button Content="🚨  Kill Switch"
+                                <Button Content="�  Auto Closer"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="AutoCloser"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#FF9800"
+                                        FontWeight="SemiBold"/>
+                                <Button Content="�🚨  Kill Switch"
                                         Command="{Binding SelectModuleCommand}"
                                         CommandParameter="KillSwitch"
                                         HorizontalContentAlignment="Left"
@@ -349,6 +358,9 @@
                             <DataTemplate x:Key="Security">
                                 <views:SecuritySettingsView DataContext="{Binding SecuritySettingsVM}"/>
                             </DataTemplate>
+                            <DataTemplate x:Key="AutoCloser">
+                                <views:AutoCloserView DataContext="{Binding AutoCloserVM}"/>
+                            </DataTemplate>
                             <DataTemplate x:Key="AppSettings">
                                 <views:AppSettingsView DataContext="{Binding AppSettingsVM}"/>
                             </DataTemplate>
@@ -402,6 +414,9 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="Security">
                                         <Setter Property="ContentTemplate" Value="{StaticResource Security}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="AutoCloser">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource AutoCloser}"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentModule}" Value="AppSettings">
                                         <Setter Property="ContentTemplate" Value="{StaticResource AppSettings}"/>

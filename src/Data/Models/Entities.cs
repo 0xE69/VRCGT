@@ -44,6 +44,18 @@ public class AuditLogEntity
     public string? RawData { get; set; }
     
     /// <summary>
+    /// Instance ID if this log entry relates to an instance
+    /// </summary>
+    [MaxLength(200)]
+    public string? InstanceId { get; set; }
+    
+    /// <summary>
+    /// World name if this log entry relates to a world/instance
+    /// </summary>
+    [MaxLength(300)]
+    public string? WorldName { get; set; }
+    
+    /// <summary>
     /// When this record was inserted into the local database
     /// </summary>
     public DateTime InsertedAt { get; set; } = DateTime.UtcNow;

@@ -379,10 +379,65 @@ public class InstanceInviterService : IInstanceInviterService
 
 public class CurrentInstanceInfo
 {
+    // Regex to extract group ID from instance ID (e.g., "12345~group(grp_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)")
+    private static readonly Regex GroupInstanceRegex = new Regex(
+        @"group\(grp_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public string WorldId { get; set; } = string.Empty;
     public string InstanceId { get; set; } = string.Empty;
     public string FullLocation { get; set; } = string.Empty;
     public DateTime DetectedAt { get; set; }
+
+    /// <summary>
+    /// Returns true if this instance belongs to a group (group instance).
+    /// </summary>
+    public bool IsGroupInstance => GroupInstanceRegex.IsMatch(InstanceId);
+
+    /// <summary>
+    /// Extracts the group ID from the instance ID if this is a group instance.
+    /// Returns null if not a group instance.
+    /// </summary>
+    public string? GetInstanceGroupId()
+    {
+        var match = GroupInstanceRegex.Match(InstanceId);
+        if (!match.Success)
+            return null;
+
+        // Extract just the grp_xxx part from "group(grp_xxx)"
+        var groupPart = match.Value; // e.g., "group(grp_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
+        var startIndex = groupPart.IndexOf("grp_");
+        var endIndex = groupPart.LastIndexOf(")");
+        if (startIndex >= 0 && endIndex > startIndex)
+        {
+            return groupPart.Substring(startIndex, endIndex - startIndex);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if sending group invites is allowed from this instance.
+    /// Returns true if: not a group instance, OR it's the same group's instance.
+    /// Returns false if: it's a different group's instance.
+    /// </summary>
+    public bool IsGroupInviteAllowed(string targetGroupId)
+    {
+        if (!IsGroupInstance)
+        {
+            // Non-group instances are always allowed
+            return true;
+        }
+
+        var instanceGroupId = GetInstanceGroupId();
+        if (string.IsNullOrEmpty(instanceGroupId))
+        {
+            // Couldn't extract group ID, allow by default
+            return true;
+        }
+
+        // Only allow if the instance belongs to the same group we're inviting to
+        return string.Equals(instanceGroupId, targetGroupId, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public class InstanceUser

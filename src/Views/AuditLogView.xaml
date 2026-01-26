@@ -300,6 +300,15 @@
                                                        Visibility="{Binding TargetName, Converter={StaticResource NullToVisibilityConverter}}"/>
                                             <TextBlock Foreground="#888" FontSize="11" Text="{Binding TargetName}"/>
                                         </StackPanel>
+                                        <!-- Instance/World Info -->
+                                        <StackPanel Orientation="Horizontal" Visibility="{Binding WorldName, Converter={StaticResource NullToVisibilityConverter}}">
+                                            <TextBlock Foreground="#666" FontSize="11" Text="🌐 "/>
+                                            <TextBlock Foreground="#7C4DFF" FontSize="11" Text="{Binding WorldName}"/>
+                                            <TextBlock Foreground="#666" FontSize="11" Text=" • " 
+                                                       Visibility="{Binding InstanceId, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                            <TextBlock Foreground="#666" FontSize="11" Text="{Binding InstanceId}"
+                                                       Visibility="{Binding InstanceId, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                        </StackPanel>
                                     </StackPanel>
                                     
                                     <!-- Event Type Badge -->
