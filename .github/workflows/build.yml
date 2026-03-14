@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release (Windows)
 
 on:
   push:
@@ -12,13 +12,15 @@ on:
 env:
   DOTNET_VERSION: '8.0.x'
   PROJECT_PATH: 'src/VRCGroupTools.csproj'
+  RUNTIME: 'win-x64'
+  DOTNET_EnableWindowsTargeting: true
 
 jobs:
   build:
     runs-on: windows-latest
     permissions:
       contents: read
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -28,15 +30,39 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
-
-    - name: Build
-      run: dotnet build ${{ env.PROJECT_PATH }} -c Release --no-restore
-
-    - name: Publish
+    - name: Restore (Windows)
+      shell: pwsh
       run: |
-        dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+        dotnet restore $env:PROJECT_PATH `
+          -p:EnableWindowsTargeting=true
+
+    - name: Build (Release, Windows)
+      shell: pwsh
+      run: |
+        dotnet build $env:PROJECT_PATH `
+          -c Release `
+          --no-restore `
+          -p:EnableWindowsTargeting=true
+
+    - name: Publish (Self‑contained Windows EXE)
+      shell: pwsh
+      run: |
+        dotnet publish $env:PROJECT_PATH `
+          -c Release `
+          -r $env:RUNTIME `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableWindowsTargeting=true `
+          -o publish
+
+    - name: Verify EXE exists
+      shell: pwsh
+      run: |
+        Get-ChildItem publish
+        if (-not (Test-Path publish\VRCGroupTools.exe)) {
+          Write-Error "VRCGroupTools.exe not found!"
+        }
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v4
@@ -51,26 +77,20 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
       with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        name: VRCGroupTools-win-x64
+        path: release
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
-
-    - name: Publish Release Build
+    - name: Create ZIP archive
+      shell: pwsh
       run: |
-        dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o release
-
-    - name: Create ZIP Archive
-      run: |
-        Compress-Archive -Path release/VRCGroupTools.exe -DestinationPath VRCGroupTools-${{ github.ref_name }}-win-x64.zip
+        Compress-Archive `
+          -Path release\VRCGroupTools.exe `
+          -DestinationPath VRCGroupTools-${{ github.ref_name }}-win-x64.zip
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1

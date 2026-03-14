@@ -62,10 +62,10 @@ public partial class App : Application
                 LoggingService.Info("APP", "Console window enabled via settings");
             }
             
-            // Initialize database
+            // Initialize database (runs schema migrations)
             LoggingService.Debug("APP", "Initializing SQLite database...");
-            var cacheService = Services.GetRequiredService<ICacheService>();
-            await cacheService.InitializeAsync();
+            var databaseService = Services.GetRequiredService<IDatabaseService>();
+            await databaseService.InitializeAsync();
             LoggingService.Debug("APP", "Database initialized");
 
             // Prevent app from shutting down when the update prompt (the only window) closes

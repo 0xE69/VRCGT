@@ -2,6 +2,8 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using VRCGroupTools.Data.Models;
 
@@ -10,7 +12,7 @@ namespace VRCGroupTools.Data;
 public interface IDatabaseService
 {
     Task InitializeAsync();
-    
+
     // Audit Logs
     Task<List<AuditLogEntity>> GetAuditLogsAsync(string groupId, int limit = 1000, int offset = 0);
     Task<List<AuditLogEntity>> SearchAuditLogsAsync(string groupId, string? searchQuery = null, string? eventType = null, DateTime? fromDate = null, DateTime? toDate = null);
@@ -20,23 +22,28 @@ public interface IDatabaseService
     Task<List<AuditLogEntity>> GetUnsentDiscordLogsAsync(string groupId, int limit = 100);
     Task MarkLogAsSentToDiscordAsync(string auditLogId);
     Task MarkLogsAsSentToDiscordAsync(IEnumerable<string> auditLogIds);
-    
+
+    // Pending Invites (used to infer invite acceptance on join)
+    Task UpsertPendingInviteAsync(string groupId, string? targetUserId, string? targetName, string inviteLogId, DateTime invitedAtUtc);
+    Task<(bool Found, DateTime? InvitedAtUtc)> TryConsumePendingInviteAsync(string groupId, string? targetUserId, string? targetName);
+    Task<int> CleanupExpiredPendingInvitesAsync(DateTime cutoffUtc);
+
     // Group Members
     Task<List<GroupMemberEntity>> GetGroupMembersAsync(string groupId);
     Task<GroupMemberEntity?> GetGroupMemberAsync(string groupId, string userId);
     Task SaveGroupMemberAsync(GroupMemberEntity member);
     Task SaveGroupMembersAsync(IEnumerable<GroupMemberEntity> members);
-    
+
     // Users
     Task<UserEntity?> GetUserAsync(string userId);
     Task SaveUserAsync(UserEntity user);
-    
+
     // Secure Storage (credentials, session)
     Task SaveSecureAsync(string key, string value, DateTime? expiresAt = null);
     Task<string?> GetSecureAsync(string key);
     Task DeleteSecureAsync(string key);
     Task ClearAllSecureAsync();
-    
+
     // App Settings
     Task SaveSettingAsync(string key, string value);
     Task<string?> GetSettingAsync(string key);
@@ -67,10 +74,10 @@ public class DatabaseService : IDatabaseService
         {
             using var context = new AppDbContext();
             await context.Database.EnsureCreatedAsync();
-            
+
             // Add missing columns for existing databases
             await MigrateSchemaAsync(context);
-            
+
             Console.WriteLine("[DATABASE] Database initialized successfully");
             _initialized = true;
         }
@@ -90,14 +97,14 @@ public class DatabaseService : IDatabaseService
             {
                 await connection.OpenAsync();
             }
-            
+
             using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA table_info(AuditLogs)";
-            
+
             var hasDiscordSentAt = false;
             var hasInstanceId = false;
             var hasWorldName = false;
-            
+
             using (var reader = await command.ExecuteReaderAsync())
             {
                 while (await reader.ReadAsync())
@@ -111,9 +118,9 @@ public class DatabaseService : IDatabaseService
                         hasWorldName = true;
                 }
             }
-            
+
             Console.WriteLine($"[DATABASE] Schema check - DiscordSentAt: {hasDiscordSentAt}, InstanceId: {hasInstanceId}, WorldName: {hasWorldName}");
-            
+
             // Add DiscordSentAt column if it doesn't exist
             if (!hasDiscordSentAt)
             {
@@ -123,7 +130,7 @@ public class DatabaseService : IDatabaseService
                 await alterCommand.ExecuteNonQueryAsync();
                 Console.WriteLine("[DATABASE] DiscordSentAt column added successfully");
             }
-            
+
             // Add InstanceId column if it doesn't exist
             if (!hasInstanceId)
             {
@@ -133,7 +140,7 @@ public class DatabaseService : IDatabaseService
                 await alterCommand.ExecuteNonQueryAsync();
                 Console.WriteLine("[DATABASE] InstanceId column added successfully");
             }
-            
+
             // Add WorldName column if it doesn't exist
             if (!hasWorldName)
             {
@@ -178,6 +185,33 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
                 await createTable.ExecuteNonQueryAsync();
                 Console.WriteLine("[DATABASE] MemberBackups table created successfully");
             }
+
+            // Ensure PendingGroupInvites table exists (used to infer invite acceptance)
+            using var pendingInviteTableCheck = connection.CreateCommand();
+            pendingInviteTableCheck.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='PendingGroupInvites'";
+            var pendingInviteTableName = await pendingInviteTableCheck.ExecuteScalarAsync();
+
+            if (pendingInviteTableName == null)
+            {
+                Console.WriteLine("[DATABASE] Creating PendingGroupInvites table...");
+                using var createPendingInvites = connection.CreateCommand();
+                createPendingInvites.CommandText = @"
+CREATE TABLE IF NOT EXISTS PendingGroupInvites (
+    GroupId TEXT NOT NULL,
+    TargetKey TEXT NOT NULL,
+    TargetUserId TEXT,
+    TargetName TEXT,
+    InviteLogId TEXT NOT NULL,
+    InvitedAtUtc TEXT NOT NULL,
+    UpdatedAtUtc TEXT NOT NULL,
+    PRIMARY KEY (GroupId, TargetKey)
+);
+CREATE INDEX IF NOT EXISTS IX_PendingGroupInvites_GroupId ON PendingGroupInvites(GroupId);
+CREATE INDEX IF NOT EXISTS IX_PendingGroupInvites_InvitedAtUtc ON PendingGroupInvites(InvitedAtUtc);
+";
+                await createPendingInvites.ExecuteNonQueryAsync();
+                Console.WriteLine("[DATABASE] PendingGroupInvites table created successfully");
+            }
         }
         catch (Exception ex)
         {
@@ -209,7 +243,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
         DateTime? toDate = null)
     {
         using var context = new AppDbContext();
-        
+
         var query = context.AuditLogs.Where(l => l.GroupId == groupId);
 
         if (!string.IsNullOrWhiteSpace(searchQuery))
@@ -247,7 +281,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     {
         // Ensure database is initialized with latest schema
         await InitializeAsync();
-        
+
         using var context = new AppDbContext();
         var saved = 0;
 
@@ -332,6 +366,161 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
 
     #endregion
 
+    #region Pending Invites (Invite Accepted Inference)
+
+    private static string ComputeTargetKey(string? targetUserId, string? targetName)
+    {
+        if (!string.IsNullOrWhiteSpace(targetUserId))
+            return targetUserId.Trim();
+
+        var name = (targetName ?? "").Trim().ToLowerInvariant();
+        return "name:" + name;
+    }
+
+    public async Task UpsertPendingInviteAsync(string groupId, string? targetUserId, string? targetName, string inviteLogId, DateTime invitedAtUtc)
+    {
+        await InitializeAsync();
+
+        using var context = new AppDbContext();
+        var connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync();
+
+        var targetKey = ComputeTargetKey(targetUserId, targetName);
+        var invitedAtStr = invitedAtUtc.ToUniversalTime().ToString("o");
+        var nowStr = DateTime.UtcNow.ToString("o");
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO PendingGroupInvites
+    (GroupId, TargetKey, TargetUserId, TargetName, InviteLogId, InvitedAtUtc, UpdatedAtUtc)
+VALUES
+    ($groupId, $targetKey, $targetUserId, $targetName, $inviteLogId, $invitedAtUtc, $updatedAtUtc)
+ON CONFLICT(GroupId, TargetKey) DO UPDATE SET
+    TargetUserId = excluded.TargetUserId,
+    TargetName   = excluded.TargetName,
+    InviteLogId  = excluded.InviteLogId,
+    InvitedAtUtc = excluded.InvitedAtUtc,
+    UpdatedAtUtc = excluded.UpdatedAtUtc;
+";
+
+        var p1 = cmd.CreateParameter(); p1.ParameterName = "$groupId"; p1.Value = groupId;
+        var p2 = cmd.CreateParameter(); p2.ParameterName = "$targetKey"; p2.Value = targetKey;
+        var p3 = cmd.CreateParameter(); p3.ParameterName = "$targetUserId"; p3.Value = (object?)targetUserId ?? DBNull.Value;
+        var p4 = cmd.CreateParameter(); p4.ParameterName = "$targetName"; p4.Value = (object?)targetName ?? DBNull.Value;
+        var p5 = cmd.CreateParameter(); p5.ParameterName = "$inviteLogId"; p5.Value = inviteLogId;
+        var p6 = cmd.CreateParameter(); p6.ParameterName = "$invitedAtUtc"; p6.Value = invitedAtStr;
+        var p7 = cmd.CreateParameter(); p7.ParameterName = "$updatedAtUtc"; p7.Value = nowStr;
+
+        cmd.Parameters.Add(p1);
+        cmd.Parameters.Add(p2);
+        cmd.Parameters.Add(p3);
+        cmd.Parameters.Add(p4);
+        cmd.Parameters.Add(p5);
+        cmd.Parameters.Add(p6);
+        cmd.Parameters.Add(p7);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<(bool Found, DateTime? InvitedAtUtc)> TryConsumePendingInviteAsync(string groupId, string? targetUserId, string? targetName)
+    {
+        await InitializeAsync();
+
+        using var context = new AppDbContext();
+        var connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync();
+
+        // Try userId key first, then name key fallback
+        var candidateKeys = new List<string>();
+        if (!string.IsNullOrWhiteSpace(targetUserId))
+            candidateKeys.Add(ComputeTargetKey(targetUserId, null));
+        if (!string.IsNullOrWhiteSpace(targetName))
+            candidateKeys.Add(ComputeTargetKey(null, targetName));
+
+        if (candidateKeys.Count == 0)
+            return (false, null);
+
+        using var tx = connection.BeginTransaction();
+
+        foreach (var key in candidateKeys.Distinct())
+        {
+            using var selectCmd = connection.CreateCommand();
+            selectCmd.Transaction = tx;
+            selectCmd.CommandText = @"
+SELECT InvitedAtUtc
+FROM PendingGroupInvites
+WHERE GroupId = $groupId AND TargetKey = $targetKey
+LIMIT 1;
+";
+            var s1 = selectCmd.CreateParameter(); s1.ParameterName = "$groupId"; s1.Value = groupId;
+            var s2 = selectCmd.CreateParameter(); s2.ParameterName = "$targetKey"; s2.Value = key;
+            selectCmd.Parameters.Add(s1);
+            selectCmd.Parameters.Add(s2);
+
+            var invitedStrObj = await selectCmd.ExecuteScalarAsync();
+            if (invitedStrObj != null && invitedStrObj != DBNull.Value)
+            {
+                var invitedStr = invitedStrObj.ToString() ?? "";
+                DateTime invitedUtc;
+                if (DateTimeOffset.TryParse(invitedStr, out var dto))
+                    invitedUtc = dto.UtcDateTime;
+                else
+                    invitedUtc = DateTime.UtcNow;
+
+                using var deleteCmd = connection.CreateCommand();
+                deleteCmd.Transaction = tx;
+                deleteCmd.CommandText = @"
+DELETE FROM PendingGroupInvites
+WHERE GroupId = $groupId AND TargetKey = $targetKey;
+";
+                var d1 = deleteCmd.CreateParameter(); d1.ParameterName = "$groupId"; d1.Value = groupId;
+                var d2 = deleteCmd.CreateParameter(); d2.ParameterName = "$targetKey"; d2.Value = key;
+                deleteCmd.Parameters.Add(d1);
+                deleteCmd.Parameters.Add(d2);
+
+                await deleteCmd.ExecuteNonQueryAsync();
+
+                tx.Commit();
+                return (true, invitedUtc);
+            }
+        }
+
+        tx.Commit();
+        return (false, null);
+    }
+
+    public async Task<int> CleanupExpiredPendingInvitesAsync(DateTime cutoffUtc)
+    {
+        await InitializeAsync();
+
+        using var context = new AppDbContext();
+        var connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync();
+
+        var cutoffStr = cutoffUtc.ToUniversalTime().ToString("o");
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+DELETE FROM PendingGroupInvites
+WHERE InvitedAtUtc < $cutoffUtc;
+";
+        var p = cmd.CreateParameter();
+        p.ParameterName = "$cutoffUtc";
+        p.Value = cutoffStr;
+        cmd.Parameters.Add(p);
+
+        var affected = await cmd.ExecuteNonQueryAsync();
+        if (affected > 0)
+            Console.WriteLine($"[DATABASE] Cleaned up {affected} expired PendingGroupInvites");
+
+        return affected;
+    }
+
+    #endregion
+
     #region Group Members
 
     public async Task<List<GroupMemberEntity>> GetGroupMembersAsync(string groupId)
@@ -353,7 +542,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     public async Task SaveGroupMemberAsync(GroupMemberEntity member)
     {
         using var context = new AppDbContext();
-        
+
         var existing = await context.GroupMembers
             .FirstOrDefaultAsync(m => m.GroupId == member.GroupId && m.UserId == member.UserId);
 
@@ -417,7 +606,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     public async Task SaveUserAsync(UserEntity user)
     {
         using var context = new AppDbContext();
-        
+
         var existing = await context.Users.FirstOrDefaultAsync(u => u.UserId == user.UserId);
 
         if (existing != null)
@@ -447,7 +636,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     public async Task SaveSecureAsync(string key, string value, DateTime? expiresAt = null)
     {
         using var context = new AppDbContext();
-        
+
         // Encrypt using DPAPI
         var plainBytes = Encoding.UTF8.GetBytes(value);
         var encryptedBytes = ProtectedData.Protect(plainBytes, null, DataProtectionScope.CurrentUser);
@@ -478,7 +667,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     public async Task<string?> GetSecureAsync(string key)
     {
         using var context = new AppDbContext();
-        
+
         var session = await context.CachedSessions.FirstOrDefaultAsync(s => s.Key == key);
 
         if (session == null)
@@ -507,7 +696,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     public async Task DeleteSecureAsync(string key)
     {
         using var context = new AppDbContext();
-        
+
         var session = await context.CachedSessions.FirstOrDefaultAsync(s => s.Key == key);
         if (session != null)
         {
@@ -531,7 +720,7 @@ CREATE INDEX IF NOT EXISTS IX_MemberBackups_WasReInvited ON MemberBackups(WasReI
     public async Task SaveSettingAsync(string key, string value)
     {
         using var context = new AppDbContext();
-        
+
         var existing = await context.AppSettings.FirstOrDefaultAsync(s => s.Key == key);
 
         if (existing != null)
