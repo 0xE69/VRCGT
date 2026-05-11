@@ -1,0 +1,207 @@
+<UserControl x:Class="VRCGroupTools.Views.DiscordSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="10">
+            <!-- Header -->
+            <TextBlock Text="🔔 Discord Notifications" 
+                       FontSize="24" 
+                       FontWeight="Bold" 
+                       Foreground="White"
+                       Margin="0,0,0,5"/>
+            <TextBlock Text="Configure separate Discord webhooks for different event categories" 
+                       Foreground="#AAA" 
+                       Margin="0,0,0,20"/>
+
+            <!-- Member Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="👥 MEMBER EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for user joins, leaves, kicks, bans, and role changes" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookMemberEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <!-- Event Toggles -->
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="👋  User Joins" IsChecked="{Binding NotifyUserJoins}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🚪  User Leaves" IsChecked="{Binding NotifyUserLeaves}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="👢  User Kicked" IsChecked="{Binding NotifyUserKicked}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🔨  User Banned" IsChecked="{Binding NotifyUserBanned}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="✅  User Unbanned" IsChecked="{Binding NotifyUserUnbanned}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="➕  User Role Added" IsChecked="{Binding NotifyUserRoleAdd}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="➖  User Role Removed" IsChecked="{Binding NotifyUserRoleRemove}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Role Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="🎭 ROLE EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for role creation, updates, and deletions" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookRoleEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="🎭  Role Created" IsChecked="{Binding NotifyRoleCreate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🏷️  Role Updated" IsChecked="{Binding NotifyRoleUpdate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🗑️  Role Deleted" IsChecked="{Binding NotifyRoleDelete}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Instance Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="🌍 INSTANCE EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for instance creation, deletion, and status changes" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookInstanceEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="🌍  Instance Created" IsChecked="{Binding NotifyInstanceCreate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🚫  Instance Deleted" IsChecked="{Binding NotifyInstanceDelete}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🌐  Instance Opened" IsChecked="{Binding NotifyInstanceOpened}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🔒  Instance Closed" IsChecked="{Binding NotifyInstanceClosed}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="⚠️  Instance Warning" IsChecked="{Binding NotifyInstanceWarn}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Group Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="⚙️ GROUP EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for group settings changes" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookGroupEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="⚙️  Group Settings Updated" IsChecked="{Binding NotifyGroupUpdate}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Invite & Join Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="💌 INVITE &amp; JOIN EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for invites and join requests" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookInviteEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="💌  Invite Sent" IsChecked="{Binding NotifyInviteCreate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="✔️  Invite Accepted" IsChecked="{Binding NotifyInviteAccept}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="❌  Invite Rejected" IsChecked="{Binding NotifyInviteReject}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="📥  Join Request" IsChecked="{Binding NotifyJoinRequests}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Announcement Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="📢 ANNOUNCEMENT EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for announcements" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookAnnouncementEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="📢  Announcement Posted" IsChecked="{Binding NotifyAnnouncementCreate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🗑️  Announcement Deleted" IsChecked="{Binding NotifyAnnouncementDelete}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Gallery Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="🖼️ GALLERY EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for gallery submissions and approvals" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookGalleryEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="🖼️  Gallery Item Added" IsChecked="{Binding NotifyGalleryCreate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🗑️  Gallery Item Removed" IsChecked="{Binding NotifyGalleryDelete}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Post Events Webhook -->
+            <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="📝 POST EVENTS" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <TextBlock Text="Webhook URL for group posts" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBox Text="{Binding WebhookPostEvents, UpdateSourceTrigger=PropertyChanged}"
+                             materialDesign:HintAssist.Hint="https://discord.com/api/webhooks/..."
+                             Foreground="White"
+                             CaretBrush="White"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                    
+                    <StackPanel Margin="0,15,0,0">
+                        <CheckBox Content="📝  Post Created" IsChecked="{Binding NotifyPostCreate}" Foreground="White" Margin="0,0,0,6" Style="{StaticResource MaterialDesignCheckBox}"/>
+                        <CheckBox Content="🗑️  Post Deleted" IsChecked="{Binding NotifyPostDelete}" Foreground="White" Style="{StaticResource MaterialDesignCheckBox}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Bulk Actions -->
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="✅ Select All Events"
+                        Command="{Binding SelectAllCommand}"
+                        Height="40"
+                        FontSize="13"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Foreground="#7C4DFF"
+                        BorderBrush="#7C4DFF"/>
+                <Button Grid.Column="2" Content="❌ Deselect All Events"
+                        Command="{Binding DeselectAllCommand}"
+                        Height="40"
+                        FontSize="13"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Foreground="#888"
+                        BorderBrush="#888"/>
+            </Grid>
+
+            <!-- Save Button -->
+            <Button Content="💾  Save Settings"
+                    Command="{Binding SaveSettingsCommand}"
+                    Height="50"
+                    FontSize="15"
+                    Background="#7C4DFF"
+                    Foreground="White"
+                    FontWeight="SemiBold"
+                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

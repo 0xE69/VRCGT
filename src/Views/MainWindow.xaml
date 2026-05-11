@@ -1,0 +1,489 @@
+<Window x:Class="VRCGroupTools.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:VRCGroupTools.ViewModels"
+        xmlns:views="clr-namespace:VRCGroupTools.Views"
+        Title="VRC Group Tools" 
+        Height="800" Width="1400"
+        MinHeight="700" MinWidth="1100"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E1E"
+        ResizeMode="CanResize">
+    
+    <!-- DataContext is set in code-behind to use DI singleton -->
+    
+    <Border Background="#1E1E1E">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Title Bar -->
+            <Border Grid.Row="0" Background="#252526" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
+                        <TextBlock Text="🎮 VRC Group Tools" 
+                                   Foreground="#CCCCCC"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding AppVersion}" 
+                                   Foreground="#666"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,5,0">
+                        <Button Content="⚙️" Width="45" Height="40"
+                            Command="{Binding SelectModuleCommand}"
+                            CommandParameter="AppSettings"
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"
+                            FontSize="18"
+                            Padding="0"
+                            ToolTip="Application settings"/>
+                        <Button Content="─" Width="45" Height="40" Click="MinimizeButton_Click"
+                                Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"
+                                FontSize="16"
+                                Padding="0"/>
+                        <Button Content="□" Width="45" Height="40" Click="MaximizeButton_Click"
+                                Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"
+                                FontSize="16"
+                                Padding="0"/>
+                        <Button Content="✕" Width="45" Height="40" Click="CloseButton_Click"
+                                Style="{StaticResource MaterialDesignFlatButton}" Foreground="White"
+                                FontSize="16"
+                                Padding="0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            
+            <!-- Main Content -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Sidebar -->
+                <Border Grid.Column="0" Background="#252526" Padding="15">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <!-- User Info -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+                            <Border Width="60" Height="60" HorizontalAlignment="Center" CornerRadius="30" ClipToBounds="True">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding UserProfilePicUrl}" Stretch="UniformToFill"/>
+                                </Border.Background>
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding UserProfilePicUrl}" Value="{x:Null}">
+                                                <Setter Property="Background" Value="#7C4DFF"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                            <TextBlock Text="{Binding WelcomeMessage}" 
+                                       Foreground="White"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <!-- Group Selection -->
+                        <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="12" Margin="0,0,0,20">
+                            <StackPanel>
+                                <TextBlock Text="Managed Groups" Foreground="#AAA" FontSize="12" Margin="0,0,0,8"/>
+                                <ComboBox ItemsSource="{Binding ManagedGroups}"
+                                          SelectedItem="{Binding SelectedGroup}"
+                                          DisplayMemberPath="DisplayName"
+                                          FontSize="11"
+                                          Foreground="White"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}">
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource MaterialDesignComboBoxItemStyle}">
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+                                </ComboBox>
+                                
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Content="+ Add Group"
+                                            Command="{Binding ShowAddGroupDialogCommand}"
+                                            Height="32"
+                                            FontSize="11"
+                                            Margin="0,0,5,0"
+                                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                    <Button Content="− Remove"
+                                            Command="{Binding RemoveSelectedGroupCommand}"
+                                            Height="32"
+                                            FontSize="11"
+                                            Margin="0,0,5,0"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                </StackPanel>
+                                
+                                <Button Command="{Binding DiscoverMyGroupsCommand}"
+                                        Height="36"
+                                        FontSize="11"
+                                        Margin="0,10,0,0">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                            <Setter Property="Content" Value="🔍 Discover My Groups"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsDiscoveringGroups}" Value="True">
+                                                    <Setter Property="Content" Value="⏳ Discovering..."/>
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Navigation -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="MODULES" Foreground="#666" FontSize="11" Margin="0,0,0,10"/>
+                                    <Button Content="ℹ️  Group Info"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="GroupInfo"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="📮  Group Posts"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="GroupPosts"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>                                    <Button Content="📥  Join Requests"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="GroupJoinRequests"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>                                    <Button Content="�  Inviter Hub"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="InviterHub"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#7C4DFF"
+                                        FontWeight="SemiBold"/>
+                                    <Button Content="🔍  18+ Badge Scanner"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="BadgeScanner"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="👥  User Search"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="UserSearch"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="📑  Members"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Members"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="⛔  Bans"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Bans"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="💾  Member Backup"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="MemberBackup"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#29B6F6"
+                                        FontWeight="SemiBold"/>
+                                <Button Content="📋  Audit Logs"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="AuditLogs"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="🗓️  Calendar Events"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="CalendarEvents"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                    <Button Content="🚀  Instance Creator"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="InstanceCreator"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="🔔  Discord"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Discord"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="White"/>
+                                <Button Content="🛡️  Security"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="Security"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#FFC107"
+                                        FontWeight="SemiBold"/>
+                                <Button Content="�  Auto Closer"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="AutoCloser"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#FF9800"
+                                        FontWeight="SemiBold"/>
+                                <Button Content="�🚨  Kill Switch"
+                                        Command="{Binding SelectModuleCommand}"
+                                        CommandParameter="KillSwitch"
+                                        HorizontalContentAlignment="Left"
+                                        Height="40"
+                                        Margin="0,0,0,5"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="#F44336"
+                                        FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                        
+                        <!-- Logout -->
+                        <Button Grid.Row="4" 
+                                Content="🚪  Logout"
+                                Command="{Binding LogoutCommand}"
+                                HorizontalContentAlignment="Left"
+                                Height="40"
+                                Margin="0,0,0,30"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Foreground="#F44336"/>
+                        
+                        <!-- Footer Credits -->
+                        <Border Grid.Row="4" VerticalAlignment="Bottom" Margin="0,0,0,5">
+                            <TextBlock HorizontalAlignment="Center" FontSize="10">
+                                <Run Text="VRCGT By " Foreground="#555"/><Hyperlink NavigateUri="https://vrchat.com/home/user/usr_a0a7676a-e6d2-4660-9a48-65074e872a29" 
+                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                           Foreground="#7C4DFF">Pĩxęlㄔღ</Hyperlink><Run Text=" - " Foreground="#555"/><Hyperlink NavigateUri="https://github.com/0xE69/VRCGT" 
+                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                           Foreground="#7C4DFF">GitHub</Hyperlink>
+                            </TextBlock>
+                        </Border>
+                    </Grid>
+                </Border>
+                
+                <!-- Content Area -->
+                <Border Grid.Column="1" Padding="20">
+                    <ContentControl Content="{Binding}">
+                        <ContentControl.Resources>
+                            <DataTemplate x:Key="GroupInfo">
+                                <views:GroupInfoView DataContext="{Binding GroupInfoVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="GroupPosts">
+                                <views:GroupPostsView DataContext="{Binding GroupPostsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="GroupJoinRequests">
+                                <views:GroupJoinRequestsView DataContext="{Binding GroupJoinRequestsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="InviterHub">
+                                <views:InviterHubView DataContext="{Binding InviterHubVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="BadgeScanner">
+                                <views:BadgeScannerView DataContext="{Binding BadgeScannerVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="UserSearch">
+                                <views:UserSearchView DataContext="{Binding UserSearchVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Members">
+                                <views:MembersListView DataContext="{Binding MembersListVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Bans">
+                                <views:BansListView DataContext="{Binding BansListVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="MemberBackup">
+                                <views:MemberBackupView DataContext="{Binding MemberBackupVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="AuditLogs">
+                                <views:AuditLogView DataContext="{Binding AuditLogVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="CalendarEvents">
+                                <views:CalendarEventView DataContext="{Binding CalendarEventVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="InstanceCreator">
+                                <views:InstanceCreatorView DataContext="{Binding InstanceCreatorVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Discord">
+                                <views:DiscordSettingsView DataContext="{Binding DiscordSettingsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="Security">
+                                <views:SecuritySettingsView DataContext="{Binding SecuritySettingsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="AutoCloser">
+                                <views:AutoCloserView DataContext="{Binding AutoCloserVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="AppSettings">
+                                <views:AppSettingsView DataContext="{Binding AppSettingsVM}"/>
+                            </DataTemplate>
+                            <DataTemplate x:Key="KillSwitch">
+                                <views:KillSwitchView DataContext="{Binding KillSwitchVM}"/>
+                            </DataTemplate>
+                        </ContentControl.Resources>
+
+                        <ContentControl.Style>
+                            <Style TargetType="ContentControl">
+                                <Setter Property="ContentTemplate" Value="{StaticResource GroupInfo}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="GroupInfo">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource GroupInfo}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="GroupPosts">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource GroupPosts}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="GroupJoinRequests">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource GroupJoinRequests}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="InviterHub">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource InviterHub}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="BadgeScanner">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource BadgeScanner}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="UserSearch">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource UserSearch}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Members">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Members}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Bans">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Bans}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="MemberBackup">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource MemberBackup}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="AuditLogs">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource AuditLogs}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="CalendarEvents">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource CalendarEvents}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="InstanceCreator">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource InstanceCreator}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Discord">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Discord}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="Security">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource Security}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="AutoCloser">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource AutoCloser}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="AppSettings">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource AppSettings}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentModule}" Value="KillSwitch">
+                                        <Setter Property="ContentTemplate" Value="{StaticResource KillSwitch}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                    </ContentControl>
+                </Border>
+            </Grid>
+            
+            <!-- Add Group Dialog Overlay -->
+            <Border Grid.RowSpan="2" 
+                    Background="#CC000000" 
+                    Visibility="{Binding IsAddingNewGroup, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
+                <Border Background="#2D2D30" 
+                        Width="450" 
+                        Height="380" 
+                        CornerRadius="8" 
+                        Padding="30"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="Add New Group" 
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White" 
+                                   Margin="0,0,0,20"/>
+                        
+                        <TextBlock Text="Group ID" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding NewGroupId, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="grp_xxxxxxxx-xxxx-xxxx-xxxx"
+                                 FontSize="13"
+                                 Foreground="White"
+                                 CaretBrush="White"
+                                 Margin="0,0,0,15"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        
+                        <TextBlock Text="Group Name (Optional)" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="My Group"
+                                 FontSize="13"
+                                 Foreground="White"
+                                 CaretBrush="White"
+                                 Margin="0,0,0,30"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel"
+                                    Command="{Binding CancelAddGroupCommand}"
+                                    Width="100"
+                                    Height="36"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            <Button Content="Add Group"
+                                    Command="{Binding AddNewGroupCommand}"
+                                    Width="120"
+                                    Height="36"
+                                    Style="{StaticResource MaterialDesignRaisedButton}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
