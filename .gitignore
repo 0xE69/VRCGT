@@ -1,85 +1,91 @@
-﻿# Build results
+﻿# ============================================================
+# VRCGT — .gitignore
+# ============================================================
+
+# ── .NET build outputs ───────────────────────────────────────
 bin/
 obj/
-[Pp]ublish/
-out/
-
-# IDE
-.vs/
-.vscode/
+TestResults/
 *.user
 *.suo
 *.userosscache
+*.rsuser
 *.sln.docstates
-
-# NuGet
-packages/
 *.nupkg
+*.snupkg
 project.lock.json
 
-# OS generated
-.DS_Store
-Thumbs.db
-desktop.ini
+# ── NuGet (restored automatically; lock file IS tracked) ─────
+packages/
 
-# Installer output
+# ── Publish / release artifacts ──────────────────────────────
+artifacts/
+[Pp]ublish/
+out/
+Release/
+release/
+releases/
+dist-release/
+src/bin/Release/
+src/bin/Publish/
+
+# ── Archive and installer outputs ────────────────────────────
+*.zip
+*.tar.gz
+*.7z
+*.msi
 installer/Output/
 
-# Secrets & Credentials
-.env
-*.pem
-*.key
+# ── Frontend — build outputs and tooling ─────────────────────
+node_modules/
+src/VRCGT.Web/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+coverage/
 
-# Logs
-*.log
-
-# ===========================================
-# VRCGroupTools - User Data (DO NOT COMMIT!)
-# ===========================================
-
-# SQLite Database files
+# ── Local application data (runtime-created) ─────────────────
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
-
-# Application Data folder contents
-# (These are created in %LocalAppData%\VRCGroupTools\ at runtime)
-# This ensures if someone copies the folder, sensitive data isn't included
-
-# Cached data
+settings.json
 Cache/
 cache/
+Logs/
+logs/
+CrashReports/
+crashreports/
+exports/
+backups/
 
-# Secure/encrypted credential storage  
+# ── Secrets and local developer config ───────────────────────
+# NOTE: appsettings.json and appsettings.Development.json are
+# intentional source files and are NOT ignored.
+# Only local developer overrides are excluded here:
+appsettings.Local.json
+appsettings.Development.local.json
+appsettings.*.local.json
+secrets.json
+
+# Environment variables — .env.example IS tracked
+.env
+.env.*
+!.env.example
+
+# VRChat credentials and session data
 Secure/
 secure/
-
-# Settings that may contain sensitive info
-settings.json
-appsettings.json
-appsettings.*.json
-
-# VRChat API related
 auth_cookie.txt
 session.json
 credentials.enc
 *.enc
-
-# Any backup files
-*.bak
-*.backup
-
-# Test/debug files with potential sensitive data
-*_test.json
-*_debug.json
-
-# ===========================================
-# Additional Security - Login & Session Data
-# ===========================================
-
-# Cookies and tokens
+*.pem
+*.key
+*.cred
 *.cookie
 *.cookies
 *.token
@@ -88,43 +94,37 @@ credentials.enc
 auth_*.txt
 auth_*.json
 
-# Captcha related
+# Discord / webhook secrets
+webhook*.txt
+discord_*.json
+
+# ── IDE and editors ───────────────────────────────────────────
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# ── OS generated ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Misc generated / temporary ───────────────────────────────
+*.log
+*.bak
+*.backup
+*.tmp
+*.temp
+~$*
+user_data/
+userdata/
+UserData/
+*_test.json
+*_debug.json
 captcha_*.png
 captcha_*.jpg
 captcha_*.gif
 captcha/
 hcaptcha/
 recaptcha/
-
-# User-specific data
-user_data/
-userdata/
-UserData/
-
-# Logs folder (runtime logs)
-Logs/
-logs/
-CrashReports/
-crashreports/
-
-# Discord webhook URLs (may be in config)
-webhook*.txt
-discord_*.json
-
-# Local development overrides
-*.local
-*.local.json
-
-# Windows credential store exports
-*.cred
-
-# Temporary files
-*.tmp
-*.temp
-~$*
-
-# Release folder (built binaries)
-Release/
-release/
-src/bin/Release/
-src/bin/Publish/

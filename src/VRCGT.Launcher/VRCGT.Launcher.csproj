@@ -1,0 +1,68 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\VRCGT.Server\VRCGT.Server.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!--
+      Publish settings — applied when `dotnet publish` is invoked.
+      SelfContained is true so the .NET runtime is bundled; users need no
+      dotnet installation.  PublishReadyToRun speeds up cold-start on the
+      host architecture; it is safe to skip on cross-compiled builds.
+    -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained Condition="'$(SelfContained)' == ''">false</SelfContained>
+    <PublishReadyToRun Condition="'$(PublishReadyToRun)' == ''">false</PublishReadyToRun>
+    <AssemblyName>VRCGT.Launcher</AssemblyName>
+    <Version>2.0.0-alpha.1</Version>
+    <Product>VRCGT</Product>
+    <Copyright>Copyright © VRCGT Contributors</Copyright>
+  </PropertyGroup>
+
+  <!--
+    Copy VRCGT.Server's wwwroot/ into this project's output directory.
+
+    WHY a Target instead of a static <Content> glob:
+    VRCGT.Server has a BeforeTargets="Build" step that rebuilds the React
+    frontend (npm run build).  Vite uses content-hashed filenames (e.g.
+    index-C9tZH2Qy.js).  If the hash changes between the PREVIOUS build and
+    this build, the static <Content> glob (evaluated at MSBuild PARSE time,
+    before any targets run) resolves to the OLD filenames.  After VRCGT.Server's
+    BeforeTargets runs the new filenames exist and the old ones are gone, causing
+    MSB3030 "could not copy … because it was not found".
+
+    Using an <ItemGroup> INSIDE a Target defers glob evaluation to EXECUTION
+    time — after VRCGT.Server (and its BeforeTargets=Build npm step) has already
+    finished — so the glob always sees the freshly-built files.
+
+    Build output:   $(OutDir)wwwroot/
+    Publish output: $(PublishDir)wwwroot/
+  -->
+  <Target Name="CopyServerWwwrootToOutput"
+          AfterTargets="Build"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\VRCGT.Server\wwwroot\index.html')">
+    <ItemGroup>
+      <_WwwFiles Include="$(MSBuildThisFileDirectory)..\VRCGT.Server\wwwroot\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_WwwFiles)"
+          DestinationFolder="$(OutDir)wwwroot\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyServerWwwrootToPublish"
+          AfterTargets="Publish"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\VRCGT.Server\wwwroot\index.html')">
+    <ItemGroup>
+      <_WwwPublishFiles Include="$(MSBuildThisFileDirectory)..\VRCGT.Server\wwwroot\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_WwwPublishFiles)"
+          DestinationFolder="$(PublishDir)wwwroot\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

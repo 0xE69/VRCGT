@@ -1,0 +1,71 @@
+# ============================================================
+# VRCGT v2 -- Docker Compose configuration
+# ============================================================
+#
+# Usage:
+#   docker compose up           -- start in foreground
+#   docker compose up -d        -- start detached (background)
+#   docker compose down         -- stop and remove container
+#   docker compose down -v      -- stop and delete data volume (CAUTION)
+#
+# The web UI is available at http://localhost:45721 after startup.
+#
+# SECURITY NOTE:
+#   By default, the host-side port binding below (127.0.0.1:45721) restricts
+#   access to the local machine only.  Change it to "45721:45721" to expose
+#   the port on all host interfaces -- only do this on a trusted network or
+#   behind an authenticated reverse proxy.  See docs/v2/docker.md for details.
+# ============================================================
+
+services:
+  vrcgt:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vrcgt
+    restart: unless-stopped
+
+    # ---- Port mapping -------------------------------------------------------
+    # Left side: host.  Right side: container (always 45721).
+    # The default binds ONLY to the loopback interface on the host so the app
+    # is not reachable from other machines on your network.
+    # To allow LAN access change to:  "45721:45721"  (no host IP prefix)
+    ports:
+      - "127.0.0.1:45721:45721"
+
+    # ---- Persistent data volume --------------------------------------------
+    # The vrcgt-data named volume stores:
+    #   - vrcgt-v2.db        (SQLite database, includes all credentials/tokens)
+    #   - access-settings.json (bind-mode configuration)
+    #   - logs/              (rotating application logs)
+    #   - cache/             (VRChat API response cache -- safe to delete)
+    #   - exports/           (user-initiated CSV exports)
+    #   - backups/           (automatic member-list backups)
+    volumes:
+      - vrcgt-data:/app/data
+
+    # ---- Environment variables ---------------------------------------------
+    environment:
+      VRCGT_DATA_DIR: /app/data
+      VRCGT_BIND_URL: http://0.0.0.0:45721
+      ASPNETCORE_ENVIRONMENT: Production
+
+    # ---- Resource limits (optional, uncomment to enable) -------------------
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512m
+    #       cpus: '1.0'
+
+    # ---- Healthcheck (mirrors the HEALTHCHECK in Dockerfile) ---------------
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:45721/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+# ---- Named volumes ---------------------------------------------------------
+volumes:
+  vrcgt-data:
+    # driver: local   # default; uncomment and configure for NFS/SMB etc.
