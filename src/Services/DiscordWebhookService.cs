@@ -35,7 +35,18 @@ public class DiscordWebhookService : IDiscordWebhookService
     {
         if (string.IsNullOrEmpty(groupId)) return IsConfigured;
         var groupConfig = _settingsService.GetGroupConfig(groupId);
-        return !string.IsNullOrWhiteSpace(groupConfig?.DiscordWebhookUrl);
+        if (groupConfig == null) return IsConfigured;
+        // Check any per-category or legacy webhook on the group, then fall back to global
+        return !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookMemberEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookRoleEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookInstanceEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookGroupEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookInviteEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookAnnouncementEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookGalleryEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookPostEvents)
+            || !string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookUrl)
+            || IsConfigured;
     }
 
     public DiscordWebhookService(ISettingsService settingsService)
@@ -66,8 +77,8 @@ public class DiscordWebhookService : IDiscordWebhookService
             }
         }
         
-        // Fallback to global if not group specific or groupId not provided
-        if (string.IsNullOrWhiteSpace(webhookUrl) && string.IsNullOrEmpty(groupId))
+        // Fallback to global if no group-level webhook was resolved
+        if (string.IsNullOrWhiteSpace(webhookUrl))
         {
             webhookUrl = _settingsService.Settings.DiscordWebhookUrl;
         }
@@ -576,9 +587,11 @@ public class DiscordWebhookService : IDiscordWebhookService
             categoryWebhook = groupConfig.DiscordWebhookPostEvents;
         }
         
-        // If category-specific webhook is set, use it; otherwise fall back to legacy webhook
-        return !string.IsNullOrWhiteSpace(categoryWebhook) 
-            ? categoryWebhook 
-            : groupConfig.DiscordWebhookUrl;
+        // If category-specific webhook is set, use it; otherwise fall back to legacy per-group webhook, then global
+        if (!string.IsNullOrWhiteSpace(categoryWebhook))
+            return categoryWebhook;
+        if (!string.IsNullOrWhiteSpace(groupConfig.DiscordWebhookUrl))
+            return groupConfig.DiscordWebhookUrl;
+        return _settingsService.Settings.DiscordWebhookUrl;
     }
 }
