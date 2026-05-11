@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.10] - 2026-05-11
+
+### Fixed
+
+- **Auto-updater causing 0xc0000142 crash after update** (`UpdateService.cs`)
+
+  The batch script written by the updater used Unix `\n` line endings. Windows `cmd.exe` does not reliably parse Unix line endings, causing the `copy` command to be skipped or malformed — leaving the destination executable empty or corrupted. When that corrupted exe was launched, Windows reported error 0xc0000142 (DLL initialization failed / invalid image).
+
+  Additional hardening applied in the same fix:
+  - The batch script is now written with ASCII encoding and Windows CRLF line endings.
+  - A 4-second initial delay is added before the first copy attempt, ensuring the old process has fully exited before the file is touched.
+  - The `.NET` single-file bundle extraction cache (`%TEMP%\.net\VRCGroupTools\`) is deleted before the new exe is launched, preventing stale/mismatched native DLLs from a previous version causing startup failures.
+  - A minimum-size check on the downloaded ZIP validates the file before extraction.
+
+---
+
 ## [1.1.9] - 2026-05-11
 
 ### Fixed

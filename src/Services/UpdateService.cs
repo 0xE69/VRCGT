@@ -82,6 +82,11 @@ public class UpdateService : IUpdateService
             await response.Content.CopyToAsync(fs);
             fs.Close();
 
+            // Validate the downloaded file has a reasonable size
+            var zipInfo = new FileInfo(zipPath);
+            if (zipInfo.Length < 1024)
+                throw new Exception("Downloaded update file appears to be invalid (too small)");
+
             // Extract the ZIP
             Directory.CreateDirectory(tempDir);
             ZipFile.ExtractToDirectory(zipPath, tempDir);
@@ -89,36 +94,47 @@ public class UpdateService : IUpdateService
             // Find the new executable
             var newExePath = Directory.GetFiles(tempDir, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
             if (newExePath == null)
-            {
                 throw new Exception("No executable found in update package");
-            }
 
             var currentExePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
             if (string.IsNullOrEmpty(currentExePath))
-            {
                 throw new Exception("Could not determine current executable path");
-            }
 
-            // Create a batch script to replace the exe after the app closes
+            var backupExePath = currentExePath + ".bak";
+
+            // Build the .NET bundle extract cache path so we can wipe it before relaunching,
+            // preventing stale cached DLLs from a previous version causing 0xc0000142.
+            var dotnetCacheDir = Path.Combine(Path.GetTempPath(), ".net", "VRCGroupTools");
+
+            // Use Windows (CRLF) line endings — Unix LF endings cause cmd.exe to mis-parse
+            // the script and skip commands, leaving the destination exe empty/corrupted.
+            const string nl = "\r\n";
             var batchPath = Path.Combine(Path.GetTempPath(), "VRCGroupTools_Update.bat");
-            var batchContent = "@echo off\n" +
-                "echo Updating VRC Group Tools...\n" +
-                "echo Waiting for application to exit...\n" +
-                ":retry_loop\n" +
-                "timeout /t 1 /nobreak >nul\n" +
-                $"copy /Y \"{newExePath}\" \"{currentExePath}\"\n" +
-                "if errorlevel 1 (\n" +
-                "    echo File locked, retrying in 1 second...\n" +
-                "    goto retry_loop\n" +
-                ")\n" +
-                "echo Update complete!\n" +
-                "timeout /t 2 /nobreak >nul\n" +
-                $"start \"\" \"{currentExePath}\"\n" +
-                $"rd /s /q \"{tempDir}\"\n" +
-                $"del \"{zipPath}\"\n" +
-                "del \"%~f0\"\n";
+            var batchContent =
+                "@echo off" + nl +
+                "echo Updating VRC Group Tools..." + nl +
+                // Give the app process a few seconds to fully exit before touching the file
+                "timeout /t 4 /nobreak >nul" + nl +
+                ":retry_loop" + nl +
+                $"copy /Y \"{newExePath}\" \"{currentExePath}\"" + nl +
+                "if errorlevel 1 (" + nl +
+                "    echo File still locked, retrying..." + nl +
+                "    timeout /t 2 /nobreak >nul" + nl +
+                "    goto retry_loop" + nl +
+                ")" + nl +
+                // Wipe the old .NET single-file extraction cache so the new version
+                // extracts fresh and doesn't hit stale/mismatched native DLLs.
+                $"if exist \"{dotnetCacheDir}\" rd /s /q \"{dotnetCacheDir}\"" + nl +
+                // Short pause to let the filesystem flush before launching
+                "timeout /t 1 /nobreak >nul" + nl +
+                $"start \"\" \"{currentExePath}\"" + nl +
+                // Cleanup
+                $"rd /s /q \"{tempDir}\"" + nl +
+                $"del \"{zipPath}\"" + nl +
+                $"if exist \"{backupExePath}\" del \"{backupExePath}\"" + nl +
+                "del \"%~f0\"" + nl;
 
-            File.WriteAllText(batchPath, batchContent);
+            File.WriteAllText(batchPath, batchContent, System.Text.Encoding.ASCII);
 
             // Launch the batch script and close the app
             Process.Start(new ProcessStartInfo
