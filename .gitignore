@@ -2,6 +2,20 @@
 # VRCGT — .gitignore
 # ============================================================
 
+# ── Copilot / dev audit documents ────────────────────────────
+# These are AI-generated development artifacts, not product files.
+*_AUDIT.md
+*_REPORT.md
+*_INVENTORY.md
+*_CHECKLIST.md
+ALPHA_RELEASE_NOTES.md
+CLEANUP_GENERATED_FILES.md
+FEATURE_PARITY_V1_TO_V2.md
+RUNTIME_SMOKE_TEST.md
+TESTING.md
+UI_REDESIGN_REQUIREMENTS.md
+WEB_LOCAL_APP_MIGRATION_PLAN.md
+
 # ── .NET build outputs ───────────────────────────────────────
 bin/
 obj/
