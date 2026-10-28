@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.11] - 2026-10-28
+
+### Fixed
+
+- **In-app version string drift causing perpetual update loop** (`App.xaml.cs`)
+
+  The v1.1.10 release shipped with the hardcoded `App.Version` string still set to "1.1.8" — the version bump existed only as an uncommitted working-tree change. The auto-updater compares the in-app string against the latest release tag, so every v1.1.10 install reported itself as v1.1.8 and perpetually saw an "available update" to v1.1.10, i.e. itself.
+
+  *Fix:* `App.Version` now matches the actual release (1.1.11), and all version locations (`App.Version`, csproj `Version` / `AssemblyVersion` / `FileVersion`) are committed together so the string can never silently drift again.
+
+---
+
 ## [1.1.10] - 2026-05-11
 
 ### Fixed
