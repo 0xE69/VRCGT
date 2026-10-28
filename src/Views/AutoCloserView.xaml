@@ -170,6 +170,19 @@
                                    Margin="0,5,0,0"/>
                     </StackPanel>
 
+                    <!-- Allowed Access Types -->
+                    <StackPanel Margin="0,0,0,15">
+                        <TextBlock Text="Allowed Access Types (optional, comma-separated)" Foreground="#AAA" FontSize="12" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding AutoCloserAllowedAccessTypes, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="e.g., members,plus (leave empty for all)"
+                                 Foreground="White"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        <TextBlock Text="Only list the access levels to allow; everything else gets closed. Values: members (Group), plus (Group+), public, friends, private. Leave empty to allow all." 
+                                   FontSize="10" 
+                                   Foreground="#666" 
+                                   Margin="0,5,0,0"/>
+                    </StackPanel>
+
                     <!-- Save Button -->
                     <Button Content="💾  Save Settings"
                             Command="{Binding SaveSettingsCommand}"
@@ -227,6 +240,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         
                                         <!-- World Name -->
@@ -252,8 +266,21 @@
                                                        FontSize="11"/>
                                         </Border>
                                         
+                                        <!-- Access Level -->
+                                        <Border Grid.Column="2" 
+                                                Background="{Binding AccessColor}" 
+                                                CornerRadius="4" 
+                                                Padding="8,4" 
+                                                Margin="10,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding AccessDisplay}" 
+                                                       Foreground="White" 
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"/>
+                                        </Border>
+                                        
                                         <!-- User Count -->
-                                        <StackPanel Grid.Column="2" 
+                                        <StackPanel Grid.Column="3" 
                                                     Orientation="Horizontal" 
                                                     VerticalAlignment="Center"
                                                     Margin="10,0">
@@ -262,7 +289,7 @@
                                         </StackPanel>
                                         
                                         <!-- Age Gate Status -->
-                                        <Border Grid.Column="3" 
+                                        <Border Grid.Column="4" 
                                                 Background="{Binding AgeGatedColor}" 
                                                 CornerRadius="4" 
                                                 Padding="8,4" 
@@ -275,7 +302,7 @@
                                         </Border>
                                         
                                         <!-- Close Button -->
-                                        <Button Grid.Column="4"
+                                        <Button Grid.Column="5"
                                                 Content="Close"
                                                 Command="{Binding DataContext.CloseInstanceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding InstanceId}"

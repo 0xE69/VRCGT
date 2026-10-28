@@ -300,4 +300,5 @@ public class AppSettings
     public int AutoCloserCheckIntervalSeconds { get; set; } = 60; // How often to check for instances
     public bool AutoCloserNotifyDiscord { get; set; } = true;
     public string AutoCloserAllowedRegions { get; set; } = ""; // Comma-separated regions to allow (empty = all)
+    public string AutoCloserAllowedAccessTypes { get; set; } = ""; // Comma-separated access types to allow: members,plus,public,friends,private (empty = all)
 }

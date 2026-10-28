@@ -40,6 +40,7 @@ public class GroupInstanceInfo
     public string OwnerId { get; set; } = string.Empty;
     public string OwnerName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public string? AccessType { get; set; }
 }
 
 public class AutoCloserService : IAutoCloserService, IDisposable
@@ -137,7 +138,8 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                         UserCount = instance.UserCount,
                         OwnerId = instance.OwnerId,
                         OwnerName = instance.OwnerName,
-                        CreatedAt = instance.CreatedAt
+                        CreatedAt = instance.CreatedAt,
+                        AccessType = instance.AccessType
                     });
                 }
             }
@@ -207,6 +209,10 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                 ? null
                 : settings.AutoCloserAllowedRegions.Split(',').Select(r => r.Trim().ToLower()).ToList();
             
+            var allowedAccess = string.IsNullOrWhiteSpace(settings.AutoCloserAllowedAccessTypes)
+                ? null
+                : settings.AutoCloserAllowedAccessTypes.Split(',').Select(a => a.Trim().ToLower()).Where(a => a.Length > 0).ToList();
+            
             foreach (var instance in instances)
             {
                 var shouldClose = false;
@@ -226,6 +232,16 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                     {
                         shouldClose = true;
                         reason = $"Instance region '{instance.Region}' is not in allowed regions";
+                    }
+                }
+                
+                // Check access type restriction (e.g., only allow Group / Group+, close Public)
+                if (!shouldClose && allowedAccess != null && allowedAccess.Count > 0)
+                {
+                    if (!IsAccessAllowed(instance.AccessType, allowedAccess))
+                    {
+                        shouldClose = true;
+                        reason = $"Instance access '{instance.AccessType ?? "unknown"}' is not in allowed access types";
                     }
                 }
                 
@@ -261,7 +277,8 @@ public class AutoCloserService : IAutoCloserService, IDisposable
             
             var nonCompliantCount = instances.Count(i => 
                 (settings.AutoCloserRequireAgeGate && !i.AgeGated) ||
-                (allowedRegions != null && !allowedRegions.Contains(i.Region.ToLower())));
+                (allowedRegions != null && !allowedRegions.Contains(i.Region.ToLower())) ||
+                (allowedAccess != null && !IsAccessAllowed(i.AccessType, allowedAccess)));
             
             StatusChanged?.Invoke(this, $"✓ Checked {instances.Count} instances | Closed: {_closedInstanceCount}");
         }
@@ -270,6 +287,35 @@ public class AutoCloserService : IAutoCloserService, IDisposable
             LoggingService.Error("AUTO-CLOSER", ex, "Error during instance check");
             StatusChanged?.Invoke(this, $"✗ Error: {ex.Message}");
         }
+    }
+    
+    /// <summary>
+    /// Normalizes access type values so both the app's vocabulary (members/plus/public)
+    /// and VRChat's raw values (group/group_fof/friends/private) compare consistently.
+    /// </summary>
+    private static string? NormalizeAccess(string? access)
+    {
+        var value = (access ?? string.Empty).Trim().ToLowerInvariant();
+        return value switch
+        {
+            "members" or "group" => "group",
+            "plus" or "group_fof" => "plus",
+            "public" => "public",
+            "friends" => "friends",
+            "private" => "private",
+            _ => value.Length > 0 ? value : null
+        };
+    }
+    
+    private static bool IsAccessAllowed(string? access, List<string> allowed)
+    {
+        var normalized = NormalizeAccess(access);
+        // Leave instances with an unknown/missing access type alone — safer not to close what we can't identify
+        if (normalized == null)
+        {
+            return true;
+        }
+        return allowed.Any(a => NormalizeAccess(a) == normalized);
     }
     
     private async Task SendDiscordNotificationAsync(GroupInstanceInfo instance, string reason)

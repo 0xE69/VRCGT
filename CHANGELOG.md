@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.12] - 2026-10-28
+
+### Added
+
+- **Auto Closer: allowed access types rule** (`AutoCloserService.cs`, `AutoCloserViewModel.cs`, `AutoCloserView.xaml`)
+
+  New "Allowed Access Types" option in the Auto Closer. Enter a comma-separated list of access levels to allow (e.g. `members,plus` for Group / Group+ only) — any instance with a different access level (e.g. **public**) is automatically closed, with the same logging and Discord webhook notification as the existing rules.
+
+  - Accepts both the app's vocabulary (`members`, `plus`) and VRChat's raw values (`group`, `group_fof`) interchangeably; also supports `friends` and `private`.
+  - Leave empty to allow all access levels (rule off) — fully backward compatible.
+  - Instances with an unknown/missing access type are never closed by this rule.
+  - The instance list now shows a color-coded **Access** badge on every instance (Public = red, Group / Group+ = green) so you can see exactly what the Auto Closer will target at a glance.
+
+---
+
 ## [1.1.11] - 2026-10-28
 
 ### Fixed

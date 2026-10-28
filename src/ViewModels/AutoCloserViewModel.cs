@@ -30,6 +30,9 @@ public partial class AutoCloserViewModel : ObservableObject
     private string _autoCloserAllowedRegions = string.Empty;
 
     [ObservableProperty]
+    private string _autoCloserAllowedAccessTypes = string.Empty;
+
+    [ObservableProperty]
     private bool _isMonitoring;
 
     [ObservableProperty]
@@ -77,6 +80,7 @@ public partial class AutoCloserViewModel : ObservableObject
         AutoCloserCheckIntervalSeconds = settings.AutoCloserCheckIntervalSeconds;
         AutoCloserNotifyDiscord = settings.AutoCloserNotifyDiscord;
         AutoCloserAllowedRegions = settings.AutoCloserAllowedRegions;
+        AutoCloserAllowedAccessTypes = settings.AutoCloserAllowedAccessTypes;
         IsMonitoring = _autoCloserService.IsMonitoring;
         ClosedInstanceCount = _autoCloserService.ClosedInstanceCount;
     }
@@ -92,6 +96,7 @@ public partial class AutoCloserViewModel : ObservableObject
             settings.AutoCloserCheckIntervalSeconds = AutoCloserCheckIntervalSeconds;
             settings.AutoCloserNotifyDiscord = AutoCloserNotifyDiscord;
             settings.AutoCloserAllowedRegions = AutoCloserAllowedRegions;
+            settings.AutoCloserAllowedAccessTypes = AutoCloserAllowedAccessTypes;
 
             _settingsService.Save();
             StatusMessage = "✓ Settings saved successfully!";
@@ -150,6 +155,17 @@ public partial class AutoCloserViewModel : ObservableObject
 
             foreach (var instance in instances)
             {
+                var access = (instance.AccessType ?? string.Empty).Trim().ToLowerInvariant();
+                var (accessDisplay, accessColor) = access switch
+                {
+                    "members" or "group" => ("Group", "#4CAF50"),
+                    "plus" or "group_fof" => ("Group+", "#4CAF50"),
+                    "public" => ("Public", "#F44336"),
+                    "friends" => ("Friends", "#FF9800"),
+                    "private" => ("Private", "#9E9E9E"),
+                    _ => ("—", "#888")
+                };
+
                 var displayItem = new GroupInstanceDisplayItem
                 {
                     InstanceId = instance.InstanceId,
@@ -161,7 +177,10 @@ public partial class AutoCloserViewModel : ObservableObject
                     OwnerName = instance.OwnerName,
                     CreatedAt = instance.CreatedAt,
                     AgeGatedDisplay = instance.AgeGated ? "✓ 18+" : "✗ No",
-                    AgeGatedColor = instance.AgeGated ? "#4CAF50" : "#F44336"
+                    AgeGatedColor = instance.AgeGated ? "#4CAF50" : "#F44336",
+                    AccessType = instance.AccessType ?? string.Empty,
+                    AccessDisplay = accessDisplay,
+                    AccessColor = accessColor
                 };
 
                 ActiveInstances.Add(displayItem);
@@ -219,4 +238,7 @@ public class GroupInstanceDisplayItem
     public DateTime CreatedAt { get; set; }
     public string AgeGatedDisplay { get; set; } = string.Empty;
     public string AgeGatedColor { get; set; } = "#888";
+    public string AccessType { get; set; } = string.Empty;
+    public string AccessDisplay { get; set; } = string.Empty;
+    public string AccessColor { get; set; } = "#888";
 }
