@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -31,6 +32,33 @@ public partial class AutoCloserViewModel : ObservableObject
 
     [ObservableProperty]
     private string _autoCloserAllowedAccessTypes = string.Empty;
+
+    // Access-type checkboxes (checked = allowed to stay open). Backed by the
+    // comma-separated AutoCloserAllowedAccessTypes setting via Build/Apply helpers.
+    [ObservableProperty]
+    private bool _allowAccessGroup;
+
+    [ObservableProperty]
+    private bool _allowAccessGroupPlus;
+
+    [ObservableProperty]
+    private bool _allowAccessPublic;
+
+    [ObservableProperty]
+    private bool _allowAccessFriends;
+
+    [ObservableProperty]
+    private bool _allowAccessPrivate;
+
+    // Region checkboxes (checked = allowed to stay open).
+    [ObservableProperty]
+    private bool _allowRegionUs;
+
+    [ObservableProperty]
+    private bool _allowRegionEu;
+
+    [ObservableProperty]
+    private bool _allowRegionJp;
 
     [ObservableProperty]
     private bool _isMonitoring;
@@ -81,6 +109,8 @@ public partial class AutoCloserViewModel : ObservableObject
         AutoCloserNotifyDiscord = settings.AutoCloserNotifyDiscord;
         AutoCloserAllowedRegions = settings.AutoCloserAllowedRegions;
         AutoCloserAllowedAccessTypes = settings.AutoCloserAllowedAccessTypes;
+        ApplyAccessCheckboxes(settings.AutoCloserAllowedAccessTypes);
+        ApplyRegionCheckboxes(settings.AutoCloserAllowedRegions);
         IsMonitoring = _autoCloserService.IsMonitoring;
         ClosedInstanceCount = _autoCloserService.ClosedInstanceCount;
     }
@@ -95,8 +125,12 @@ public partial class AutoCloserViewModel : ObservableObject
             settings.AutoCloserRequireAgeGate = AutoCloserRequireAgeGate;
             settings.AutoCloserCheckIntervalSeconds = AutoCloserCheckIntervalSeconds;
             settings.AutoCloserNotifyDiscord = AutoCloserNotifyDiscord;
-            settings.AutoCloserAllowedRegions = AutoCloserAllowedRegions;
-            settings.AutoCloserAllowedAccessTypes = AutoCloserAllowedAccessTypes;
+            var regionCsv = BuildRegionCsv();
+            var accessCsv = BuildAccessCsv();
+            AutoCloserAllowedRegions = regionCsv;
+            AutoCloserAllowedAccessTypes = accessCsv;
+            settings.AutoCloserAllowedRegions = regionCsv;
+            settings.AutoCloserAllowedAccessTypes = accessCsv;
 
             _settingsService.Save();
             StatusMessage = "✓ Settings saved successfully!";
@@ -107,6 +141,54 @@ public partial class AutoCloserViewModel : ObservableObject
             StatusMessage = $"✗ Failed to save settings: {ex.Message}";
             LoggingService.Error("AUTO-CLOSER-VM", ex, "Failed to save settings");
         }
+    }
+
+    // --- Access / region checkbox helpers (bridge to the comma-separated settings) ---
+
+    private static HashSet<string> ParseCsvSet(string csv)
+    {
+        return (csv ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => s.ToLowerInvariant())
+            .ToHashSet();
+    }
+
+    private void ApplyAccessCheckboxes(string csv)
+    {
+        var set = ParseCsvSet(csv);
+        AllowAccessGroup = set.Contains("group") || set.Contains("members");
+        AllowAccessGroupPlus = set.Contains("plus") || set.Contains("group_fof");
+        AllowAccessPublic = set.Contains("public");
+        AllowAccessFriends = set.Contains("friends");
+        AllowAccessPrivate = set.Contains("private");
+    }
+
+    private void ApplyRegionCheckboxes(string csv)
+    {
+        var set = ParseCsvSet(csv);
+        AllowRegionUs = set.Contains("us");
+        AllowRegionEu = set.Contains("eu");
+        AllowRegionJp = set.Contains("jp");
+    }
+
+    private string BuildAccessCsv()
+    {
+        var list = new List<string>();
+        if (AllowAccessGroup) list.Add("group");
+        if (AllowAccessGroupPlus) list.Add("plus");
+        if (AllowAccessPublic) list.Add("public");
+        if (AllowAccessFriends) list.Add("friends");
+        if (AllowAccessPrivate) list.Add("private");
+        return string.Join(",", list);
+    }
+
+    private string BuildRegionCsv()
+    {
+        var list = new List<string>();
+        if (AllowRegionUs) list.Add("us");
+        if (AllowRegionEu) list.Add("eu");
+        if (AllowRegionJp) list.Add("jp");
+        return string.Join(",", list);
     }
 
     [RelayCommand]

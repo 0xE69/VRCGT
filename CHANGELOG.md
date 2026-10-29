@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.1.13] - 2026-10-28
+
+### Fixed
+
+- **Group Posts / write requests sent without the API key** (`VRChatApiService.cs`)
+
+  `CreateGroupPostAsync`, `UpdateGroupPostAsync`, `SendGroupInviteAsync` and `CreateInstanceAsync` all POSTed/PUT to the VRChat API **without** the `?apiKey=*** query parameter. The working read methods (`GetGroupPostsAsync`, `DeleteGroupPostAsync`, `CreateGroupEventAsync`) append it, but these four write methods did not — so the request went out unauthenticated and VRChat rejected it. This is why "make a post" silently failed.
+
+  *Fix:* each write method now appends `?apiKey=*** to its request URL, matching the working methods. `CreateGroupPostAsync` no longer sends a `null` `roleIds` array when none are supplied (mirroring the existing `CreateInstanceAsync` guard).
+
+- **Group Posts UI reported success on failure** (`GroupPostsViewModel.cs`)
+
+  `CreatePostAsync` fired the create request without awaiting/inspecting the result, so the status bar always showed "Post created!" even when the API returned `null` (rejected). It now awaits the result and shows a clear "Post failed - see log" message when the API returns nothing.
+
+- **Post / invite / create-instance requests now logged to the file** (`VRChatApiService.cs`)
+
+  The post, invite and create-instance write methods now call `LogHttp` so the raw request URL and API response body are written to `%LOCALAPPDATA%\VRCGroupTools\Logs` — the same path the working methods already used. Makes it easy to diagnose any future write failure.
+
+- **Auto Closer: public (and other) instances never closed — access type parsed as "unknown"** (`VRChatApiService.cs`)
+
+  The group-instances endpoint does **not** surface the group access type as a top-level field — it only carries it inside the `location` string (e.g. `wrld_x:123~group(grp_y)~groupAccessType(public)~region(us)`). The old parser only read `item["groupAccessType"]` / `item["accessType"]`, so every group instance fell through to `null` → displayed as **"unknown"** → the Auto Closer's safe default (keep unknown) meant a **public** instance was never closed even when only Group / Group+ was allowed.
+
+  *Fix:* new `ExtractAccessType` helper checks the top-level `groupAccessType`/`accessType` field, then regex-parses `groupAccessType(...)` out of the `location` string, then falls back to the `type` field. A parsed value is now logged per instance (`GROUP-INSTANCES`) for easy verification.
+
+- **Auto Closer: region always "unknown" — region now parsed from the location string** (`VRChatApiService.cs`)
+
+  Same root cause as above: `region` is only present inside the `location` string (`~region(us|eu|jp)`), not as a top-level field, so `instance.Region` was always `"unknown"`. Previously harmless (region left empty = allow all), but it would have broken the new region checkboxes. New `ExtractRegion` helper checks the top-level `region` field, then regex-parses `region(...)` from `location`, then defaults to `"unknown"`.
+
+- **Auto Closer: Allowed Regions + Allowed Access Types are now checkboxes** (`AutoCloserView.xaml`, `AutoCloserViewModel.cs`)
+
+  Replaced the two comma-separated text boxes with clear checkbox groups — **Access Types** (Group / Group+ / Public / Friends / Private) and **Regions** (US / EU / JP). Checked boxes are the allowed set; anything else is closed. Leaving all unchecked = allow all. The ViewModel bridges between the checkboxes and the existing comma-separated settings, so saved settings stay backward-compatible (no `SettingsService` changes).
+
+---
+
 ## [1.1.12] - 2026-10-28
 
 ### Added

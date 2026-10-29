@@ -986,8 +986,10 @@ public class VRChatApiService : IVRChatApiService
             for (var attempt = 1; attempt <= 3; attempt++)
             {
                 await RateLimitAsync();
-                var response = await SendJsonAsync(HttpMethod.Post, $"groups/{groupId}/invites", payload);
+                var inviteUrl = $"groups/{groupId}/invites?apiKey={ApiKey}";
+                var response = await SendJsonAsync(HttpMethod.Post, inviteUrl, payload);
                 var content = await response.Content.ReadAsStringAsync();
+                LogHttp("GROUP-INVITE", inviteUrl, response, content);
                 Console.WriteLine($"[GROUP-INVITE] Status: {response.StatusCode}");
 
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
@@ -1028,17 +1030,23 @@ public class VRChatApiService : IVRChatApiService
                 ["title"] = title,
                 ["text"] = text,
                 ["visibility"] = visibility,
-                ["sendNotification"] = sendNotification,
-                ["roleIds"] = roleIds?.ToArray()
+                ["sendNotification"] = sendNotification
             };
+
+            if (roleIds != null && roleIds.Any())
+            {
+                payload["roleIds"] = roleIds.ToArray();
+            }
 
             if (!string.IsNullOrWhiteSpace(imageId))
             {
                 payload["imageId"] = imageId;
             }
 
-            var response = await SendJsonAsync(HttpMethod.Post, $"groups/{groupId}/posts", payload);
+            var postUrl = $"groups/{groupId}/posts?apiKey={ApiKey}";
+            var response = await SendJsonAsync(HttpMethod.Post, postUrl, payload);
             var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-POST", postUrl, response, content);
             Console.WriteLine($"[GROUP-POST] Status: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
             {
@@ -1583,8 +1591,10 @@ public class VRChatApiService : IVRChatApiService
                 ["sendNotification"] = sendNotification
             };
 
-            var response = await SendJsonAsync(HttpMethod.Put, $"groups/{groupId}/posts/{postId}", payload);
+            var updateUrl = $"groups/{groupId}/posts/{postId}?apiKey={ApiKey}";
+            var response = await SendJsonAsync(HttpMethod.Put, updateUrl, payload);
             var content = await response.Content.ReadAsStringAsync();
+            LogHttp("GROUP-POST-UPDATE", updateUrl, response, content);
             Console.WriteLine($"[GROUP-POST-UPDATE] Status: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
             {
@@ -1810,8 +1820,10 @@ public class VRChatApiService : IVRChatApiService
                 payload["roleIds"] = roleIds.ToArray();
             }
 
-            var response = await SendJsonAsync(HttpMethod.Post, "instances", payload);
+            var instanceUrl = $"instances?apiKey={ApiKey}";
+            var response = await SendJsonAsync(HttpMethod.Post, instanceUrl, payload);
             var content = await response.Content.ReadAsStringAsync();
+            LogHttp("INSTANCE-API", instanceUrl, response, content);
             Console.WriteLine($"[INSTANCE-API] Create status: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
             {
@@ -2223,7 +2235,7 @@ public class VRChatApiService : IVRChatApiService
                     {
                         InstanceId = item["instanceId"]?.ToString() ?? item["id"]?.ToString() ?? "",
                         WorldId = item["worldId"]?.ToString() ?? item["location"]?.ToString()?.Split(':').FirstOrDefault() ?? "",
-                        Region = item["region"]?.ToString() ?? "unknown",
+                        Region = ExtractRegion(item),
                         UserCount = item["userCount"]?.Value<int>() ?? item["n_users"]?.Value<int>() ?? 0,
                         OwnerId = item["ownerId"]?.ToString() ?? "",
                         QueueEnabled = item["queueEnabled"]?.Value<bool>() ?? false
@@ -2269,9 +2281,13 @@ public class VRChatApiService : IVRChatApiService
                         }
                     }
                     
-                    // Get access type
-                    instance.AccessType = item["groupAccessType"]?.ToString() ?? item["accessType"]?.ToString();
-                    
+                    // Get access type. VRChat exposes the group access type as a top-level field
+                    // on the user-instances endpoint, but the group-instances endpoint only carries
+                    // it inside the location string (~groupAccessType(public|plus|members)). Parse
+                    // both (plus the type field) so a public instance is never left as "unknown".
+                    instance.AccessType = ExtractAccessType(item);
+                    LoggingService.Debug("GROUP-INSTANCES", $"Parsed instance '{instance.InstanceId}' -> accessType='{instance.AccessType ?? "unknown"}', region='{instance.Region}', location='{item["location"]?.ToString() ?? item["id"]?.ToString() ?? "-"}'");
+
                     instances.Add(instance);
                 }
                 catch (Exception parseEx)
@@ -2288,6 +2304,60 @@ public class VRChatApiService : IVRChatApiService
         }
         
         return instances;
+    }
+
+    /// <summary>
+    /// Extracts the instance access type from a VRChat instance JSON object. VRChat exposes it as
+    /// a top-level field on some endpoints and only inside the location string on others
+    /// (~group(grp_x)~groupAccessType(public|plus|members)), so we check the field, then the
+    /// location string, then the instance type field.
+    /// </summary>
+    private static string? ExtractAccessType(JToken item)
+    {
+        // 1. Top-level groupAccessType / accessType field
+        var field = (item["groupAccessType"] ?? item["accessType"])?.ToString();
+        if (!string.IsNullOrWhiteSpace(field))
+        {
+            return field;
+        }
+
+        // 2. Parse from the location string: ...~group(grp_x)~groupAccessType(public)
+        var location = item["location"]?.ToString() ?? item["id"]?.ToString();
+        if (!string.IsNullOrWhiteSpace(location))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(location, @"groupAccessType\(([^)]+)\)");
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+        }
+
+        // 3. Fall back to the instance type field (public / group / ...)
+        return item["type"]?.ToString();
+    }
+
+    /// <summary>
+    /// Extracts the instance region from a VRChat instance JSON object. The region is a top-level
+    /// field on some endpoints but only inside the location string on the group-instances endpoint
+    /// (~region(us|eu|jp)), so we check the field first, then the location string, then "unknown".
+    /// </summary>
+    private static string ExtractRegion(JToken item)
+    {
+        var field = item["region"]?.ToString();
+        if (!string.IsNullOrWhiteSpace(field))
+        {
+            return field;
+        }
+        var location = item["location"]?.ToString() ?? item["id"]?.ToString();
+        if (!string.IsNullOrWhiteSpace(location))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(location, @"region\(([^)]+)\)");
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+        }
+        return "unknown";
     }
 
     public async Task<bool> DeleteGroupInstanceAsync(string groupId, string instanceId)

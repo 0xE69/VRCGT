@@ -183,12 +183,22 @@ public partial class GroupPostsViewModel : ObservableObject
         {
             if (IsEditMode && !string.IsNullOrEmpty(EditingPostId))
             {
-                await _apiService.UpdateGroupPostAsync(groupId, EditingPostId, PostTitle, PostText, PostVisibility, SendNotification);
+                var updated = await _apiService.UpdateGroupPostAsync(groupId, EditingPostId, PostTitle, PostText, PostVisibility, SendNotification);
+                if (updated == null)
+                {
+                    Status = "Post failed - see log (GROUP-POST) for the API error.";
+                    return;
+                }
                 Status = "Post updated!";
             }
             else
             {
-                await _apiService.CreateGroupPostAsync(groupId, PostTitle, PostText, null, PostVisibility, SendNotification);
+                var created = await _apiService.CreateGroupPostAsync(groupId, PostTitle, PostText, null, PostVisibility, SendNotification);
+                if (created == null)
+                {
+                    Status = "Post failed - see log (GROUP-POST) for the API error.";
+                    return;
+                }
                 Status = "Post created!";
             }
 
