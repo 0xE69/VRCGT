@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.14] - 2026-10-30
+
+### Added
+
+- **Bulk text-file Inviter** (new `Bulk Inviter` tab in the Inviter Hub)
+
+  Import a list of VRChat user IDs from a text/CSV file on disk (or paste), dedupe against the built-in SQLite `InvitedUsers` DB (skip-already-invited on by default), apply the app's new/user/known/18+ and trust-level filters, and send group invites in one run. See `BULK_INVITER.md`.
+  - `📂 Load File` button opens a file dialog (`.txt` / `.csv`) and loads the IDs into the same pipeline as paste.
+  - `VRChatApiService`: added `FriendCount` + `CreatedUtc` to user details for richer per-user info.
+
+### Notes
+
+- Bump version to 1.1.14 across `App.xaml.cs`, `VRCGroupTools.csproj`, `setup.iss`.
+
+---
+
 ## [1.1.13] - 2026-10-28
 
 ### Fixed

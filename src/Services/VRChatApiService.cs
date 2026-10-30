@@ -878,6 +878,23 @@ public class VRChatApiService : IVRChatApiService
             }
             Console.WriteLine($"[USER] Profile pic URL: {profilePicUrl}");
 
+            // New-user detection signals: friendCount (reliable) + account creation date (best-effort).
+            int friendCount = -1;
+            var fcNode = data["friendCount"];
+            if (fcNode != null && fcNode.Type == JTokenType.Integer)
+                friendCount = fcNode.Value<int>();
+
+            DateTime? createdUtc = null;
+            foreach (var field in new[] { "createdDate", "createdAt", "accountCreatedDate", "created" })
+            {
+                var raw = data[field]?.ToString();
+                if (!string.IsNullOrEmpty(raw) && DateTime.TryParse(raw, out var dt))
+                {
+                    createdUtc = dt.ToUniversalTime();
+                    break;
+                }
+            }
+
             return new UserDetails
             {
                 UserId = data["id"]?.ToString() ?? userId,
@@ -886,13 +903,14 @@ public class VRChatApiService : IVRChatApiService
                 ProfilePicUrl = profilePicUrl,
                 Badges = badgeNames,
                 Tags = tags,
-                IsAgeVerified = isAgeVerified18Plus
+                IsAgeVerified = isAgeVerified18Plus,
+                FriendCount = friendCount,
+                CreatedUtc = createdUtc
             };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[API] GetUserAsync exception: {ex.Message}");
-            Console.WriteLine($"[API] Stack: {ex.StackTrace}");
+            Console.WriteLine($"[USER-API] Exception: {ex.Message}");
             return null;
         }
     }
@@ -2466,6 +2484,10 @@ public class UserDetails
     public List<string> Badges { get; set; } = new();
     public List<string> Tags { get; set; } = new();
     public bool IsAgeVerified { get; set; }
+    /// <summary>Number of friends. -1 when the API did not expose it.</summary>
+    public int FriendCount { get; set; } = -1;
+    /// <summary>Account creation time (UTC) if the API exposes it; null otherwise.</summary>
+    public DateTime? CreatedUtc { get; set; }
 }
 
 public class UserSearchResult
