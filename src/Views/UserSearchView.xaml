@@ -439,10 +439,17 @@
                                     Margin="0,15,0,0"
                                     Visibility="{Binding IsGroupMember, Converter={StaticResource InverseBoolToVisConverter}}">
                                 <StackPanel>
-                                    <TextBlock Text="This user is not a member of your group. Set a Group ID in the sidebar to manage group members."
+                                    <TextBlock Text="This user is not a member of your group. You can still ban them from the group using the selected Group ID in the sidebar."
                                                Foreground="#888"
                                                TextWrapping="Wrap"
                                                TextAlignment="Center"/>
+                                    <Button Content="🚫 Ban from Group"
+                                            Command="{Binding BanUserCommand}"
+                                            Height="36"
+                                            Margin="0,10,0,0"
+                                            ToolTip="Ban a non-member from this group. Requires group ban permission."
+                                            Style="{StaticResource MaterialDesignRaisedDarkButton}"
+                                            Background="#F44336"/>
                                     <Button Content="Invite to Group"
                                             Command="{Binding InviteUserCommand}"
                                             Height="32"

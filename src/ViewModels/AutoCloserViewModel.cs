@@ -308,16 +308,22 @@ public partial class AutoCloserViewModel : ObservableObject
         {
             StatusMessage = $"Closing instance {item.InstanceId}...";
             
-            var success = await _autoCloserService.CloseInstanceAsync(item.WorldId, item.InstanceId);
+            var result = await _autoCloserService.CloseInstanceAsync(item.WorldId, item.InstanceId);
             
-            if (success)
+            switch (result)
             {
-                StatusMessage = $"✓ Instance closed successfully";
-                await RefreshInstancesAsync();
-            }
-            else
-            {
-                StatusMessage = "✗ Failed to close instance";
+                case CloseInstanceResult.Closed:
+                    StatusMessage = $"✓ Instance closed successfully";
+                    await RefreshInstancesAsync();
+                    break;
+                case CloseInstanceResult.AlreadyClosed:
+                    StatusMessage = $"ℹ Instance was already closed";
+                    await RefreshInstancesAsync();
+                    break;
+                case CloseInstanceResult.Failed:
+                default:
+                    StatusMessage = "✗ Failed to close instance";
+                    break;
             }
         }
         catch (Exception ex)

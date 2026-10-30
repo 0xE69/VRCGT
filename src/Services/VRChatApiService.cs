@@ -67,10 +67,25 @@ public interface IVRChatApiService
     Task<List<GroupJoinRequest>> GetGroupJoinRequestsAsync(string groupId);
     Task<bool> RespondToGroupJoinRequestAsync(string groupId, string userId, string action);
     Task<List<GroupInstanceDetails>> GetGroupInstancesAsync(string groupId);
-    Task<bool> CloseGroupInstanceAsync(string worldId, string instanceId);
+    Task<CloseInstanceResult> CloseGroupInstanceAsync(string worldId, string instanceId);
     string? GetAuthCookie();
     string? GetTwoFactorCookie();
     void Logout();
+}
+
+/// <summary>
+/// Outcome of a close-instance request. Distinguishes a real close from the "already
+/// closed" 403 VRChat returns when a soft-closed instance is re-closed, and from a
+/// genuine failure (auth / rate limit / not found / server error).
+/// </summary>
+public enum CloseInstanceResult
+{
+    /// <summary>We closed the instance.</summary>
+    Closed,
+    /// <summary>The instance was already closed (by us, a group member, or another tool). No-op.</summary>
+    AlreadyClosed,
+    /// <summary>The close attempt failed for an unrelated reason.</summary>
+    Failed
 }
 
 public class InstanceCreateResult
@@ -2378,7 +2393,7 @@ public class VRChatApiService : IVRChatApiService
         return "unknown";
     }
 
-    public async Task<bool> CloseGroupInstanceAsync(string worldId, string instanceId)
+    public async Task<CloseInstanceResult> CloseGroupInstanceAsync(string worldId, string instanceId)
     {
         try
         {
@@ -2387,7 +2402,7 @@ public class VRChatApiService : IVRChatApiService
             if (string.IsNullOrEmpty(worldId) || string.IsNullOrEmpty(instanceId))
             {
                 Console.WriteLine($"[GROUP-INSTANCE-CLOSE] WorldId or InstanceId is empty");
-                return false;
+                return CloseInstanceResult.Failed;
             }
             
             // Correct VRChat endpoint: DELETE /instances/{worldId}:{instanceId}
@@ -2402,17 +2417,26 @@ public class VRChatApiService : IVRChatApiService
             
             if (!response.IsSuccessStatusCode)
             {
+                // VRChat answers 403 with "already closed" when the instance is already
+                // soft-closed (by us earlier, a group member, or another tool). That is a
+                // no-op, not a failure — report it distinctly so callers can skip it
+                // instead of re-attempting (and re-logging) every polling cycle.
+                if (content != null && content.IndexOf("already closed", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Instance already closed (no-op): {instanceId}");
+                    return CloseInstanceResult.AlreadyClosed;
+                }
                 Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Failed to close instance: {response.StatusCode}");
-                return false;
+                return CloseInstanceResult.Failed;
             }
             
             Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Successfully closed instance: {instanceId}");
-            return true;
+            return CloseInstanceResult.Closed;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Exception: {ex.Message}");
-            return false;
+            return CloseInstanceResult.Failed;
         }
     }
 }

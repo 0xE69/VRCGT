@@ -16,7 +16,7 @@ public interface IAutoCloserService
     Task StartMonitoringAsync(string groupId);
     void StopMonitoring();
     Task<List<GroupInstanceInfo>> GetActiveInstancesAsync();
-    Task<bool> CloseInstanceAsync(string worldId, string instanceId);
+    Task<CloseInstanceResult> CloseInstanceAsync(string worldId, string instanceId);
     bool IsMonitoring { get; }
     int ClosedInstanceCount { get; }
 }
@@ -159,35 +159,42 @@ public class AutoCloserService : IAutoCloserService, IDisposable
         return instances;
     }
     
-    public async Task<bool> CloseInstanceAsync(string worldId, string instanceId)
+    public async Task<CloseInstanceResult> CloseInstanceAsync(string worldId, string instanceId)
     {
         try
         {
             if (string.IsNullOrEmpty(worldId) || string.IsNullOrEmpty(instanceId))
             {
-                return false;
+                return CloseInstanceResult.Failed;
             }
             
             LoggingService.Info("AUTO-CLOSER", $"Attempting to close instance: {instanceId}");
             
-            var success = await _apiService.CloseGroupInstanceAsync(worldId, instanceId);
+            var result = await _apiService.CloseGroupInstanceAsync(worldId, instanceId);
             
-            if (success)
+            switch (result)
             {
-                _closedInstanceCount++;
-                LoggingService.Info("AUTO-CLOSER", $"✓ Successfully closed instance: {instanceId}");
-            }
-            else
-            {
-                LoggingService.Warn("AUTO-CLOSER", $"✗ Failed to close instance: {instanceId}");
+                case CloseInstanceResult.Closed:
+                    _closedInstanceCount++;
+                    LoggingService.Info("AUTO-CLOSER", $"✓ Successfully closed instance: {instanceId}");
+                    break;
+                case CloseInstanceResult.AlreadyClosed:
+                    // Already in the desired state — log at info, don't count it as a
+                    // close we performed and don't fire a Discord "auto-closed" ping.
+                    LoggingService.Info("AUTO-CLOSER", $"ℹ Instance already closed (no-op): {instanceId}");
+                    break;
+                case CloseInstanceResult.Failed:
+                default:
+                    LoggingService.Warn("AUTO-CLOSER", $"✗ Failed to close instance: {instanceId}");
+                    break;
             }
             
-            return success;
+            return result;
         }
         catch (Exception ex)
         {
             LoggingService.Error("AUTO-CLOSER", ex, $"Error closing instance: {instanceId}");
-            return false;
+            return CloseInstanceResult.Failed;
         }
     }
     
@@ -264,9 +271,9 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                 {
                     LoggingService.Warn("AUTO-CLOSER", $"Closing instance: {instance.WorldName} ({instance.InstanceId}) - {reason}");
                     
-                    var success = await CloseInstanceAsync(instance.WorldId, instance.InstanceId);
+                    var closeResult = await CloseInstanceAsync(instance.WorldId, instance.InstanceId);
                     
-                    if (success)
+                    if (closeResult == CloseInstanceResult.Closed)
                     {
                         MarkInstanceClosed(instance.InstanceId);
 
@@ -286,8 +293,16 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                             await SendDiscordNotificationAsync(instance, reason);
                         }
                     }
+                    else if (closeResult == CloseInstanceResult.AlreadyClosed)
+                    {
+                        // Already in the desired (closed) state — record it so we skip
+                        // re-attempting during the cooldown window. We do NOT count it
+                        // as a close we performed and do NOT ping Discord.
+                        MarkInstanceClosed(instance.InstanceId);
+                        LoggingService.Info("AUTO-CLOSER", $"Instance was already closed, skipping: {instance.InstanceId}");
+                    }
                     
-                    // Rate limit between closes
+                    // Rate limit between close attempts
                     await Task.Delay(1000);
                 }
             }
