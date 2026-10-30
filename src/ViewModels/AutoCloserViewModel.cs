@@ -230,56 +230,74 @@ public partial class AutoCloserViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshInstancesAsync()
     {
+        // This method is invoked from BOTH the UI thread (Refresh button) and the Auto
+        // Closer's background monitoring loop, so every ObservableCollection / UI-property
+        // mutation must be marshalled to the WPF Dispatcher thread — otherwise WPF throws
+        // NotSupportedException ("changes to SourceCollection from a thread different from
+        // the Dispatcher thread").
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        void OnUi(Action action)
+        {
+            if (dispatcher != null && !dispatcher.CheckAccess())
+                dispatcher.Invoke(action);
+            else
+                action();
+        }
+
         try
         {
-            IsLoadingInstances = true;
-            ActiveInstances.Clear();
+            OnUi(() => IsLoadingInstances = true);
 
             var instances = await _autoCloserService.GetActiveInstancesAsync();
 
-            foreach (var instance in instances)
+            OnUi(() =>
             {
-                var access = (instance.AccessType ?? string.Empty).Trim().ToLowerInvariant();
-                var (accessDisplay, accessColor) = access switch
+                ActiveInstances.Clear();
+
+                foreach (var instance in instances)
                 {
-                    "members" or "group" => ("Group", "#4CAF50"),
-                    "plus" or "group_fof" => ("Group+", "#4CAF50"),
-                    "public" => ("Public", "#F44336"),
-                    "friends" => ("Friends", "#FF9800"),
-                    "private" => ("Private", "#9E9E9E"),
-                    _ => ("—", "#888")
-                };
+                    var access = (instance.AccessType ?? string.Empty).Trim().ToLowerInvariant();
+                    var (accessDisplay, accessColor) = access switch
+                    {
+                        "members" or "group" => ("Group", "#4CAF50"),
+                        "plus" or "group_fof" => ("Group+", "#4CAF50"),
+                        "public" => ("Public", "#F44336"),
+                        "friends" => ("Friends", "#FF9800"),
+                        "private" => ("Private", "#9E9E9E"),
+                        _ => ("—", "#888")
+                    };
 
-                var displayItem = new GroupInstanceDisplayItem
-                {
-                    InstanceId = instance.InstanceId,
-                    WorldId = instance.WorldId,
-                    WorldName = instance.WorldName,
-                    Region = instance.Region,
-                    AgeGated = instance.AgeGated,
-                    UserCount = instance.UserCount,
-                    OwnerName = instance.OwnerName,
-                    CreatedAt = instance.CreatedAt,
-                    AgeGatedDisplay = instance.AgeGated ? "✓ 18+" : "✗ No",
-                    AgeGatedColor = instance.AgeGated ? "#4CAF50" : "#F44336",
-                    AccessType = instance.AccessType ?? string.Empty,
-                    AccessDisplay = accessDisplay,
-                    AccessColor = accessColor
-                };
+                    var displayItem = new GroupInstanceDisplayItem
+                    {
+                        InstanceId = instance.InstanceId,
+                        WorldId = instance.WorldId,
+                        WorldName = instance.WorldName,
+                        Region = instance.Region,
+                        AgeGated = instance.AgeGated,
+                        UserCount = instance.UserCount,
+                        OwnerName = instance.OwnerName,
+                        CreatedAt = instance.CreatedAt,
+                        AgeGatedDisplay = instance.AgeGated ? "✓ 18+" : "✗ No",
+                        AgeGatedColor = instance.AgeGated ? "#4CAF50" : "#F44336",
+                        AccessType = instance.AccessType ?? string.Empty,
+                        AccessDisplay = accessDisplay,
+                        AccessColor = accessColor
+                    };
 
-                ActiveInstances.Add(displayItem);
-            }
+                    ActiveInstances.Add(displayItem);
+                }
 
-            StatusMessage = $"Found {instances.Count} active instances";
+                StatusMessage = $"Found {instances.Count} active instances";
+            });
         }
         catch (Exception ex)
         {
-            StatusMessage = $"✗ Failed to load instances: {ex.Message}";
+            OnUi(() => StatusMessage = $"✗ Failed to load instances: {ex.Message}");
             LoggingService.Error("AUTO-CLOSER-VM", ex, "Failed to refresh instances");
         }
         finally
         {
-            IsLoadingInstances = false;
+            OnUi(() => IsLoadingInstances = false);
         }
     }
 

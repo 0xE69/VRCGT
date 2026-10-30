@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.17] - 2026-10-30
+
+### Fixed
+
+- **Auto Closer — `NotSupportedException` crash when refreshing the instance list from the background loop** (`AutoCloserViewModel.cs`)
+
+  After closing an instance, the auto-closer's `InstanceClosed` handler calls `RefreshInstancesAsync()`, which runs on a **background thread** (not the WPF Dispatcher). That method mutated the `ActiveInstances` `ObservableCollection` and UI-bound properties (`IsLoadingInstances`, `StatusMessage`) directly off-thread, so WPF threw `NotSupportedException: This type of CollectionView does not support changes to its SourceCollection from a thread different from the Dispatcher thread` on every refresh — the instance list would fail to update after each close.
+
+  *Fix:* all `ActiveInstances` / UI-property mutations are now marshalled to the WPF Dispatcher via a small `OnUi(...)` helper (same pattern as `FriendInviterViewModel`), so the list refreshes correctly whether the call originates from the UI button or the background monitoring loop.
+
+- **Auto Closer — repeated `403 "You're not allowed to close an already closed instance"`** (`AutoCloserService.cs`)
+
+  VRChat keeps a **soft-closed** instance in the group-instances list for a while after it's closed, and returns `403` on any re-close attempt. Because the refresh above was failing, the stale instance kept getting re-detected and re-closed every 15s poll, spamming `403` errors in the log.
+
+  *Fix:* added a per-instance **close cooldown** (10 min). Once an instance is closed successfully it's recorded in a `ConcurrentDictionary` and skipped by the monitoring loop until it expires (stale entries are pruned automatically). This stops the re-close hammering for instances we just closed; a genuinely new instance (different ID) is still closed normally.
+
+### Notes
+
+- Bump version to 1.1.17 across `App.xaml.cs`, `VRCGroupTools.csproj`, `setup.iss`.
+- Log lines showing `RE?LITY ␦` are a **console rendering artifact**, not a data bug: the group name contains emoji/special characters the log console font can't draw (the API data is correct UTF-8 — `ReadAsStringAsync` reads UTF-8, and the curly apostrophe U+2019 renders fine in the same log). The in-app UI displays the real name correctly.
+
+---
+
 ## [1.1.16] - 2026-10-30
 
 ### Fixed

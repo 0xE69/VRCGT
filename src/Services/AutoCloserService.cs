@@ -47,6 +47,13 @@ public class AutoCloserService : IAutoCloserService, IDisposable
 {
     private readonly IVRChatApiService _apiService;
     private readonly ISettingsService _settingsService;
+
+    // Tracks instances we recently closed. VRChat keeps soft-closed instances listed in the
+    // group-instances response (and returns 403 "not allowed to close an already closed
+    // instance" on a re-close attempt), so we skip them for a cooldown window instead of
+    // re-attempting the close every polling cycle.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _recentlyClosedInstances = new();
+    private static readonly TimeSpan ClosedInstanceCooldown = TimeSpan.FromMinutes(10);
     private readonly IDiscordWebhookService _discordService;
     
     private Timer? _monitorTimer;
@@ -215,6 +222,14 @@ public class AutoCloserService : IAutoCloserService, IDisposable
             
             foreach (var instance in instances)
             {
+                // Skip instances we recently closed — VRChat keeps soft-closed instances
+                // listed and returns 403 on re-close, so avoid re-attempting every cycle.
+                if (IsRecentlyClosed(instance.InstanceId))
+                {
+                    LoggingService.Debug("AUTO-CLOSER", $"Skipping recently-closed instance: {instance.InstanceId}");
+                    continue;
+                }
+
                 var shouldClose = false;
                 var reason = "";
                 
@@ -253,6 +268,8 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                     
                     if (success)
                     {
+                        MarkInstanceClosed(instance.InstanceId);
+
                         var eventArgs = new AutoCloserEventArgs
                         {
                             InstanceId = instance.InstanceId,
@@ -289,6 +306,34 @@ public class AutoCloserService : IAutoCloserService, IDisposable
         }
     }
     
+    /// <summary>
+    /// Returns true if the given instance was closed within the cooldown window, so the
+    /// auto-closer skips re-attempting it (VRChat keeps soft-closed instances listed).
+    /// </summary>
+    private bool IsRecentlyClosed(string instanceId)
+    {
+        if (string.IsNullOrEmpty(instanceId)) return false;
+        return _recentlyClosedInstances.TryGetValue(instanceId, out var closedAt) &&
+               (DateTime.UtcNow - closedAt) < ClosedInstanceCooldown;
+    }
+
+    /// <summary>
+    /// Records a successful close so the instance is skipped during the cooldown window.
+    /// Also prunes stale entries to keep the dictionary small.
+    /// </summary>
+    private void MarkInstanceClosed(string instanceId)
+    {
+        if (string.IsNullOrEmpty(instanceId)) return;
+        _recentlyClosedInstances[instanceId] = DateTime.UtcNow;
+
+        var cutoff = DateTime.UtcNow - ClosedInstanceCooldown;
+        foreach (var kvp in _recentlyClosedInstances)
+        {
+            if (kvp.Value < cutoff)
+                _recentlyClosedInstances.TryRemove(kvp.Key, out _);
+        }
+    }
+
     /// <summary>
     /// Normalizes access type values so both the app's vocabulary (members/plus/public)
     /// and VRChat's raw values (group/group_fof/friends/private) compare consistently.
