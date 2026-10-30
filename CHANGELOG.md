@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.15] - 2026-10-30
+
+### Fixed
+
+- **Auto Closer — group instance regions**: split the single "US" checkbox into **US West** and **US East** (VRChat reports `us_west` / `us_east`, not a single `us`). The old exact-match check never matched, so US group instances were being wrongly auto-closed. Region matching is now normalized (`us_west` / `us-west` / `US West` all compare the same), and a legacy `us` setting still covers both US sub-regions for back-compat.
+- **Auto Closer — group instance access types**: removed **Friends** and **Private** from the allowed-access-types filter. Group instances only support **Group / Group+ / Public** (Friends & Private are personal-instance only).
+
+### Notes
+
+- Bump version to 1.1.15 across `App.xaml.cs`, `VRCGroupTools.csproj`, `setup.iss`.
+
+---
+
 ## [1.1.14] - 2026-10-30
 
 ### Added

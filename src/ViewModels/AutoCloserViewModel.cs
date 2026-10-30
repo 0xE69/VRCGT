@@ -44,15 +44,13 @@ public partial class AutoCloserViewModel : ObservableObject
     [ObservableProperty]
     private bool _allowAccessPublic;
 
-    [ObservableProperty]
-    private bool _allowAccessFriends;
-
-    [ObservableProperty]
-    private bool _allowAccessPrivate;
-
     // Region checkboxes (checked = allowed to stay open).
+    // VRChat reports US regions as us_west / us_east (not a single "us").
     [ObservableProperty]
-    private bool _allowRegionUs;
+    private bool _allowRegionUsWest;
+
+    [ObservableProperty]
+    private bool _allowRegionUsEast;
 
     [ObservableProperty]
     private bool _allowRegionEu;
@@ -159,14 +157,19 @@ public partial class AutoCloserViewModel : ObservableObject
         AllowAccessGroup = set.Contains("group") || set.Contains("members");
         AllowAccessGroupPlus = set.Contains("plus") || set.Contains("group_fof");
         AllowAccessPublic = set.Contains("public");
-        AllowAccessFriends = set.Contains("friends");
-        AllowAccessPrivate = set.Contains("private");
     }
 
     private void ApplyRegionCheckboxes(string csv)
     {
         var set = ParseCsvSet(csv);
-        AllowRegionUs = set.Contains("us");
+        AllowRegionUsWest = set.Contains("us_west");
+        AllowRegionUsEast = set.Contains("us_east");
+        // Back-compat: older settings stored a single "us" — treat it as both US regions.
+        if (set.Contains("us"))
+        {
+            AllowRegionUsWest = true;
+            AllowRegionUsEast = true;
+        }
         AllowRegionEu = set.Contains("eu");
         AllowRegionJp = set.Contains("jp");
     }
@@ -177,15 +180,14 @@ public partial class AutoCloserViewModel : ObservableObject
         if (AllowAccessGroup) list.Add("group");
         if (AllowAccessGroupPlus) list.Add("plus");
         if (AllowAccessPublic) list.Add("public");
-        if (AllowAccessFriends) list.Add("friends");
-        if (AllowAccessPrivate) list.Add("private");
         return string.Join(",", list);
     }
 
     private string BuildRegionCsv()
     {
         var list = new List<string>();
-        if (AllowRegionUs) list.Add("us");
+        if (AllowRegionUsWest) list.Add("us_west");
+        if (AllowRegionUsEast) list.Add("us_east");
         if (AllowRegionEu) list.Add("eu");
         if (AllowRegionJp) list.Add("jp");
         return string.Join(",", list);

@@ -161,7 +161,9 @@
                     <StackPanel Margin="0,0,0,15">
                         <TextBlock Text="Allowed Regions" Foreground="#AAA" FontSize="12" Margin="0,0,0,6"/>
                         <WrapPanel>
-                            <CheckBox Content="US" IsChecked="{Binding AllowRegionUs}"
+                            <CheckBox Content="US West" IsChecked="{Binding AllowRegionUsWest}"
+                                      Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
+                            <CheckBox Content="US East" IsChecked="{Binding AllowRegionUsEast}"
                                       Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
                             <CheckBox Content="EU" IsChecked="{Binding AllowRegionEu}"
                                       Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
@@ -182,12 +184,8 @@
                                       Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
                             <CheckBox Content="Public" IsChecked="{Binding AllowAccessPublic}"
                                       Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
-                            <CheckBox Content="Friends" IsChecked="{Binding AllowAccessFriends}"
-                                      Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
-                            <CheckBox Content="Private" IsChecked="{Binding AllowAccessPrivate}"
-                                      Foreground="White" Margin="0,0,18,6" VerticalContentAlignment="Center"/>
                         </WrapPanel>
-                        <TextBlock Text="Check the access levels to allow. Only checked types survive — the rest get closed. Leave all unchecked to allow every access level."
+                        <TextBlock Text="Group instances only support these three levels (Friends &amp; Private are personal-instance only). Check the levels to allow — the rest get closed. Leave all unchecked to allow every level."
                                    FontSize="10" Foreground="#666" Margin="0,4,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
 

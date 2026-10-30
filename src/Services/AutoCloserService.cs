@@ -228,7 +228,7 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                 // Check region restriction
                 if (!shouldClose && allowedRegions != null && allowedRegions.Count > 0)
                 {
-                    if (!allowedRegions.Contains(instance.Region.ToLower()))
+                    if (!IsRegionAllowed(instance.Region, allowedRegions))
                     {
                         shouldClose = true;
                         reason = $"Instance region '{instance.Region}' is not in allowed regions";
@@ -277,7 +277,7 @@ public class AutoCloserService : IAutoCloserService, IDisposable
             
             var nonCompliantCount = instances.Count(i => 
                 (settings.AutoCloserRequireAgeGate && !i.AgeGated) ||
-                (allowedRegions != null && !allowedRegions.Contains(i.Region.ToLower())) ||
+                (allowedRegions != null && !IsRegionAllowed(i.Region, allowedRegions)) ||
                 (allowedAccess != null && !IsAccessAllowed(i.AccessType, allowedAccess)));
             
             StatusChanged?.Invoke(this, $"✓ Checked {instances.Count} instances | Closed: {_closedInstanceCount}");
@@ -316,6 +316,41 @@ public class AutoCloserService : IAutoCloserService, IDisposable
             return true;
         }
         return allowed.Any(a => NormalizeAccess(a) == normalized);
+    }
+
+    /// <summary>
+    /// Normalizes a region value so "us_west", "us-west" and "US West" all compare
+    /// consistently as "us_west".
+    /// </summary>
+    private static string? NormalizeRegion(string? region)
+    {
+        var value = (region ?? string.Empty).Trim().ToLowerInvariant();
+        if (value.Length == 0) return null;
+        value = value.Replace('-', '_').Replace(' ', '_');
+        while (value.Contains("__")) value = value.Replace("__", "_");
+        return value;
+    }
+
+    /// <summary>
+    /// True if the instance's region is within the allowed set. Handles the fine-grained
+    /// US regions (us_west / us_east) and keeps legacy "us" settings working by treating
+    /// them as a prefix covering both US sub-regions. A null/empty allowed list means
+    /// "allow all".
+    /// </summary>
+    private static bool IsRegionAllowed(string? region, List<string>? allowed)
+    {
+        if (allowed == null || allowed.Count == 0) return true;
+        var r = NormalizeRegion(region);
+        if (r == null) return false;
+        return allowed.Any(a =>
+        {
+            var allowedRegion = NormalizeRegion(a);
+            if (allowedRegion == null) return false;
+            // Exact match, or the instance region is a sub-region of an allowed one
+            // (so a legacy "us" still covers "us_west" / "us_east").
+            return r == allowedRegion
+                || r.StartsWith(allowedRegion + "_", StringComparison.Ordinal);
+        });
     }
     
     private async Task SendDiscordNotificationAsync(GroupInstanceInfo instance, string reason)
