@@ -284,13 +284,13 @@ public partial class AutoCloserViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task CloseInstanceAsync(string instanceId)
+    private async Task CloseInstanceAsync(GroupInstanceDisplayItem item)
     {
         try
         {
-            StatusMessage = $"Closing instance {instanceId}...";
+            StatusMessage = $"Closing instance {item.InstanceId}...";
             
-            var success = await _autoCloserService.CloseInstanceAsync(instanceId);
+            var success = await _autoCloserService.CloseInstanceAsync(item.WorldId, item.InstanceId);
             
             if (success)
             {
@@ -305,7 +305,7 @@ public partial class AutoCloserViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"✗ Error: {ex.Message}";
-            LoggingService.Error("AUTO-CLOSER-VM", ex, $"Failed to close instance {instanceId}");
+            LoggingService.Error("AUTO-CLOSER-VM", ex, $"Failed to close instance {item.InstanceId}");
         }
     }
 }

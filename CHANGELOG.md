@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.16] - 2026-10-30
+
+### Fixed
+
+- **Auto Closer — group instances never actually closed (404 on the delete call)** (`VRChatApiService.cs`, `AutoCloserService.cs`, `AutoCloserViewModel.cs`, `AutoCloserView.xaml`)
+
+  The close/delete HTTP call hit a VRChat route that doesn't exist: `DELETE /groups/{groupId}/instances/{instanceId}` returned `404 — The endpoint you're looking for is not implemented by our system`, so no group instance was ever actually closed (the parse + region/access/age-gate decision all worked; only the final delete failed). VRChat's real endpoint for closing a group instance is `DELETE /instances/{worldId}:{instanceId}` (worldId and instanceId joined by a colon).
+
+  *Fix:* the API method is now `CloseGroupInstanceAsync(worldId, instanceId)` and hits `instances/{worldId}:{instanceId}`. The `worldId` (already parsed from the instance `location` prefix, e.g. `wrld_f5f8b3dc-...`) is threaded from `GroupInstanceInfo.WorldId` through `AutoCloserService.CloseInstanceAsync` into the API call. The manual "Close" button now passes the whole instance row (not just the instance ID) so the `worldId` reaches the command.
+
+### Notes
+
+- Bump version to 1.1.16 across `App.xaml.cs`, `VRCGroupTools.csproj`, `setup.iss`.
+
+---
+
 ## [1.1.15] - 2026-10-30
 
 ### Fixed

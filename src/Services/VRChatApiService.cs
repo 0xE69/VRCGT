@@ -67,7 +67,7 @@ public interface IVRChatApiService
     Task<List<GroupJoinRequest>> GetGroupJoinRequestsAsync(string groupId);
     Task<bool> RespondToGroupJoinRequestAsync(string groupId, string userId, string action);
     Task<List<GroupInstanceDetails>> GetGroupInstancesAsync(string groupId);
-    Task<bool> DeleteGroupInstanceAsync(string groupId, string instanceId);
+    Task<bool> CloseGroupInstanceAsync(string worldId, string instanceId);
     string? GetAuthCookie();
     string? GetTwoFactorCookie();
     void Logout();
@@ -2378,32 +2378,40 @@ public class VRChatApiService : IVRChatApiService
         return "unknown";
     }
 
-    public async Task<bool> DeleteGroupInstanceAsync(string groupId, string instanceId)
+    public async Task<bool> CloseGroupInstanceAsync(string worldId, string instanceId)
     {
         try
         {
             await RateLimitAsync();
             
-            var url = $"groups/{groupId}/instances/{instanceId}?apiKey={ApiKey}";
-            Console.WriteLine($"[GROUP-INSTANCE-DELETE] Deleting instance: {instanceId}");
+            if (string.IsNullOrEmpty(worldId) || string.IsNullOrEmpty(instanceId))
+            {
+                Console.WriteLine($"[GROUP-INSTANCE-CLOSE] WorldId or InstanceId is empty");
+                return false;
+            }
+            
+            // Correct VRChat endpoint: DELETE /instances/{worldId}:{instanceId}
+            // (the groups/{groupId}/instances/{id} route is not implemented by VRChat and 404s).
+            var url = $"instances/{worldId}:{instanceId}?apiKey={ApiKey}";
+            Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Closing instance: {instanceId}");
             
             var request = new HttpRequestMessage(HttpMethod.Delete, url);
             var response = await _httpClient.SendAsync(request);
             var content = await response.Content.ReadAsStringAsync();
-            LogHttp("GROUP-INSTANCE-DELETE", url, response, content);
+            LogHttp("GROUP-INSTANCE-CLOSE", url, response, content);
             
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[GROUP-INSTANCE-DELETE] Failed to delete instance: {response.StatusCode}");
+                Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Failed to close instance: {response.StatusCode}");
                 return false;
             }
             
-            Console.WriteLine($"[GROUP-INSTANCE-DELETE] Successfully deleted instance: {instanceId}");
+            Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Successfully closed instance: {instanceId}");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[GROUP-INSTANCE-DELETE] Exception: {ex.Message}");
+            Console.WriteLine($"[GROUP-INSTANCE-CLOSE] Exception: {ex.Message}");
             return false;
         }
     }

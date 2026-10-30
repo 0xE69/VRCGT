@@ -16,7 +16,7 @@ public interface IAutoCloserService
     Task StartMonitoringAsync(string groupId);
     void StopMonitoring();
     Task<List<GroupInstanceInfo>> GetActiveInstancesAsync();
-    Task<bool> CloseInstanceAsync(string instanceId);
+    Task<bool> CloseInstanceAsync(string worldId, string instanceId);
     bool IsMonitoring { get; }
     int ClosedInstanceCount { get; }
 }
@@ -152,18 +152,18 @@ public class AutoCloserService : IAutoCloserService, IDisposable
         return instances;
     }
     
-    public async Task<bool> CloseInstanceAsync(string instanceId)
+    public async Task<bool> CloseInstanceAsync(string worldId, string instanceId)
     {
         try
         {
-            if (string.IsNullOrEmpty(_currentGroupId))
+            if (string.IsNullOrEmpty(worldId) || string.IsNullOrEmpty(instanceId))
             {
                 return false;
             }
             
             LoggingService.Info("AUTO-CLOSER", $"Attempting to close instance: {instanceId}");
             
-            var success = await _apiService.DeleteGroupInstanceAsync(_currentGroupId, instanceId);
+            var success = await _apiService.CloseGroupInstanceAsync(worldId, instanceId);
             
             if (success)
             {
@@ -249,9 +249,9 @@ public class AutoCloserService : IAutoCloserService, IDisposable
                 {
                     LoggingService.Warn("AUTO-CLOSER", $"Closing instance: {instance.WorldName} ({instance.InstanceId}) - {reason}");
                     
-                    var closed = await CloseInstanceAsync(instance.InstanceId);
+                    var success = await CloseInstanceAsync(instance.WorldId, instance.InstanceId);
                     
-                    if (closed)
+                    if (success)
                     {
                         var eventArgs = new AutoCloserEventArgs
                         {

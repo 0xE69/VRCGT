@@ -311,7 +311,7 @@
                                         <Button Grid.Column="5"
                                                 Content="Close"
                                                 Command="{Binding DataContext.CloseInstanceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                CommandParameter="{Binding InstanceId}"
+                                                CommandParameter="{Binding}"
                                                 Background="#F44336"
                                                 Foreground="White"
                                                 Height="30"
