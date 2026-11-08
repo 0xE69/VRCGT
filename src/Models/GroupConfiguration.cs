@@ -1,15 +1,29 @@
 using System;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace VRCGroupTools.Models;
 
 /// <summary>
 /// Configuration for a single managed group
 /// </summary>
-public class GroupConfiguration
+public class GroupConfiguration : ObservableObject
 {
     public string GroupId { get; set; } = string.Empty;
-    public string GroupName { get; set; } = string.Empty;
-    public string? GroupIconUrl { get; set; }
+    private string _groupName = string.Empty;
+    public string GroupName
+    {
+        get => _groupName;
+        set
+        {
+            if (SetProperty(ref _groupName, value)) OnPropertyChanged(nameof(DisplayName));
+        }
+    }
+    private string? _groupIconUrl;
+    public string? GroupIconUrl
+    {
+        get => _groupIconUrl;
+        set => SetProperty(ref _groupIconUrl, value);
+    }
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastAccessed { get; set; }
     

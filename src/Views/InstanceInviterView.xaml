@@ -101,7 +101,7 @@
                                      ToolTip="Skip users who haven't been in the instance long enough"
                                      Foreground="White"
                                      VerticalAlignment="Center"/>
-                            <TextBox Text="{Binding MinInstanceTimeSeconds, UpdateSourceTrigger=PropertyChanged}" 
+                            <TextBox x:Name="MinInstanceTimeInput" TextChanged="OnFilterTextChanged" Text="{Binding MinInstanceTimeSeconds, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
                                     IsEnabled="{Binding SkipJustJoined}"
                                     Style="{StaticResource MaterialDesignTextBox}"
                                     Width="40"
@@ -116,17 +116,14 @@
                         </StackPanel>
                     </WrapPanel>
 
-                    <!-- Auto Invite Toggle -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="🤖 Auto Invite:" 
-                                  Foreground="White"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,10,0"/>
-                        <ToggleButton IsChecked="{Binding AutoInviteEnabled}"
-                                     Style="{StaticResource MaterialDesignSwitchToggleButton}"
-                                     ToolTip="Automatically invite new instance users that pass filters"/>
-                    </StackPanel>
+                    <CheckBox x:Name="AutoInviteCheckBox" Grid.Column="1" Content="Auto Invite (every 5 seconds)" IsChecked="{Binding AutoInviteEnabled, Mode=TwoWay}" Foreground="White" VerticalAlignment="Center" ToolTip="Explicit opt-in. Local checks every 5 seconds; each new candidate requires fresh API identity/location corroboration. Hidden/non-friend/unknown presence is skipped, not all occupants are supported. Always off on restart/context/filter changes."/>
                 </Grid>
+                <TextBox TextChanged="OnFilterTextChanged" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Filter instance users by name or exact ID (editing stops Auto Invite)" Foreground="White" Margin="0,8,0,4"/>
+                <TextBlock Text="Automatic invites require fresh API-confirmed presence. Hidden/non-friend/unknown locations are skipped (not all occupants); logs alone never authorize. Review skipped users manually." Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                <TextBlock x:Name="AutoInviteStatus" Text="{Binding StatusMessage}" Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                <Expander Header="Auto Invite activity — persistent outcomes in Game Log / shared local history" Foreground="#BBB" Margin="0,5,0,0">
+                    <ListBox x:Name="AutoInviteActivity" ItemsSource="{Binding AutoInviteLog}" MaxHeight="100" Foreground="#BBB" Background="Transparent"/>
+                </Expander>
             </StackPanel>
         </Border>
 
@@ -209,6 +206,7 @@
                                         <!-- Selection Checkbox -->
                                         <CheckBox Grid.Column="0" 
                                                  IsChecked="{Binding IsSelected}"
+                                                 IsEnabled="{Binding CanInvite}"
                                                  VerticalAlignment="Center"
                                                  Margin="0,0,15,0"/>
 
@@ -230,6 +228,7 @@
                                                       Foreground="White" 
                                                       FontWeight="SemiBold" 
                                                       FontSize="15"/>
+                                            <TextBlock Text="{Binding GroupInviteResult}" Foreground="#BBB" FontSize="11" TextWrapping="Wrap"/>
                                             <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                                 <TextBlock Text="{Binding TrustLevel}" 
                                                           Foreground="{Binding TrustLevelBrush}"

@@ -27,6 +27,36 @@
                       Foreground="#888" 
                       FontSize="13" 
                       Margin="0,5,0,0"/>
+            <TextBlock Text="{Binding GroupContext}" Foreground="#B0B0B0" TextWrapping="Wrap" Margin="0,8,0,4"/>
+            <WrapPanel>
+                <Button Content="Refresh local history" Command="{Binding RefreshGroupCommand}" Margin="0,0,8,4"/>
+                <Button Content="Sync members (API)" Command="{Binding SyncMembersCommand}" Margin="0,0,8,4"/>
+                <CheckBox Content="Hide sent / pending / unknown invites" IsChecked="{Binding HidePriorInvites}" Foreground="White" Margin="0,0,8,4"/>
+            </WrapPanel>
+            <Expander Header="Local group invitation history (all app areas)" Foreground="White">
+                <StackPanel>
+                    <TextBlock Text="Sent blocks duplicates. InFlight may be pending or interrupted; Unknown may have been sent. Check VRChat; neither is retried. Failed = rejected; explicit retry is allowed. Legacy unscoped invite rows cannot be assigned to a group." TextWrapping="Wrap" Foreground="#AAA"/>
+                    <DataGrid ItemsSource="{Binding InviteHistory}" IsReadOnly="True" AutoGenerateColumns="False" MaxHeight="180" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Recipient ID" Binding="{Binding UserId}" Width="*"/>
+                            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="Auto"/>
+                            <DataGridTextColumn Header="Updated (UTC)" Binding="{Binding UpdatedUtc}" Width="Auto"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Expander>
+            <Border Background="#332222" Padding="10" Margin="0,6,0,0" Visibility="{Binding HasActionTarget, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock Text="User actions — no action is sent by opening this panel" Foreground="White"/>
+                    <TextBlock Text="{Binding ActionTarget.DisplayName}" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding ActionTarget.UserId}" Foreground="White"/>
+                    <TextBlock Text="{Binding ActionTarget.GroupId, StringFormat='Selected group: {0}'}" Foreground="White"/>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Ban from this group…" Command="{Binding BanLogUserCommand}" Background="#B71C1C" Margin="0,0,8,0"/>
+                        <Button Content="Close actions" Command="{Binding CloseUserActionsCommand}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <!-- Search and Filters -->
@@ -55,6 +85,8 @@
                          Foreground="White"
                          VerticalAlignment="Center"
                          Margin="0,0,10,0"/>
+
+                <CheckBox Grid.Column="2" Content="Non-members only (cached)" IsChecked="{Binding HideAlreadyInGroup}" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Unknown membership is not a non-member. Sync members once to build a complete snapshot."/>
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
                     <TextBlock Text="📊 " Foreground="#888" VerticalAlignment="Center"/>
@@ -155,7 +187,7 @@
                                         <!-- Selection Checkbox -->
                                         <CheckBox Grid.Column="0" 
                                                  IsChecked="{Binding IsSelected}"
-                                                 IsEnabled="{Binding HasUserId}"
+                                                 IsEnabled="{Binding CanInvite}"
                                                  VerticalAlignment="Center"
                                                  Margin="0,0,10,0"/>
 
@@ -181,10 +213,10 @@
                                                    Margin="10,0,10,0" 
                                                    VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding User.DisplayName}" 
-                                                          Foreground="White" 
-                                                          FontWeight="SemiBold" 
-                                                          FontSize="14"/>
+                                                <Button Content="{Binding User.DisplayName}" Foreground="White" FontWeight="SemiBold" FontSize="14"
+                                                        Style="{StaticResource MaterialDesignFlatButton}" Padding="0" Height="Auto"
+                                                        Command="{Binding DataContext.OpenUserActionsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" ToolTip="Open user actions (including group ban); does not ban on click"/>
                                                 
                                                 <!-- 18+ Badge -->
                                                 <TextBlock Text=" 🔞" 
@@ -200,6 +232,7 @@
                                                           Visibility="{Binding HasUserId, Converter={StaticResource InverseBoolToVisConverter}}"/>
                                             </StackPanel>
                                             
+                                            <TextBlock Text="{Binding GroupStatus}" Foreground="#B0B0B0" FontSize="11"/>
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                 <TextBlock Text="Last seen: " 
                                                           Foreground="#666"

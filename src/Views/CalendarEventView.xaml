@@ -12,8 +12,85 @@
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,16,0">
                 <TextBlock Text="📅 Calendar Events" FontSize="24" FontWeight="Bold" Foreground="White" Margin="0,0,0,4"/>
-                <TextBlock Text="Create, schedule, repeat, and template events." Foreground="#AAA" Margin="0,0,0,20"/>
+                <TextBlock Text="Local calendar and news drafts. Saving and checks never publish. Preview and approve EACH event or news item separately; uploads occur only after approval." TextWrapping="Wrap" Foreground="#AAA" Margin="0,0,0,20"/>
 
+                <Expander Header="Post scheduler — local drafts awaiting per-item approval" Foreground="White" Margin="0,0,0,16">
+                    <StackPanel Margin="8">
+                        <TextBlock Text="Checks prepare drafts, never publish. Existing schedules and executed-rule history are retained. Restart starts paused. Missed after-event drafts older than 24h are withheld. DST-ambiguous/invalid dates require correction." TextWrapping="Wrap" Foreground="#CCC"/>
+                        <WrapPanel Margin="0,8">
+                            <Button Content="New rule" Command="{Binding AddAutomationRuleCommand}" Margin="0,0,8,8"/>
+                            <Button Content="Save rule" Command="{Binding SaveAutomationRuleCommand}" Margin="0,0,8,8"/>
+                            <Button Content="Delete rule" Command="{Binding DeleteAutomationRuleCommand}" Margin="0,0,8,8"/>
+                        </WrapPanel>
+                        <ComboBox ItemsSource="{Binding AutomationRules}" SelectedItem="{Binding SelectedAutomationRule}" DisplayMemberPath="Name"/>
+                        <TextBox Text="{Binding SelectedAutomationRule.Name, UpdateSourceTrigger=PropertyChanged}" ToolTip="Rule name" Margin="0,6"/>
+                        <CheckBox Content="Enabled for local draft preparation only" IsChecked="{Binding SelectedAutomationRule.Enabled}"/>
+                        <TextBlock Text="Exact group" Foreground="#CCC"/>
+                        <ComboBox ItemsSource="{Binding ManagedGroupIds}" SelectedItem="{Binding SelectedAutomationRule.FilterGroupId}"/>
+                        <ComboBox ItemsSource="{Binding TriggerTypes}" SelectedItem="{Binding SelectedAutomationRule.TriggerType}" Margin="0,6"/>
+                        <TextBlock Text="Offset (HH:mm:ss; before start or after end)" Foreground="#CCC"/>
+                        <TextBox Text="{Binding SelectedAutomationRule.TimeOffset}"/>
+                        <TextBox Text="{Binding SelectedAutomationRule.PostTitle, UpdateSourceTrigger=PropertyChanged}" ToolTip="Post title; supports {EventName} and {StartTime}" Margin="0,6"/>
+                        <TextBox Text="{Binding SelectedAutomationRule.PostBody, UpdateSourceTrigger=PropertyChanged}" ToolTip="Body; supports {EventName} and {Description}" AcceptsReturn="True" MinHeight="70" TextWrapping="Wrap"/>
+                        <WrapPanel Margin="0,8">
+                            <Button Content="Check due / refresh drafts" Command="{Binding PrepareDuePostsCommand}" Margin="0,0,8,8"/>
+                            <Button Content="Start local checks" Command="{Binding StartDraftChecksCommand}" Margin="0,0,8,8"/>
+                            <Button Content="Pause local checks" Command="{Binding PauseDraftChecksCommand}" Margin="0,0,8,8"/>
+                        </WrapPanel>
+                        <ItemsControl ItemsSource="{Binding PendingPosts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#666" BorderThickness="1" Padding="8" Margin="0,4">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding GroupId}" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding DueUtc, StringFormat=Due UTC: {0:O}}"/>
+                                            <TextBlock Text="{Binding Title}" FontWeight="Bold" TextWrapping="Wrap"/>
+                                            <TextBox Text="{Binding Body, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding ImageId, StringFormat=Artwork reference: {0}}" TextWrapping="Wrap"/>
+                                            <Button Content="Review in news editor (no send)" Command="{Binding DataContext.ReviewScheduledPostCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                            <TextBlock Text="Local draft; prior publication effects may already exist. Check durable history/status, then review this exact item." TextWrapping="Wrap" Foreground="#CCC"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Expander>
+                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#FFD166" Margin="0,0,0,12"/>
+                <Expander Header="Durable publication history (local read only)" Foreground="White" Margin="0,0,0,16">
+                    <StackPanel>
+                        <Button Content="Read history for selected group (no send)" Command="{Binding RefreshPublicationHistoryCommand}"/>
+                        <ItemsControl ItemsSource="{Binding PublicationHistory}"><ItemsControl.ItemTemplate><DataTemplate>
+                            <Border BorderBrush="#666" BorderThickness="1" Padding="8" Margin="0,4"><StackPanel>
+                                <TextBlock Text="{Binding EffectKey}" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding State}" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding TargetId}" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding Digest, StringFormat=Approved digest: {0}}" TextWrapping="Wrap"/>
+                            </StackPanel></Border>
+                        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                    </StackPanel>
+                </Expander>
+                <Expander Header="News editor — exact selected group, explicit one-item approval" Foreground="White" Margin="0,0,0,16" IsExpanded="True">
+                    <StackPanel Margin="8">
+                        <Button Content="New blank news draft" Command="{Binding NewNewsDraftCommand}"/>
+                        <TextBlock Text="Title"/>
+                        <TextBox Text="{Binding NewsTitle, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Text="Exact body"/>
+                        <TextBox Text="{Binding NewsBody, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90"/>
+                        <TextBlock Text="Audience"/>
+                        <ComboBox ItemsSource="{Binding NewsAudienceOptions}" SelectedItem="{Binding NewsAudience}"/>
+                        <CheckBox Content="Request group member notification" IsChecked="{Binding NewsNotify}"/>
+                        <TextBlock Text="{Binding NewsArtworkReference, StringFormat=Old artwork reference: {0}}" TextWrapping="Wrap"/>
+                        <CheckBox Content="Explicitly omit old referenced artwork when no local PNG is chosen" IsChecked="{Binding OmitReferencedArtwork}"/>
+                        <TextBlock Text="{Binding NewsImagePath, StringFormat=Local PNG: {0}}" TextWrapping="Wrap"/>
+                        <WrapPanel>
+                            <Button Content="Choose local PNG (no upload)" Command="{Binding BrowseNewsImageCommand}" Margin="0,8,8,8"/>
+                            <Button Content="Clear PNG" Command="{Binding ClearNewsImageCommand}" Margin="0,8,8,8"/>
+                            <Button Content="Save news locally (no send)" Command="{Binding SaveNewsDraftCommand}" Margin="0,8,8,8"/>
+                            <Button Content="Preview and approve ONE news post" Command="{Binding PublishNewsCommand}" Margin="0,8,8,8"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Expander>
                 <Border Background="#2D2D30" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                     <StackPanel>
                         <TextBlock Text="Create Event" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,12"/>
@@ -118,6 +195,10 @@
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}" 
                                  Foreground="White"/>
 
+                        <TextBlock Text="Exact event group (must match sidebar before publication)" Foreground="#CCC" Margin="0,10,0,4"/>
+                        <ComboBox ItemsSource="{Binding ManagedGroupIds}" SelectedItem="{Binding Draft.GroupId, Mode=TwoWay}"/>
+                        <TextBlock Text="Timezone for wall-clock dates/times below (24-hour HH:mm). DST gaps/folds must be corrected." Foreground="#CCC" TextWrapping="Wrap" Margin="0,10,0,4"/>
+                        <ComboBox ItemsSource="{Binding AvailableTimeZones}" SelectedItem="{Binding Draft.TimeZoneId, Mode=TwoWay}"/>
                         <TextBox Text="{Binding Draft.Description, UpdateSourceTrigger=PropertyChanged}" 
                                  materialDesign:HintAssist.Hint="Description" 
                                  Margin="0,10,0,0"
@@ -132,13 +213,13 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,8,0">
                                 <TextBlock Text="Start Time" Foreground="#AAA" FontSize="12"/>
-                                <DatePicker SelectedDate="{Binding Draft.StartTime, Mode=TwoWay}"/>
-                                <TextBox Text="{Binding Draft.StartTime, StringFormat=HH:mm}" Margin="0,6,0,0"/>
+                                <DatePicker SelectedDate="{Binding StartDate, Mode=TwoWay}"/>
+                                <TextBox Text="{Binding StartClock, UpdateSourceTrigger=PropertyChanged}" Margin="0,6,0,0"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="8,0,0,0">
                                 <TextBlock Text="End Time" Foreground="#AAA" FontSize="12"/>
-                                <DatePicker SelectedDate="{Binding Draft.EndTime, Mode=TwoWay}"/>
-                                <TextBox Text="{Binding Draft.EndTime, StringFormat=HH:mm}" Margin="0,6,0,0"/>
+                                <DatePicker SelectedDate="{Binding EndDate, Mode=TwoWay}"/>
+                                <TextBox Text="{Binding EndClock, UpdateSourceTrigger=PropertyChanged}" Margin="0,6,0,0"/>
                             </StackPanel>
                         </Grid>
 
@@ -198,7 +279,9 @@
                             </ListBox>
                         </StackPanel>
 
-                        <Button Content="Create Event" Command="{Binding SaveEventCommand}"
+                        <Button Content="Preview and approve ONE calendar event" Command="{Binding PublishEventCommand}" Margin="0,10,0,0"/>
+                        <TextBlock Text="Saving remains local only. Preview is a separate create action; approval does not create a news post or Discord message." Foreground="#CCC" TextWrapping="Wrap"/>
+                        <Button Content="Save local event draft" Command="{Binding SaveEventCommand}"
                                 Height="40" Margin="0,14,0,0" Background="#7C4DFF" Foreground="White" Style="{StaticResource MaterialDesignRaisedButton}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button Content="Sync from VRChat" Command="{Binding SyncFromVrChatCommand}" Height="32" Width="150" Style="{StaticResource MaterialDesignRaisedButton}"/>
@@ -314,8 +397,9 @@
                                 <TextBlock Text="{Binding Category}" Foreground="#AAA" FontSize="12"/>
                                 <TextBlock Text="{Binding StartTime, StringFormat=yyyy-MM-dd HH:mm}" Foreground="#AAA" FontSize="12"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <Button Content="Open draft" Command="{Binding DataContext.EditEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Height="26" FontSize="11" Style="{StaticResource MaterialDesignFlatButton}"/>
                                     <Button Content="Create Again" Command="{Binding DataContext.DuplicateEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Height="26" FontSize="11" Style="{StaticResource MaterialDesignFlatButton}"/>
-                                    <Button Content="Delete" Command="{Binding DataContext.DeleteEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Height="26" FontSize="11" Foreground="#F44336" Style="{StaticResource MaterialDesignFlatButton}"/>
+                                    <Button Content="Delete local" Command="{Binding DataContext.DeleteEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Height="26" FontSize="11" Foreground="#F44336" Style="{StaticResource MaterialDesignFlatButton}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

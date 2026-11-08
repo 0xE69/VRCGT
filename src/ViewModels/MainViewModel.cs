@@ -173,11 +173,14 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSelectedGroupChanged(GroupConfiguration? value)
     {
+        DiscordSettingsVM?.OpenInstances.PauseCommand.Execute(null);
+        CalendarEventVM?.PauseDraftChecksCommand.Execute(null);
         if (value != null)
         {
             GroupId = value.GroupId;
             _settingsService.CurrentGroupId = value.GroupId;
             _settingsService.Settings.GroupId = value.GroupId; // Sync legacy setting
+            DiscordSettingsVM?.OpenInstances.RefreshGroup();
             _settingsService.Save();
             
             // Update API service
@@ -209,6 +212,17 @@ public partial class MainViewModel : ObservableObject
             
             Console.WriteLine($"[DEBUG] Switched to group: {value.GroupName} ({value.GroupId})");
         }
+    }
+
+    // Update in place so selection and per-group webhook/security settings survive.
+    public void UpdateManagedGroupMetadata(string groupId, string name, string? iconUrl)
+    {
+        var existing = ManagedGroups.FirstOrDefault(g => g.GroupId == groupId);
+        if (existing == null || string.IsNullOrWhiteSpace(name)) return;
+        if (existing.GroupName == name && existing.GroupIconUrl == iconUrl) return;
+        existing.GroupName = name;
+        existing.GroupIconUrl = iconUrl;
+        _settingsService.Save();
     }
 
     [RelayCommand]
@@ -306,7 +320,7 @@ public partial class MainViewModel : ObservableObject
                 // Skip if already exists
                 if (ManagedGroups.Any(g => g.GroupId == groupInfo.Id))
                 {
-                    Console.WriteLine($"[MainVM]   Skipping - already in list");
+                    UpdateManagedGroupMetadata(groupInfo.Id, groupInfo.Name, groupInfo.IconUrl);
                     continue;
                 }
 
@@ -419,6 +433,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task LogoutAsync()
     {
+        DiscordSettingsVM?.OpenInstances.PauseCommand.Execute(null);
+        CalendarEventVM?.PauseDraftChecksCommand.Execute(null);
         // Clear cached session on logout
         await _cacheService.DeleteAsync("session");
         _apiService.Logout();

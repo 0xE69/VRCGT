@@ -131,10 +131,16 @@ public partial class DiscordSettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _isWebhookValid;
 
-    public DiscordSettingsViewModel()
+    public OpenInstanceAnnouncementsViewModel OpenInstances { get; private set; } = null!;
+
+    public DiscordSettingsViewModel() : this(App.Services.GetRequiredService<ISettingsService>(),
+        App.Services.GetRequiredService<IDiscordWebhookService>(), App.Services.GetRequiredService<OpenInstanceAnnouncementService>()) { }
+
+    public DiscordSettingsViewModel(ISettingsService settings, IDiscordWebhookService discord, OpenInstanceAnnouncementService announcements)
     {
-        _settingsService = App.Services.GetRequiredService<ISettingsService>();
-        _discordService = App.Services.GetRequiredService<IDiscordWebhookService>();
+        OpenInstances = new OpenInstanceAnnouncementsViewModel(announcements, settings);
+        _settingsService = settings;
+        _discordService = discord;
 
         LoadSettings();
     }

@@ -17,126 +17,40 @@ public interface IInstanceInviterService
 
 public class InstanceInviterService : IInstanceInviterService
 {
-    // More flexible regex to match various instance ID formats
-    private static readonly Regex InstanceLocationRegex = new Regex(
-        @"wrld_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}:[^\s]+",
-        RegexOptions.Compiled);
+    private readonly string _logDirectory;
+    private readonly Func<DateTime?> _processStartedUtc;
+    private readonly Func<DateTime> _utcNow;
+    private readonly IncrementalInstanceSessionReader _sessionReader = new();
 
-    private static readonly Regex WorldIdRegex = new Regex(
-        @"wrld_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
-        RegexOptions.Compiled);
+    public InstanceInviterService() : this(
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low", "VRChat", "VRChat"),
+        GetProcessStartedUtc, () => DateTime.UtcNow) { }
+
+    public InstanceInviterService(string logDirectory, Func<DateTime?> processStartedUtc, Func<DateTime> utcNow)
+    {
+        _logDirectory = logDirectory;
+        _processStartedUtc = processStartedUtc;
+        _utcNow = utcNow;
+    }
+
+    private static DateTime? GetProcessStartedUtc()
+    {
+        var processes = System.Diagnostics.Process.GetProcessesByName("VRChat");
+        try
+        {
+            // Multiple clients cannot be associated reliably with one log. Fail closed.
+            return processes.Length == 1 && !processes[0].HasExited
+                ? processes[0].StartTime.ToUniversalTime() : null;
+        }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
 
     public CurrentInstanceInfo? GetCurrentInstance()
     {
-        Console.WriteLine("[INSTANCE-SVC] GetCurrentInstance called");
-        try
+        try { return _sessionReader.Read(_logDirectory, _processStartedUtc(), _utcNow()); }
+        catch (Exception)
         {
-            // Get VRChat log file path from AppData
-            var appDataLocal = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low";
-            var vrchatLogPath = Path.Combine(appDataLocal, "VRChat", "VRChat");
-            Console.WriteLine($"[INSTANCE-SVC] Checking log path: {vrchatLogPath}");
-
-            if (!Directory.Exists(vrchatLogPath))
-            {
-                Console.WriteLine("[INSTANCE-SVC] VRChat log directory not found");
-                return null;
-            }
-
-            // Get the most recent log file
-            var logFiles = Directory.GetFiles(vrchatLogPath, "output_log_*.txt")
-                .OrderByDescending(f => File.GetLastWriteTime(f))
-                .ToList();
-
-            if (logFiles.Count == 0)
-            {
-                Console.WriteLine("[INSTANCE-INVITER] No VRChat log files found");
-                return null;
-            }
-
-            var latestLog = logFiles[0];
-            Console.WriteLine($"[INSTANCE-INVITER] Reading log: {Path.GetFileName(latestLog)}");
-
-            // Read the entire log file or last 5MB to find current instance
-            using var stream = new FileStream(latestLog, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var bufferSize = Math.Min(5000000, stream.Length); // Read last 5MB or entire file if smaller
-            var buffer = new byte[bufferSize];
-            
-            if (stream.Length > bufferSize)
-            {
-                stream.Seek(-bufferSize, SeekOrigin.End);
-            }
-            stream.Read(buffer, 0, (int)bufferSize);
-            
-            Console.WriteLine($"[INSTANCE-INVITER] File size: {stream.Length:N0} bytes, reading last {bufferSize:N0} bytes");
-            
-            var logContent = System.Text.Encoding.UTF8.GetString(buffer);
-            var lines = logContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Reverse().ToList();
-
-            Console.WriteLine($"[INSTANCE-INVITER] Searching through {lines.Count} log lines...");
-            
-            int behaviourCount = 0;
-            int joiningCount = 0;
-
-            // Look for the most recent instance location
-            // World ID is on the same line as "Joining" or "Rejoining local world:"
-            foreach (var line in lines)
-            {
-                // Skip lines that don't have the Behaviour tag and joining keywords
-                if (!line.Contains("[Behaviour]")) continue;
-                behaviourCount++;
-                
-                // Debug: Print first few [Behaviour] lines to see what we're getting
-                if (behaviourCount <= 5)
-                {
-                    Console.WriteLine($"[INSTANCE-INVITER] Behaviour line #{behaviourCount}: {line.Substring(0, Math.Min(120, line.Length))}");
-                }
-                
-                if (!line.Contains("Joining") && !line.Contains("Rejoining local world:")) continue;
-                joiningCount++;
-                
-                // Skip "Joining or Creating Room" lines which are different
-                if (line.Contains("Joining or Creating Room:")) 
-                {
-                    Console.WriteLine($"[INSTANCE-INVITER] Skipping 'Joining or Creating Room' line");
-                    continue;
-                }
-                
-                Console.WriteLine($"[INSTANCE-INVITER] Found Joining/Rejoining line!");
-                Console.WriteLine($"[INSTANCE-INVITER] Line content: {line.Substring(0, Math.Min(150, line.Length))}");
-                
-                var match = InstanceLocationRegex.Match(line);
-                if (match.Success)
-                {
-                    var fullLocation = match.Value;
-                    var worldMatch = WorldIdRegex.Match(fullLocation);
-                    
-                    if (worldMatch.Success)
-                    {
-                        var worldId = worldMatch.Value;
-                        var instanceId = fullLocation.Substring(worldId.Length + 1); // Skip the ':'
-                        
-                        Console.WriteLine($"[INSTANCE-INVITER] ✓ Found instance: {worldId}:{instanceId}");
-                        Console.WriteLine($"[INSTANCE-INVITER] Full location: {fullLocation}");
-                        
-                        return new CurrentInstanceInfo
-                        {
-                            WorldId = worldId,
-                            InstanceId = instanceId,
-                            FullLocation = fullLocation,
-                            DetectedAt = DateTime.Now
-                        };
-                    }
-                }
-            }
-
-            Console.WriteLine($"[INSTANCE-INVITER] Stats: {behaviourCount} [Behaviour] lines, {joiningCount} Joining lines found");
-            Console.WriteLine("[INSTANCE-INVITER] ✗ No recent instance found in logs");
-            Console.WriteLine("[INSTANCE-INVITER] Tip: Make sure VRChat is running and you're in a world");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[INSTANCE-INVITER] Error reading VRChat logs: {ex.Message}");
+            // Files may rotate or disappear. Neither log contents nor exceptions containing locations are logged.
             return null;
         }
     }
@@ -154,227 +68,63 @@ public class InstanceInviterService : IInstanceInviterService
         return await apiService.InviteUserToInstanceAsync(userId, currentInstance.WorldId, currentInstance.InstanceId);
     }
 
-    public async Task<List<InstanceUser>> GetCurrentInstanceUsersAsync(IVRChatApiService apiService)
+    // Local-only discovery. Details are resolved once, on demand, by the viewmodel for enabled filters.
+    // Never resolve a log display name by choosing an arbitrary search result.
+    private string? _usersSession;
+    private string? _usersFile;
+    private long _usersOffset;
+    private readonly Dictionary<string, InstanceUser> _localUsers = new(StringComparer.Ordinal);
+    private readonly object _localLock = new();
+    private string _partial = "";
+    public Task<List<InstanceUser>> GetCurrentInstanceUsersAsync(IVRChatApiService apiService) => Task.FromResult(GetLocalUsers());
+
+    public List<InstanceUser> GetLocalUsers()
     {
-        var users = new List<InstanceUser>();
-        
-        try
+        lock (_localLock)
         {
-            var currentInstance = GetCurrentInstance();
-            
-            if (currentInstance == null)
+            var current = GetCurrentInstance();
+            if (current == null) { ResetUsers(); return new(); }
+            var file = Directory.GetFiles(_logDirectory, "output_log_*.txt").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+            if (file == null) { ResetUsers(); return new(); }
+            var session = current.SessionKey + ":" + current.FullLocation;
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (session != _usersSession || file != _usersFile || stream.Length < _usersOffset)
             {
-                Console.WriteLine("[INSTANCE-USERS] No current instance detected");
-                return users;
+                ResetUsers(); _usersSession = session; _usersFile = file;
+                _usersOffset = Math.Max(0, stream.Length - 5_000_000);
             }
-
-            Console.WriteLine($"[INSTANCE-USERS] Looking for users in instance: {currentInstance.WorldId}:{currentInstance.InstanceId}");
-
-            // Get instance details from API to verify and get user count
-            var instanceDetails = await apiService.GetInstanceAsync(currentInstance.WorldId, currentInstance.InstanceId);
-            if (instanceDetails != null)
+            stream.Position = _usersOffset;
+            using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+            var content = _partial + reader.ReadToEnd();
+            _usersOffset = stream.Position;
+            var lines = content.Split('\n'); _partial = lines[^1];
+            foreach (var raw in lines.Take(lines.Length - 1))
             {
-                Console.WriteLine($"[INSTANCE-USERS] API reports {instanceDetails.UserCount} users in instance");
-            }
-
-            // Parse VRChat logs to find users
-            var appDataLocal = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low";
-            var vrchatLogPath = Path.Combine(appDataLocal, "VRChat", "VRChat");
-            var logFiles = Directory.GetFiles(vrchatLogPath, "output_log_*.txt")
-                .OrderByDescending(f => File.GetLastWriteTime(f))
-                .ToList();
-
-            if (logFiles.Count == 0)
-            {
-                Console.WriteLine("[INSTANCE-USERS] No VRChat log files found");
-                return users;
-            }
-
-            var latestLog = logFiles[0];
-            Console.WriteLine($"[INSTANCE-USERS] Reading log: {Path.GetFileName(latestLog)}");
-
-            // Read last 10MB of log to capture player join events
-            using var stream = new FileStream(latestLog, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            
-            var bufferSize = Math.Min(10000000, stream.Length); // 10MB
-            var buffer = new byte[bufferSize];
-            
-            if (stream.Length > bufferSize)
-            {
-                stream.Seek(-bufferSize, SeekOrigin.End);
-            }
-            
-            stream.Read(buffer, 0, (int)bufferSize);
-            var logContent = System.Text.Encoding.UTF8.GetString(buffer);
-            var lines = logContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Reverse().ToList();
-
-            Console.WriteLine($"[INSTANCE-USERS] Searching through {lines.Count} log lines");
-
-            // Regex patterns for finding user information
-            var userIdPattern = new Regex(@"usr_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
-            var onPlayerJoinedPattern = new Regex(@"OnPlayerJoined\s+(.+?)(?:\s*$)", RegexOptions.Compiled);
-            var playerJoinedPattern = new Regex(@"\[Player\]\s+(.+?)\s+joined", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-            var timestampRegex = new Regex(@"^(\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}:\d{2})", RegexOptions.Compiled);
-            
-            // Search from newest to oldest to find current instance boundary
-            foreach (var line in lines)
-            {
-                // Stop if we hit any join event (it's the start of the current session or start of a different session)
-                if (line.Contains("Joining or Creating Room:") || line.Contains("Rejoining local world:"))
+                var line = raw.TrimEnd((char)13);
+                if (line.Contains("[Behaviour]") && (line.Contains("Joining ") || line.Contains("Joining or Creating Room:") || line.Contains("Rejoining local world:") || line.Contains("OnLeftRoom") || line.Contains("OnDisconnected")))
+                { _localUsers.Clear(); continue; }
+                // Only recognized envelopes are discovery hints. Even full timestamped envelopes can be forged
+                // by multiline Udon text; automatic eligibility MUST independently corroborate identity/location.
+                var match = Regex.Match(line, @"^(?:\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\s+Log\s+-\s+)?\[Behaviour\]\s+OnPlayer(?<kind>Joined|Left)\s+(?<name>.*?)(?:\s+\((?<id>usr_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\))?\s*$");
+                if (!match.Success) continue;
+                var name = match.Groups["name"].Value.Trim();
+                var id = match.Groups["id"].Value;
+                var key = id.Length == 0 ? "name:" + name : id;
+                if (match.Groups["kind"].Value == "Left")
                 {
-                    Console.WriteLine($"[INSTANCE-USERS] Found instance boundary, stopping search");
-                    break;
+                    if (id.Length > 0) _localUsers.Remove(key);
+                    else foreach (var departed in _localUsers.Where(p => p.Value.DisplayName == name).Select(p => p.Key).ToArray()) _localUsers.Remove(departed);
+                    continue;
                 }
-
-                // Look for OnPlayerJoined events
-                if (line.Contains("OnPlayerJoined"))
-                {
-                    var match = onPlayerJoinedPattern.Match(line);
-                    if (match.Success && match.Groups.Count > 1)
-                    {
-                        var displayName = match.Groups[1].Value.Trim();
-                        
-                        // Extract user ID if present
-                        var userIdMatch = userIdPattern.Match(line);
-                        var userId = userIdMatch.Success ? userIdMatch.Value : string.Empty;
-                        
-                        // Extract timestamp
-                        var timestampMatch = timestampRegex.Match(line);
-                        var joinTime = DateTime.MinValue;
-                        if (timestampMatch.Success) 
-                        {
-                            DateTime.TryParseExact(timestampMatch.Groups[1].Value, "yyyy.MM.dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out joinTime);
-                        }
-
-                        // Only add if not already in list
-                        if (!string.IsNullOrEmpty(displayName) && !users.Any(u => u.DisplayName == displayName))
-                        {
-                            users.Add(new InstanceUser
-                            {
-                                DisplayName = displayName,
-                                UserId = userId,
-                                JoinTime = joinTime
-                            });
-                            Console.WriteLine($"[INSTANCE-USERS] Found user: {displayName} ({userId})");
-                        }
-                    }
-                }
-                
-                // Also look for alternate "[Player] X joined" format
-                if (line.Contains("[Player]") && line.Contains("joined"))
-                {
-                    var match = playerJoinedPattern.Match(line);
-                    if (match.Success && match.Groups.Count > 1)
-                    {
-                        var displayName = match.Groups[1].Value.Trim();
-                        
-                        // Extract timestamp
-                        var timestampMatch = timestampRegex.Match(line);
-                        var joinTime = DateTime.MinValue;
-                        if (timestampMatch.Success) 
-                        {
-                            DateTime.TryParseExact(timestampMatch.Groups[1].Value, "yyyy.MM.dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out joinTime);
-                        }
-
-                        if (!string.IsNullOrEmpty(displayName) && !users.Any(u => u.DisplayName == displayName))
-                        {
-                            users.Add(new InstanceUser
-                            {
-                                DisplayName = displayName,
-                                UserId = string.Empty, // Try to find ID in nearby lines
-                                JoinTime = joinTime
-                            });
-                            Console.WriteLine($"[INSTANCE-USERS] Found user from [Player] log: {displayName}");
-                        }
-                    }
-                }
+                var joined = DateTime.MinValue;
+                if (line.Length >= 19) DateTime.TryParseExact(line[..19], "yyyy.MM.dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out joined);
+                _localUsers[key] = new() { UserId = id, DisplayName = name, JoinTime = joined };
             }
-            
-            Console.WriteLine($"[INSTANCE-USERS] Found {users.Count} users in current instance from logs");
-            
-            // If log parsing found no users but API says there are users, at least show the current user
-            if (users.Count == 0 && instanceDetails != null && instanceDetails.UserCount > 0 && apiService.IsLoggedIn)
-            {
-                Console.WriteLine($"[INSTANCE-USERS] No users found in logs but instance has {instanceDetails.UserCount} users");
-                Console.WriteLine($"[INSTANCE-USERS] Adding current user as fallback");
-                
-                if (!string.IsNullOrEmpty(apiService.CurrentUserDisplayName))
-                {
-                    users.Add(new InstanceUser
-                    {
-                        DisplayName = apiService.CurrentUserDisplayName ?? "You",
-                        UserId = apiService.CurrentUserId ?? string.Empty
-                    });
-                }
-            }
+            return _localUsers.Values.ToList();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[INSTANCE-USERS] Error reading instance users: {ex.Message}");
-            Console.WriteLine($"[INSTANCE-USERS] Stack trace: {ex.StackTrace}");
-        }
-
-        // Fetch additional details from API for all users found
-        if (apiService.IsLoggedIn && users.Count > 0)
-        {
-            Console.WriteLine($"[INSTANCE-USERS] Fetching detailed info for {users.Count} users...");
-            
-            // Limit concurrency to 5 parallel requests
-            using (var semaphore = new System.Threading.SemaphoreSlim(5))
-            {
-                var tasks = users.Select(async user => 
-                {
-                    await semaphore.WaitAsync();
-                    try
-                    {
-                        // If we don't have a UserId, search by name
-                        if (string.IsNullOrEmpty(user.UserId))
-                        {
-                            // Console.WriteLine($"[INSTANCE-USERS] Searching for user ID: {user.DisplayName}");
-                            try 
-                            { 
-                                var searchResults = await apiService.SearchUsersAsync(user.DisplayName);
-                                var match = searchResults.FirstOrDefault(u => u.DisplayName.Equals(user.DisplayName, StringComparison.OrdinalIgnoreCase));
-                                
-                                if (match != null)
-                                {
-                                    user.UserId = match.UserId;
-                                }
-                            }
-                            catch (Exception searchEx) 
-                            {
-                                Console.WriteLine($"[INSTANCE-USERS] Search failed for {user.DisplayName}: {searchEx.Message}");
-                            }
-                        }
-
-                        // If we have a UserId now, fetch full details
-                        if (!string.IsNullOrEmpty(user.UserId))
-                        {
-                            var details = await apiService.GetUserAsync(user.UserId);
-                            if (details != null)
-                            {
-                                user.ProfilePicUrl = details.ProfilePicUrl ?? string.Empty;
-                                user.IsAgeVerified = details.IsAgeVerified;
-                                user.Tags = details.Tags ?? new List<string>();
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[INSTANCE-USERS] Failed to fetch details for {user.DisplayName}: {ex.Message}");
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                });
-
-                await Task.WhenAll(tasks);
-            }
-        }
-        
-        return users;
     }
+    private void ResetUsers() { _localUsers.Clear(); _usersSession = null; _usersFile = null; _usersOffset = 0; _partial = ""; }
+
 }
 
 public class CurrentInstanceInfo
@@ -388,6 +138,7 @@ public class CurrentInstanceInfo
     public string InstanceId { get; set; } = string.Empty;
     public string FullLocation { get; set; } = string.Empty;
     public DateTime DetectedAt { get; set; }
+    public string SessionKey { get; set; } = string.Empty;
 
     /// <summary>
     /// Returns true if this instance belongs to a group (group instance).

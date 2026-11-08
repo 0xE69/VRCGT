@@ -66,7 +66,7 @@ public class EventAutomationRule
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New Rule";
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; } = false; // New rules are explicitly opt-in; loaded rules are preserved.
     public AutomationTriggerType TriggerType { get; set; }
     public TimeSpan TimeOffset { get; set; } // e.g. 30 mins
     public string? FilterGroupId { get; set; }
@@ -94,14 +94,16 @@ public interface ICalendarEventService
     
     Task AddOrUpdateAutomationRuleAsync(EventAutomationRule rule);
     Task DeleteAutomationRuleAsync(Guid id);
-    Task RunAutomationChecksAsync();
+    Task RunAutomationChecksAsync(System.Threading.CancellationToken cancellation = default);
+    Task<IReadOnlyList<ScheduledPostDraft>> GetPendingPostsAsync();
+    Task SavePostDraftAsync(ScheduledPostDraft post);
     
     Task GenerateRecurringEventsAsync(int daysAhead = 30);
     Task ExportDataAsync(string filePath);
     Task ImportDataAsync(string filePath);
 }
 
-public class CalendarEventService : ICalendarEventService
+public class CalendarEventService : ICalendarEventService, IDisposable
 {
     private readonly string _eventPath;
     private readonly string _templatePath;
@@ -118,30 +120,40 @@ public class CalendarEventService : ICalendarEventService
     private List<EventTemplate> _templates = new();
     private List<EventAutomationRule> _automationRules = new();
     private System.Timers.Timer? _automationTimer;
+    private System.Threading.CancellationTokenSource? _scheduleRun;
+    private bool _loadFailed;
+
+    private readonly Func<DateTime> _utcNow;
 
     public CalendarEventService(IVRChatApiService apiService, IDiscordWebhookService discordService)
+        : this(apiService, discordService, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VRCGroupTools"), () => DateTime.UtcNow) { }
+
+    // Construction never starts background work or rewrites existing schedules.
+    public CalendarEventService(IVRChatApiService apiService, IDiscordWebhookService discordService, string appFolder, Func<DateTime> utcNow)
     {
+        _utcNow = utcNow;
         _apiService = apiService;
         _discordService = discordService;
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var appFolder = Path.Combine(appData, "VRCGroupTools");
         Directory.CreateDirectory(appFolder);
         _eventPath = Path.Combine(appFolder, "events.json");
         _templatePath = Path.Combine(appFolder, "event_templates.json");
         _automationPath = Path.Combine(appFolder, "event_automation.json");
 
         Load();
-        GenerateRecurringEventsInternal(60);
-        Save();
-        
-        StartAutomationService();
     }
 
     public void StartAutomationService()
     {
         if (_automationTimer != null) return;
         _automationTimer = new System.Timers.Timer(60000); // Check every minute
-        _automationTimer.Elapsed += async (s, e) => await RunAutomationChecksAsync();
+        _scheduleRun = new();
+        var token = _scheduleRun.Token;
+        _automationTimer.Elapsed += async (s, e) =>
+        {
+            try { await RunAutomationChecksAsync(token); }
+            catch (OperationCanceledException) { }
+            catch { Console.WriteLine("[EVENTS] Draft check failed; schedules retained. No external actions performed."); }
+        };
         _automationTimer.AutoReset = true;
         _automationTimer.Start();
         Console.WriteLine("[EVENTS] Automation service started.");
@@ -149,10 +161,15 @@ public class CalendarEventService : ICalendarEventService
     
     public void StopAutomationService()
     {
+        _scheduleRun?.Cancel();
+        _scheduleRun?.Dispose();
+        _scheduleRun = null;
         _automationTimer?.Stop();
         _automationTimer?.Dispose();
         _automationTimer = null;
     }
+
+    public void Dispose() => StopAutomationService();
 
     private void Load()
     {
@@ -176,6 +193,7 @@ public class CalendarEventService : ICalendarEventService
         }
         catch (Exception ex)
         {
+            _loadFailed = true;
             Console.WriteLine($"[EVENTS] Failed to load: {ex.Message}");
             _events ??= new();
             _templates ??= new();
@@ -185,16 +203,10 @@ public class CalendarEventService : ICalendarEventService
 
     private void Save()
     {
-        try
-        {
-            File.WriteAllText(_eventPath, JsonSerializer.Serialize(_events, _jsonOptions));
-            File.WriteAllText(_templatePath, JsonSerializer.Serialize(_templates, _jsonOptions));
-            File.WriteAllText(_automationPath, JsonSerializer.Serialize(_automationRules, _jsonOptions));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[EVENTS] Failed to save: {ex.Message}");
-        }
+        if (_loadFailed) throw new InvalidDataException("Schedule data could not be loaded; refusing to overwrite existing files.");
+        AtomicWrite(_eventPath, JsonSerializer.Serialize(_events, _jsonOptions));
+        AtomicWrite(_templatePath, JsonSerializer.Serialize(_templates, _jsonOptions));
+        AtomicWrite(_automationPath, JsonSerializer.Serialize(_automationRules, _jsonOptions));
     }
 
     public Task<IReadOnlyList<CalendarEvent>> GetEventsAsync()
@@ -351,88 +363,74 @@ public class CalendarEventService : ICalendarEventService
         return Task.CompletedTask;
     }
 
-    public async Task RunAutomationChecksAsync()
+    // Scheduling only prepares drafts; publication always requires separate per-item approval.
+    public async Task RunAutomationChecksAsync(System.Threading.CancellationToken cancellation = default)
     {
-        var now = DateTime.UtcNow;
-        var modified = false;
-
-        foreach (var rule in _automationRules.Where(r => r.Enabled))
+        await _scheduleGate.WaitAsync(cancellation);
+        try
         {
+            cancellation.ThrowIfCancellationRequested();
+            using var fileLock = new FileStream(_pendingPath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            var now = _utcNow();
+            var pending = ReadPendingPosts();
+            foreach (var rule in _automationRules.Where(r => r.Enabled))
             foreach (var evt in _events)
             {
-                // Skip if rule already executed for this event
-                evt.ExecutedRuleIds ??= new List<Guid>();
-                if (evt.ExecutedRuleIds.Contains(rule.Id)) continue;
-                
-                // Group Filter
-                if (!string.IsNullOrEmpty(rule.FilterGroupId))
-                {
-                   if (evt.GroupId != rule.FilterGroupId) continue;
-                }
-
-                bool trigger = false;
-                if (rule.TriggerType == AutomationTriggerType.BeforeEventStart)
-                {
-                    // Target Time: StartTime - Offset
-                    // If Now >= TargetTime && StartTime > Now (roughly)
-                    var targetTime = evt.StartTime.ToUniversalTime() - rule.TimeOffset;
-                    if (now >= targetTime && evt.StartTime.ToUniversalTime() > now)
-                    {
-                        // Check if we are within a reasonable window (not too late)
-                        // Should be executed once when the time comes
-                        trigger = true;
-                    }
-                }
-                else if (rule.TriggerType == AutomationTriggerType.AfterEventEnd)
-                {
-                    // Target Time: EndTime + Offset
-                    var targetTime = evt.EndTime.ToUniversalTime() + rule.TimeOffset;
-                    if (now >= targetTime)
-                    {
-                        trigger = true;
-                    }
-                }
-
-                if (trigger)
-                {
-                     try
-                     {
-                         Console.WriteLine($"[AUTOMATION] Executing rule '{rule.Name}' for event '{evt.Name}'");
-                         
-                         // Post Announcement
-                         if (!string.IsNullOrWhiteSpace(rule.PostTitle) && !string.IsNullOrWhiteSpace(rule.PostBody))
-                         {
-                             // Replace variables
-                             var title = rule.PostTitle.Replace("{EventName}", evt.Name)
-                                                       .Replace("{StartTime}", evt.StartTime.ToString("g"));
-                             var body = rule.PostBody.Replace("{EventName}", evt.Name)
-                                                     .Replace("{Description}", evt.Description);
-                             
-                             if (!string.IsNullOrEmpty(evt.GroupId))
-                             {
-                                 await _apiService.CreateGroupPostAsync(evt.GroupId, title, body, null, "public", rule.SendToDiscord, rule.PostImageId);
-                             }
-
-                             if (rule.SendToDiscord)
-                             {
-                                 await _discordService.SendMessageAsync(title, body, 0x3498DB);
-                             }
-                         }
-
-                         evt.ExecutedRuleIds.Add(rule.Id);
-                         modified = true;
-                     }
-                     catch (Exception ex)
-                     {
-                         Console.WriteLine($"[AUTOMATION] Error executing rule: {ex.Message}");
-                     }
-                }
+                if (string.IsNullOrWhiteSpace(evt.GroupId) ||
+                    (!string.IsNullOrEmpty(rule.FilterGroupId) && rule.FilterGroupId != evt.GroupId) ||
+                    (evt.ExecutedRuleIds?.Contains(rule.Id) ?? false)) continue;
+                if (!ScheduleTime.TryUtc(evt.StartTime, evt.TimeZoneId, out var start) ||
+                    !ScheduleTime.TryUtc(evt.EndTime, evt.TimeZoneId, out var end) || end <= start) continue;
+                var due = rule.TriggerType == AutomationTriggerType.BeforeEventStart
+                    ? start - rule.TimeOffset : end + rule.TimeOffset;
+                if (now < due || now - due > TimeSpan.FromHours(24) ||
+                    (rule.TriggerType == AutomationTriggerType.BeforeEventStart && now >= start)) continue;
+                var key = $"{evt.Id}:{rule.Id}";
+                if (pending.Any(p => p.Key == key)) continue;
+                if (string.IsNullOrWhiteSpace(rule.PostTitle) || string.IsNullOrWhiteSpace(rule.PostBody)) continue;
+                pending.Add(new ScheduledPostDraft(key, evt.GroupId,
+                    rule.PostTitle.Replace("{EventName}", evt.Name).Replace("{StartTime}", evt.StartTime.ToString("g")),
+                    rule.PostBody.Replace("{EventName}", evt.Name).Replace("{Description}", evt.Description),
+                    rule.PostImageId, due));
             }
+            cancellation.ThrowIfCancellationRequested();
+            AtomicWrite(_pendingPath, JsonSerializer.Serialize(pending, _jsonOptions));
         }
-        
-        if (modified) Save();
+        finally { _scheduleGate.Release(); }
     }
-    
+
+    private static readonly System.Threading.SemaphoreSlim _scheduleGate = new(1, 1);
+    private string _pendingPath => _eventPath + ".pending-posts.json";
+    private List<ScheduledPostDraft> ReadPendingPosts() => File.Exists(_pendingPath)
+        ? JsonSerializer.Deserialize<List<ScheduledPostDraft>>(File.ReadAllText(_pendingPath), _jsonOptions) ?? new()
+        : new();
+    public async Task<IReadOnlyList<ScheduledPostDraft>> GetPendingPostsAsync()
+    {
+        await _scheduleGate.WaitAsync();
+        try { return ReadPendingPosts(); }
+        finally { _scheduleGate.Release(); }
+    }
+    public async Task SavePostDraftAsync(ScheduledPostDraft post)
+    {
+        if (!ApprovalPublisher.Id(post.GroupId, "grp") || string.IsNullOrWhiteSpace(post.Key)) throw new ArgumentException("Select the exact group and draft.");
+        await _scheduleGate.WaitAsync();
+        try
+        {
+            using var fileLock = new FileStream(_pendingPath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            var pending = ReadPendingPosts();
+            pending.RemoveAll(p => p.Key == post.Key && p.GroupId == post.GroupId);
+            pending.Add(post);
+            AtomicWrite(_pendingPath, JsonSerializer.Serialize(pending, _jsonOptions));
+        }
+        finally { _scheduleGate.Release(); }
+    }
+    private static void AtomicWrite(string path, string text)
+    {
+        var temp = path + "." + Guid.NewGuid() + ".tmp";
+        File.WriteAllText(temp, text);
+        File.Move(temp, path, true);
+    }
+
     public Task ExportDataAsync(string filePath)
     {
         var data = new
@@ -485,11 +483,10 @@ public class CalendarEventService : ICalendarEventService
 
     private bool GenerateRecurringEventsInternal(int daysAhead)
     {
-        var now = DateTime.Now;
-        var horizon = now.AddDays(daysAhead);
+        var utcNow = _utcNow();
         var newEvents = new List<CalendarEvent>();
 
-        foreach (var evt in _events.Where(e => e.Recurrence.Enabled))
+        foreach (var evt in _events.Where(e => e.Recurrence?.Enabled == true))
         {
             var rec = evt.Recurrence ?? new RecurrenceOptions();
             rec.Type ??= "None";
@@ -503,29 +500,38 @@ public class CalendarEventService : ICalendarEventService
             // Ensure timezone consistency - base recurring generation on StartTime's local time logic
             // or explicit standard? We'll assume StartTime is the "base" local time for the recurrence.
             
-            var duration = evt.EndTime - evt.StartTime;
-            var baseTime = evt.StartTime.TimeOfDay;
-            var startFloor = evt.StartTime > now ? evt.StartTime : now;
+            TimeZoneInfo zone;
+            try { zone = TimeZoneInfo.FindSystemTimeZoneById(evt.TimeZoneId); }
+            catch (TimeZoneNotFoundException) { continue; }
+            catch (InvalidTimeZoneException) { continue; }
+            var now = TimeZoneInfo.ConvertTimeFromUtc(utcNow, zone);
+            var horizon = now.AddDays(Math.Clamp(daysAhead, 0, 366));
+            var baseStart = evt.StartTime.Kind == DateTimeKind.Utc ? TimeZoneInfo.ConvertTimeFromUtc(evt.StartTime, zone) : DateTime.SpecifyKind(evt.StartTime, DateTimeKind.Unspecified);
+            var baseEnd = evt.EndTime.Kind == DateTimeKind.Utc ? TimeZoneInfo.ConvertTimeFromUtc(evt.EndTime, zone) : DateTime.SpecifyKind(evt.EndTime, DateTimeKind.Unspecified);
+            var duration = baseEnd - baseStart;
+            var baseTime = baseStart.TimeOfDay;
+            var startFloor = baseStart > now ? baseStart : now;
 
             IEnumerable<DateTime> occurrences = rec.Type switch
             {
                 "Weekly" => GetWeeklyOccurrences(rec, startFloor, horizon, baseTime),
                 "Monthly" => GetMonthlyOccurrences(rec, startFloor, horizon, baseTime),
                 "SpecificDates" => GetSpecificDateOccurrences(rec, startFloor, horizon, baseTime),
-                _ => GetLegacyIntervalOccurrences(evt.StartTime, rec, horizon)
+                _ => GetLegacyIntervalOccurrences(baseStart, rec, horizon)
             };
 
             foreach (var nextStart in occurrences)
             {
-                if (nextStart <= evt.StartTime) continue; // avoid duplicating the original
+                if (nextStart <= baseStart || nextStart < startFloor || nextStart > horizon) continue;
                 
                 // Do not create duplicates
-                if (_events.Any(e => e.StartTime == nextStart && e.Name == evt.Name))
+                if (_events.Concat(newEvents).Any(e => e.StartTime == nextStart && e.Name == evt.Name && e.GroupId == evt.GroupId && e.TimeZoneId == evt.TimeZoneId))
                 {
                     continue;
                 }
                 
                 var nextEnd = nextStart.Add(duration);
+                if (!ScheduleTime.TryUtc(nextStart, evt.TimeZoneId, out _) || !ScheduleTime.TryUtc(nextEnd, evt.TimeZoneId, out _)) continue;
 
                 newEvents.Add(new CalendarEvent
                 {
@@ -545,7 +551,7 @@ public class CalendarEventService : ICalendarEventService
                     Followed = evt.Followed,
                     StartTime = nextStart,
                     EndTime = nextEnd,
-                    Recurrence = CloneRecurrence(evt.Recurrence)
+                    Recurrence = new RecurrenceOptions { Enabled = false }
                 });
             }
         }

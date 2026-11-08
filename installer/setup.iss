@@ -2,7 +2,7 @@
 ; Download Inno Setup from: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "VRC Group Tools"
-#define MyAppVersion "1.1.18"
+#define MyAppVersion "1.1.21"
 #define MyAppPublisher "VRCGT"
 #define MyAppURL "https://github.com/0xE69/VRCGT"
 #define MyAppExeName "VRCGroupTools.exe"
@@ -21,7 +21,7 @@ AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir=Output
 OutputBaseFilename=VRCGroupTools_Setup_{#MyAppVersion}
-SetupIconFile=..\src\Resources\app.ico
+SetupIconFile=..\src\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

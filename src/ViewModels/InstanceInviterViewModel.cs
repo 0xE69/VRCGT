@@ -15,7 +15,7 @@ using VRCGroupTools.Services;
 
 namespace VRCGroupTools.ViewModels;
 
-public partial class InstanceInviterViewModel : ObservableObject
+public partial class InstanceInviterViewModel : ObservableObject, IDisposable
 {
     private readonly IVRChatApiService _apiService;
     private readonly ISettingsService _settingsService;
@@ -89,12 +89,13 @@ public partial class InstanceInviterViewModel : ObservableObject
         IVRChatApiService apiService, 
         ISettingsService settingsService,
         IInstanceInviterService instanceInviterService,
-        ICacheService cacheService)
+        ICacheService cacheService, GroupInviteLedger? inviteLedger = null)
     {
         _apiService = apiService;
         _settingsService = settingsService;
         _instanceInviterService = instanceInviterService;
         _cacheService = cacheService;
+        _inviteLedger = inviteLedger ?? new GroupInviteLedger();
         
         _currentInstanceDisplay = "Click refresh to detect current instance";
 
@@ -105,10 +106,13 @@ public partial class InstanceInviterViewModel : ObservableObject
     partial void OnSearchQueryChanged(string value)
     {
         ApplyFilters();
+        ApplyInstanceUserFilters();
+        StopAutoInvite();
     }
 
     partial void OnOnly18PlusChanged(bool value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review and explicitly enable again.");
         _settingsService.Settings.InstanceInviterOnly18Plus = value;
         _settingsService.Save();
         ApplyFilters();
@@ -117,36 +121,42 @@ public partial class InstanceInviterViewModel : ObservableObject
 
     partial void OnSkipVisitorsChanged(bool value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review filters and explicitly enable again.");
         ApplyFilters();
         ApplyInstanceUserFilters();
     }
     
     partial void OnSkipNewUsersChanged(bool value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review filters and explicitly enable again.");
         ApplyFilters();
         ApplyInstanceUserFilters();
     }
     
     partial void OnSkipUsersChanged(bool value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review filters and explicitly enable again.");
         ApplyFilters();
         ApplyInstanceUserFilters();
     }
     
     partial void OnSkipKnownChanged(bool value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review filters and explicitly enable again.");
         ApplyFilters();
         ApplyInstanceUserFilters();
     }
 
     partial void OnSkipJustJoinedChanged(bool value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review filters and explicitly enable again.");
         ApplyFilters();
         ApplyInstanceUserFilters();
     }
 
     partial void OnMinInstanceTimeSecondsChanged(int value)
     {
+        StopAutoInvite("Auto Invite off: filters changed. Review filters and explicitly enable again.");
         ApplyFilters();
         ApplyInstanceUserFilters();
     }
@@ -161,6 +171,7 @@ public partial class InstanceInviterViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        StopAutoInvite("Auto Invite off: manual refresh. Review and explicitly enable again.");
         Console.WriteLine("[INSTANCE-VM] RefreshAsync started");
         await LoadFriendsAsync();
         Console.WriteLine("[INSTANCE-VM] Calling UpdateCurrentInstance...");
@@ -255,11 +266,19 @@ public partial class InstanceInviterViewModel : ObservableObject
     {
         try
         {
+            var group = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
+            if (!string.IsNullOrWhiteSpace(group)) await LoadLocalEligibilityAsync(group);
             var users = await _instanceInviterService.GetCurrentInstanceUsersAsync(_apiService);
+            // Explicit manual refresh resolves only NEW eligible IDs whose enabled filters need metadata.
+            // Auto polling uses its separate one-new-lookup-per-cycle budget; neither path re-fetches unchanged users.
+            if (NeedsFilterDetails)
+                foreach (var user in users.Where(u => BasicEligibility(u, false)))
+                    await ResolveFilterDetailsAsync(user);
             InstanceUsers.Clear();
             foreach (var user in users)
             {
-                InstanceUsers.Add(new InstanceUserViewModel(user, this));
+                ApplyKnownDetails(user);
+                InstanceUsers.Add(new InstanceUserViewModel(user, this) { GroupInviteResult = $"{GroupInviteEligibility.Membership(user.UserId, _membership)} · {_history.GetValueOrDefault(user.UserId)}" });
             }
             
             // Apply filters to instance users
@@ -268,18 +287,7 @@ public partial class InstanceInviterViewModel : ObservableObject
             // Refresh filters to exclude instance users from friend list
             ApplyFilters();
             
-            // Auto-invite if enabled
-            if (AutoInviteEnabled && FilteredInstanceUsers.Count > 0)
-            {
-                // Select all filtered users for auto-invite
-                foreach (var user in FilteredInstanceUsers)
-                {
-                    user.IsSelected = true;
-                }
-                UpdateInstanceUserSelectedCount();
-                
-                _ = InviteInstanceUsersInternal(true);
-            }
+            // Loading only discovers users. Sending always requires manual selection and confirmation.
         }
         catch (Exception ex)
         {
@@ -293,6 +301,7 @@ public partial class InstanceInviterViewModel : ObservableObject
 
         var filtered = InstanceUsers.Where(u =>
         {
+            if (!string.IsNullOrWhiteSpace(SearchQuery) && !u.User.DisplayName.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) && !u.User.UserId.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return false;
             // Apply 18+ filter
             if (Only18Plus && !u.User.IsAgeVerified)
                 return false;
@@ -310,7 +319,7 @@ public partial class InstanceInviterViewModel : ObservableObject
             if (SkipJustJoined)
             {
                 var duration = DateTime.Now - u.User.JoinTime;
-                if (u.User.JoinTime != DateTime.MinValue && duration.TotalSeconds < MinInstanceTimeSeconds)
+                if (MinInstanceTimeSeconds < 0 || u.User.JoinTime == DateTime.MinValue || duration.TotalSeconds < MinInstanceTimeSeconds)
                     return false;
             }
 
@@ -503,7 +512,7 @@ public partial class InstanceInviterViewModel : ObservableObject
     {
         foreach (var user in FilteredInstanceUsers)
         {
-            user.IsSelected = true;
+            user.IsSelected = BasicEligibility(user.User, false) && PassDetailFilters(user.User);
         }
         UpdateInstanceUserSelectedCount();
     }
@@ -531,7 +540,12 @@ public partial class InstanceInviterViewModel : ObservableObject
 
     private async Task InviteInstanceUsersInternal(bool silent)
     {
-        var selectedUsers = InstanceUsers.Where(u => u.IsSelected).ToList();
+        if (IsLoading) return;
+        StopAutoInvite("Auto Invite off: manual invitation batch started.");
+        var activeGroup = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
+        if (string.IsNullOrWhiteSpace(activeGroup)) return;
+        await LoadLocalEligibilityAsync(activeGroup);
+        var selectedUsers = FilteredInstanceUsers.Where(u => u.IsSelected && BasicEligibility(u.User, false) && PassDetailFilters(u.User)).ToList();
         if (selectedUsers.Count == 0)
         {
             if (!silent)
@@ -540,7 +554,7 @@ public partial class InstanceInviterViewModel : ObservableObject
         }
 
         // Get the current group ID from settings
-        var groupId = _settingsService.Settings.GroupId;
+        var groupId = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
         if (string.IsNullOrEmpty(groupId))
         {
             if (!silent)
@@ -576,18 +590,26 @@ public partial class InstanceInviterViewModel : ObservableObject
             return;
         }
 
+        var confirmedContext = ReadAutoContext();
+        if (confirmedContext == null || confirmedContext.GroupId != groupId) return;
+        if (!GroupInvitePresentation.Confirm(groupId, selectedUsers.Select(u => $"{u.User.DisplayName} ({u.User.UserId})"))) return;
+        if (ReadAutoContext() != confirmedContext) return;
         try
         {
             IsLoading = true;
             var successCount = 0;
             var failCount = 0;
+            var suppressedCount = 0;
 
             foreach (var userVM in selectedUsers)
             {
                 StatusMessage = $"Inviting {userVM.User.DisplayName} to group...";
 
                 // Invite to group using group ID
-                var success = await _apiService.SendGroupInviteAsync(groupId, userVM.User.UserId);
+                var outcome = await _apiService.SendTrackedAsync(groupId, userVM.User.UserId, () => ReadAutoContext() == confirmedContext && BasicEligibility(userVM.User, false, claimed: true) && PassDetailFilters(userVM.User));
+                userVM.GroupInviteResult = outcome.Message;
+                if (!outcome.Sent && outcome.State != GroupInviteState.Failed) { suppressedCount++; userVM.IsSelected = false; continue; }
+                var success = outcome.Sent;
 
                 if (success)
                 {
@@ -604,9 +626,8 @@ public partial class InstanceInviterViewModel : ObservableObject
                 await Task.Delay(delay);
             }
 
-            StatusMessage = $"Invites sent: {successCount} succeeded, {failCount} failed";
-            if (!silent)
-                MessageBox.Show($"Sent {successCount} group invites successfully.\n{failCount} failed.", "Invites Sent", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusMessage = $"Invites: {successCount} sent, {failCount} rejected, {suppressedCount} suppressed/unknown. See row status and Game Log history.";
+            if (!silent) MessageBox.Show(StatusMessage, "Group invitations", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -720,7 +741,9 @@ public partial class InstanceUserViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    [ObservableProperty] private string? _groupInviteResult;
     public InstanceUser User { get; }
+    public bool CanInvite => _parent.CanSelectInstanceUser(User);
 
     public InstanceUserViewModel(InstanceUser user, InstanceInviterViewModel parent)
     {

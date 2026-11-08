@@ -24,8 +24,13 @@ public interface IVRChatApiService
     Task<List<GroupBanEntry>> GetGroupBansAsync(string groupId, Action<int, int>? progressCallback = null);
     Task<GroupInfo?> GetGroupAsync(string groupId);
     Task<bool> SendGroupInviteAsync(string groupId, string userId);
+    Task<bool> SendGroupInviteGuardedAsync(string groupId, string userId, Func<bool> canSend) => SendGroupInviteAsync(groupId, userId);
+    long InvitationSession => 0;
+    Task<bool> SendAutomaticGroupInviteAsync(string groupId, string userId, Func<bool> canSend, CancellationToken cancellationToken) => throw new NotSupportedException("Automatic guarded invitations unavailable");
     Task<GroupPostResult?> CreateGroupPostAsync(string groupId, string title, string text, IEnumerable<string>? roleIds = null, string visibility = "public", bool sendNotification = true, string? imageId = null);
     Task<UserDetails?> GetUserAsync(string userId);
+    Task<UserPresence?> GetUserPresenceAsync(string userId, Func<bool> canRead, CancellationToken cancellationToken) => Task.FromResult<UserPresence?>(null);
+    Task<UserDetails?> LookupUserByIdAsync(string userId) => GetUserAsync(userId);
     Task<List<UserSearchResult>> SearchUsersAsync(string query);
     Task<WorldInfo?> GetWorldAsync(string worldId);
     Task<List<WorldInfo>> SearchWorldsAsync(string query, int n = 20, int offset = 0, string sort = "relevance");
@@ -64,6 +69,7 @@ public interface IVRChatApiService
     Task<List<FriendInfo>> GetFriendsAsync(bool onlineOnly = false, int n = 100, int offset = 0);
     Task<InstanceDetails?> GetInstanceAsync(string worldId, string instanceId);
     Task<bool> InviteUserToInstanceAsync(string userId, string worldId, string instanceId);
+    Task<bool> InviteUserToInstanceGuardedAsync(string userId, string worldId, string instanceId, Func<bool> canSend);
     Task<List<GroupJoinRequest>> GetGroupJoinRequestsAsync(string groupId);
     Task<bool> RespondToGroupJoinRequestAsync(string groupId, string userId, string action);
     Task<List<GroupInstanceDetails>> GetGroupInstancesAsync(string groupId);
@@ -156,7 +162,7 @@ public class GroupPost
     public DateTime? UpdatedAt { get; set; }
 }
 
-public class VRChatApiService : IVRChatApiService
+public partial class VRChatApiService : IVRChatApiService
 {
     private const string BaseUrl = "https://api.vrchat.cloud/api/1";
     private const string ApiKey = "JlE5Jldo5Jibnk5O5hTx6XVqsJu4WJ26";
@@ -170,11 +176,13 @@ public class VRChatApiService : IVRChatApiService
     private string? _twoFactorToken;
     private DateTime _lastRequestTime = DateTime.MinValue;
 
-    public bool IsLoggedIn { get; private set; }
+    private bool _isLoggedIn;
+    public bool IsLoggedIn { get => _isLoggedIn; private set { _isLoggedIn = value; Interlocked.Increment(ref _publicationSession); } }
     public string? CurrentUserId { get; private set; }
     public string? CurrentUserDisplayName { get; private set; }
     public string? CurrentUserProfilePicUrl { get; private set; }
-    public string? CurrentGroupId { get; set; }
+    private string? _currentGroupId;
+    public string? CurrentGroupId { get => _currentGroupId; set { if (_currentGroupId != value) { _currentGroupId = value; Interlocked.Increment(ref _publicationSession); } } }
 
     public VRChatApiService()
     {
@@ -183,6 +191,7 @@ public class VRChatApiService : IVRChatApiService
         {
             CookieContainer = _cookieContainer,
             UseCookies = true,
+            AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
         };
 
@@ -192,8 +201,25 @@ public class VRChatApiService : IVRChatApiService
         };
 
         // VRChat requires a proper User-Agent
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "VRCGT/1.0.1 (https://github.com/VRCGT)");
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", $"VRCGT/{App.Version} (https://github.com/RE-LITY/VRCGT)");
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+    }
+
+    /// <summary>Transport injection for deterministic, network-free verification.</summary>
+    public VRChatApiService(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+        _cookieContainer = new CookieContainer();
+    }
+
+    private readonly GroupInviteLedger _groupInviteLedger = new();
+    private readonly SemaphoreSlim _groupInviteDispatchGate = new(1, 1);
+    private long _groupInviteRetryAfterTicks;
+    public DateTimeOffset GroupInviteRetryAfterUtc => new(Interlocked.Read(ref _groupInviteRetryAfterTicks), TimeSpan.Zero);
+
+    public VRChatApiService(HttpClient httpClient, GroupInviteLedger ledger) : this(httpClient)
+    {
+        _groupInviteLedger = ledger;
     }
 
     private async Task RateLimitAsync()
@@ -257,7 +283,8 @@ public class VRChatApiService : IVRChatApiService
     }
 
     public async Task<LoginResult> LoginAsync(string username, string password)
-    {
+        {
+            IsLoggedIn = false; // Invalidate every pending publication before changing authentication.
         Console.WriteLine($"[API] LoginAsync called for user: {username}");
         
         try
@@ -435,6 +462,8 @@ public class VRChatApiService : IVRChatApiService
         const int limit = 100;
         int total = 0;
         int transientFailures = 0;
+        bool complete = false;
+        var snapshotAccountId = CurrentUserId;
 
         try
         {
@@ -476,8 +505,8 @@ public class VRChatApiService : IVRChatApiService
                 var content = await response.Content.ReadAsStringAsync();
                 var data = JsonConvert.DeserializeObject<List<JObject>>(content);
 
-                if (data == null || data.Count == 0)
-                    break;
+                if (data == null) throw new InvalidDataException("Invalid member list");
+                if (data.Count == 0) { complete = true; break; }
 
                 foreach (var memberData in data)
                 {
@@ -495,8 +524,7 @@ public class VRChatApiService : IVRChatApiService
                 progressCallback?.Invoke(total, -1); // -1 means unknown total
                 Console.WriteLine($"[MEMBERS] Fetched {data.Count} members (total so far: {total})");
 
-                if (data.Count < limit)
-                    break;
+                if (data.Count < limit) { complete = true; break; }
 
                 offset += limit;
             }
@@ -506,6 +534,7 @@ public class VRChatApiService : IVRChatApiService
             Console.WriteLine($"[MEMBERS] Exception: {ex.Message}");
         }
 
+        await _groupInviteLedger.SaveMembershipAsync(new(groupId, members.Select(m => m.UserId).ToHashSet(StringComparer.Ordinal), DateTime.UtcNow, complete && CurrentUserId == snapshotAccountId, snapshotAccountId));
         return members;
     }
 
@@ -838,6 +867,19 @@ public class VRChatApiService : IVRChatApiService
         return manageableGroups;
     }
 
+    /// <summary>Moderation identity lookup: only a 404 means not found; all other failures remain errors.</summary>
+    public async Task<UserDetails?> LookupUserByIdAsync(string userId)
+    {
+        if (ModerationUserSearch.UserId(userId) != userId) throw new ArgumentException("Expected exact usr_<UUID>");
+        await RateLimitAsync();
+        using var response = await _httpClient.GetAsync($"users/{userId}?apiKey={ApiKey}");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        var data = JsonConvert.DeserializeObject<JObject>(await response.Content.ReadAsStringAsync()) ?? throw new InvalidDataException("Invalid user response");
+        if (!string.Equals(data["id"]?.ToString(), userId, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Unexpected user identity");
+        return new() { UserId = userId, DisplayName = data["displayName"]?.ToString() ?? userId, ProfilePicUrl = data["userIcon"]?.ToString() ?? data["currentAvatarThumbnailImageUrl"]?.ToString(), Bio = data["bio"]?.ToString(), Tags = data["tags"]?.ToObject<List<string>>() ?? new() };
+    }
+
     public async Task<UserDetails?> GetUserAsync(string userId)
     {
         try
@@ -1010,46 +1052,62 @@ public class VRChatApiService : IVRChatApiService
         }
     }
 
-    public async Task<bool> SendGroupInviteAsync(string groupId, string userId)
+    public Task<bool> SendGroupInviteAsync(string groupId, string userId) => SendGroupInviteGuardedAsync(groupId, userId, () => true);
+
+    public long InvitationSession => Interlocked.Read(ref _publicationSession);
+    public Task<bool> SendGroupInviteGuardedAsync(string groupId, string userId, Func<bool> canSend) => SendGroupInviteCoreAsync(groupId, userId, canSend, false, CancellationToken.None);
+    public Task<bool> SendAutomaticGroupInviteAsync(string groupId, string userId, Func<bool> canSend, CancellationToken cancellationToken) => SendGroupInviteCoreAsync(groupId, userId, canSend, true, cancellationToken);
+    private async Task<bool> SendGroupInviteCoreAsync(string groupId, string userId, Func<bool> canSend, bool automatic, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(groupId) || string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("Group and recipient are required");
+        var actingUserId = CurrentUserId;
+        // Claim before pacing/dispatch. Storage failure fails closed without touching the API.
+        if (!(automatic ? await _groupInviteLedger.TryClaimAutomaticAsync(groupId, userId) : await _groupInviteLedger.TryClaimAsync(groupId, userId)))
+            throw new GroupInviteSuppressedException(await _groupInviteLedger.GetStateAsync(groupId, userId));
+        var outcome = GroupInviteState.Unknown;
+        var dispatched = false;
+        var gateHeld = false;
         try
         {
-            var payload = new { userId };
-
-            for (var attempt = 1; attempt <= 3; attempt++)
+            await _groupInviteDispatchGate.WaitAsync(cancellationToken);
+            gateHeld = true;
+            var backoff = GroupInviteRetryAfterUtc - DateTimeOffset.UtcNow;
+            if (backoff > TimeSpan.Zero) await Task.Delay(backoff, cancellationToken);
+            await RateLimitAsync();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"groups/{groupId}/invites?apiKey={ApiKey}")
             {
-                await RateLimitAsync();
-                var inviteUrl = $"groups/{groupId}/invites?apiKey={ApiKey}";
-                var response = await SendJsonAsync(HttpMethod.Post, inviteUrl, payload);
-                var content = await response.Content.ReadAsStringAsync();
-                LogHttp("GROUP-INVITE", inviteUrl, response, content);
-                Console.WriteLine($"[GROUP-INVITE] Status: {response.StatusCode}");
-
-                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                {
-                    var retryAfter = response.Headers.RetryAfter?.Delta?.TotalSeconds;
-                    var delaySeconds = retryAfter.HasValue ? Math.Max(1, (int)retryAfter.Value) : 30;
-                    Console.WriteLine($"[GROUP-INVITE] Rate limited. Waiting {delaySeconds}s before retry (attempt {attempt}/3)...");
-                    await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-                    continue;
-                }
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"[GROUP-INVITE] Error: {content}");
-                    return false;
-                }
-
-                return true;
+                Content = new StringContent(JsonConvert.SerializeObject(new { userId }), Encoding.UTF8, "application/json")
+            };
+            if (cancellationToken.IsCancellationRequested || !canSend() || CurrentUserId != actingUserId)
+            {
+                await _groupInviteLedger.CompleteAsync(groupId, userId, GroupInviteState.NotSent);
+                throw new GroupInviteSuppressedException(GroupInviteState.NotSent);
             }
-
-            return false;
+            dispatched = true;
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var until = response.Headers.RetryAfter?.Date
+                    ?? DateTimeOffset.UtcNow + (response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(1));
+                Interlocked.Exchange(ref _groupInviteRetryAfterTicks, until.UtcTicks);
+            }
+            // 5xx/408 can follow a server-side write: never automatically retry these.
+            outcome = response.IsSuccessStatusCode ? GroupInviteState.Sent
+                : response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.TooManyRequests
+                    ? GroupInviteState.Failed : GroupInviteState.Unknown;
         }
-        catch (Exception ex)
+        catch (GroupInviteSuppressedException) { throw; }
+        catch (Exception)
         {
-            Console.WriteLine($"[GROUP-INVITE] Exception: {ex.Message}");
-            return false;
+            // Only a dispatched timeout/disconnect is uncertain. Cancellation during pacing is proven NotSent.
+            outcome = dispatched ? GroupInviteState.Unknown : GroupInviteState.NotSent;
         }
+        finally { if (gateHeld) _groupInviteDispatchGate.Release(); }
+        try { await _groupInviteLedger.CompleteAsync(groupId, userId, outcome); }
+        catch (Exception) { throw new GroupInviteSuppressedException(GroupInviteState.InFlight); } // Durable claim remains; never label an accepted/uncertain write as rejected.
+        if (outcome == GroupInviteState.Unknown) throw new GroupInviteSuppressedException(outcome);
+        if (outcome == GroupInviteState.NotSent) throw new GroupInviteSuppressedException(outcome);
+        return outcome == GroupInviteState.Sent;
     }
 
     public async Task<GroupPostResult?> CreateGroupPostAsync(string groupId, string title, string text, IEnumerable<string>? roleIds = null, string visibility = "public", bool sendNotification = true, string? imageId = null)
@@ -1891,7 +1949,8 @@ public class VRChatApiService : IVRChatApiService
     }
 
     public async Task<LoginResult> RestoreSessionAsync(string authCookie, string? twoFactorCookie)
-    {
+        {
+            IsLoggedIn = false; // Restoring/replacing cookies invalidates pending approvals first.
         try
         {
             Console.WriteLine("[API] Attempting to restore session from cached cookies");
@@ -2110,6 +2169,20 @@ public class VRChatApiService : IVRChatApiService
             Console.WriteLine($"[INSTANCE-API] Exception: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>The guard runs after API pacing, immediately before HTTP dispatch. Exceptions imply an unknown outcome.</summary>
+    public async Task<bool> InviteUserToInstanceGuardedAsync(string userId, string worldId, string instanceId, Func<bool> canSend)
+    {
+        await RateLimitAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"invite/{userId}?apiKey={ApiKey}")
+        {
+            Content = new StringContent(JsonConvert.SerializeObject(new { instanceId = $"{worldId}:{instanceId}" }), Encoding.UTF8, "application/json")
+        };
+        if (!canSend()) throw new InstanceInviteNotSentException();
+        using var response = await _httpClient.SendAsync(request);
+        // Do not log bodies or exception messages: they may contain a private location or token.
+        return response.IsSuccessStatusCode;
     }
 
     public async Task<bool> InviteUserToInstanceAsync(string userId, string worldId, string instanceId)

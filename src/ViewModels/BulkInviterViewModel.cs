@@ -17,7 +17,7 @@ namespace VRCGroupTools.ViewModels;
 
 /// <summary>
 /// Bulk group inviter: paste a text list of VRChat user IDs (one per line) and send
-/// group invites in one run. Dedupes against the built-in InvitedUsers database and
+/// group invites in one run. Dedupes against the shared exact-group invitation ledger and
 /// applies the same trust-level / 18+ filters used by the Instance Inviter
 /// (new users / users / known users / non-18+).
 /// </summary>
@@ -100,6 +100,7 @@ public partial class BulkInviterViewModel : ObservableObject
             return;
         }
 
+        if (!GroupInvitePresentation.Confirm(groupId, userIds)) { StatusText = "Cancelled"; return; }
         IsRunning = true;
         Results.Clear();
         InvitedCount = 0;
@@ -111,18 +112,8 @@ public partial class BulkInviterViewModel : ObservableObject
 
         try
         {
-            using var db = new AppDbContext();
-
-            // Pre-load the set of IDs already in the InvitedUsers DB (global, by UserId).
-            var alreadyInvitedSet = new HashSet<string>();
-            if (SkipAlreadyInvited)
-            {
-                var existing = await db.InvitedUsers
-                    .Where(u => userIds.Contains(u.UserId))
-                    .Select(u => u.UserId)
-                    .ToListAsync();
-                alreadyInvitedSet = new HashSet<string>(existing, StringComparer.Ordinal);
-            }
+            var ledger = new GroupInviteLedger();
+            var priorInvites = (await ledger.ReadAsync(groupId)).ToDictionary(r => r.UserId, r => r.State, StringComparer.Ordinal);
 
             foreach (var userId in userIds)
             {
@@ -130,6 +121,13 @@ public partial class BulkInviterViewModel : ObservableObject
 
                 try
                 {
+                    if (_mainViewModel.GroupId != groupId) { StatusText = "Group changed; remaining recipients not sent."; break; }
+                    if (priorInvites.TryGetValue(userId, out var prior) && prior is GroupInviteState.Sent or GroupInviteState.InFlight or GroupInviteState.Unknown)
+                    {
+                        MarkSkipped(result, $"Local history: {prior}. No HTTP sent. Pending/unknown must be checked in VRChat.");
+                        Results.Add(result);
+                        continue;
+                    }
                     var profile = await _apiService.GetUserAsync(userId);
                     if (profile == null)
                     {
@@ -148,13 +146,7 @@ public partial class BulkInviterViewModel : ObservableObject
                     result.IsAgeVerified = profile.IsAgeVerified;
 
                     // ---- Skip checks (order matters; first match wins) ----
-                    if (SkipAlreadyInvited && alreadyInvitedSet.Contains(userId))
-                    {
-                        MarkSkipped(result, "Already invited (database).");
-                        Results.Add(result);
-                        await Task.Delay(150);
-                        continue;
-                    }
+
 
                     if (Only18Plus && !profile.IsAgeVerified)
                     {
@@ -190,27 +182,13 @@ public partial class BulkInviterViewModel : ObservableObject
 
                     // ---- Send the invite ----
                     StatusText = $"Inviting {profile.DisplayName} ({userId})...";
-                    var ok = await _apiService.SendGroupInviteAsync(groupId, userId);
-
-                    result.InviteSuccessful = ok;
-                    result.Outcome = ok ? "Invited" : "Failed";
-                    result.Detail = ok ? "Invite sent." : "Invite failed (rate-limited or rejected).";
-                    if (ok) InvitedCount++; else FailedCount++;
-
-                    // Record in the built-in DB so a future run skips this user.
-                    var record = new InvitedUser
-                    {
-                        UserId = userId,
-                        DisplayName = profile.DisplayName,
-                        ProfilePicUrl = profile.ProfilePicUrl,
-                        IsAgeVerified = profile.IsAgeVerified,
-                        TrustLevel = trustLevel,
-                        InvitedAt = DateTime.UtcNow,
-                        InviteSuccessful = ok
-                    };
-                    db.InvitedUsers.Add(record);
-                    await db.SaveChangesAsync();
-                    alreadyInvitedSet.Add(userId);
+                    var outcome = await _apiService.SendTrackedAsync(groupId, userId, () => _mainViewModel.GroupId == groupId);
+                    result.InviteSuccessful = outcome.Sent;
+                    result.Outcome = outcome.Sent ? "Sent" : outcome.State.ToString();
+                    result.Detail = outcome.Message;
+                    if (outcome.Sent) InvitedCount++;
+                    else if (outcome.State == GroupInviteState.Failed) FailedCount++;
+                    else SkippedCount++;
                 }
                 catch (Exception ex)
                 {

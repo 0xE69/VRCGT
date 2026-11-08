@@ -23,14 +23,14 @@
                       FontSize="24" 
                       FontWeight="Bold" 
                       Foreground="White"/>
-            <TextBlock Text="Select friends to invite to your group" 
+            <TextBlock Text="Select friends to invite to your current instance or to your group"
                       Foreground="#888" 
                       FontSize="13" 
                       Margin="0,5,0,0"/>
         </StackPanel>
 
         <!-- Search and Filters -->
-        <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="15" Margin="0,0,0,10">
+        <Border Grid.Row="1" IsEnabled="{Binding CanManageFriends}" Background="#2D2D30" CornerRadius="8" Padding="15" Margin="0,0,0,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -160,6 +160,7 @@
                                         <!-- Selection Checkbox -->
                                         <CheckBox Grid.Column="0" 
                                                  IsChecked="{Binding IsSelected}"
+                                                 IsEnabled="{Binding DataContext.CanManageFriends, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                  VerticalAlignment="Center"
                                                  Margin="0,0,10,0"/>
 
@@ -200,6 +201,9 @@
                                                           Foreground="#888"
                                                           FontSize="11"/>
                                             </StackPanel>
+                                            <TextBlock Text="{Binding GroupInviteResult}" Foreground="#BBB" FontSize="11" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding InstanceInviteResult}" Foreground="#BBB"
+                                                       FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
                                         </StackPanel>
 
                                         <!-- In Group Badge -->
@@ -232,49 +236,29 @@
             </Grid>
         </Border>
 
-        <!-- Action Bar -->
-        <Border Grid.Row="3" 
-               Background="#252526" 
-               CornerRadius="8"
-               Padding="15"
-               Margin="0,10,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Selection Controls -->
-                <Button Grid.Column="0"
-                       Content="Select All" 
-                       Command="{Binding SelectAllCommand}"
-                       Style="{StaticResource MaterialDesignFlatButton}"
-                       Foreground="#7C4DFF"/>
-                <Button Grid.Column="1"
-                       Content="Deselect All" 
-                       Command="{Binding DeselectAllCommand}"
-                       Style="{StaticResource MaterialDesignFlatButton}"
-                       Foreground="#7C4DFF"/>
-
-                <!-- Selected Count -->
-                <TextBlock Grid.Column="2" 
-                          Text="{Binding SelectedCount, StringFormat='{}{0} selected'}"
-                          Foreground="#888"
-                          VerticalAlignment="Center"
-                          HorizontalAlignment="Center"
-                          FontSize="13"/>
-
-                <!-- Invite Button -->
-                <Button Grid.Column="3" 
-                       Content="📨 Invite to Group" 
-                       Command="{Binding InviteToGroupCommand}"
-                       Style="{StaticResource MaterialDesignRaisedButton}"
-                       Background="#4CAF50"
-                       Height="36"
-                       Padding="15,0"/>
-            </Grid>
+        <!-- Actions stay distinct: instance invites never depend on a configured group. -->
+        <Border Grid.Row="3" Background="#252526" CornerRadius="8" Padding="12" Margin="0,10,0,0">
+            <StackPanel>
+                <WrapPanel>
+                    <Button Content="Select All" Command="{Binding SelectAllCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="#7C4DFF"/>
+                    <Button Content="Deselect All" Command="{Binding DeselectAllCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}" Foreground="#7C4DFF"/>
+                    <TextBlock Text="{Binding SelectedCount, StringFormat='{}{0} selected (including hidden)'}"
+                               Foreground="#BBB" VerticalAlignment="Center" Margin="8"/>
+                    <Button Content="Invite to Current Instance" Command="{Binding InviteToCurrentInstanceCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}" Background="#536DFE"
+                            Height="36" Padding="15,0" Margin="4"
+                            ToolTip="Review your current destination and selected recipient count before sending. No group required."/>
+                    <Button Content="Invite to Group" Command="{Binding InviteToGroupCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}" Background="#4CAF50"
+                            Height="36" Padding="15,0" Margin="4"/>
+                    <Button Content="Cancel Instance Invites" Command="{Binding InviteToCurrentInstanceCancelCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4"
+                            ToolTip="Stop remaining invites. An in-flight invite cannot be recalled."/>
+                </WrapPanel>
+                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#BBB" Margin="4,8,4,0"/>
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>

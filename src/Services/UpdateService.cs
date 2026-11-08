@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
+using System.Text.RegularExpressions;
 using Octokit;
-
 namespace VRCGroupTools.Services;
 
 public interface IUpdateService
@@ -16,164 +16,73 @@ public interface IUpdateService
 
 public class UpdateService : IUpdateService
 {
-    private readonly GitHubClient _gitHubClient;
-    private Release? _latestRelease;
-
-    public string? LatestVersion => _latestRelease?.TagName?.TrimStart('v');
-    public string? DownloadUrl { get; private set; }
-
-    public UpdateService()
+    private readonly Func<Task<IReadOnlyList<UpdateRelease>>> _releases;
+    private readonly HttpClient _http;
+    private readonly string _current;
+    private UpdateCandidate? _candidate;
+    public string? LatestVersion => _candidate?.Version;
+    public string? DownloadUrl => _candidate?.ZipUrl;
+    public UpdateService() : this(ReadReleasesAsync, new HttpClient { Timeout=TimeSpan.FromMinutes(10) }, App.Version) { }
+    public UpdateService(Func<Task<IReadOnlyList<UpdateRelease>>> releases, HttpClient httpClient, string? currentVersion = null)
+    { _releases=releases; _http=httpClient; _current=currentVersion??App.Version; }
+    private static async Task<IReadOnlyList<UpdateRelease>> ReadReleasesAsync()
     {
-        _gitHubClient = new GitHubClient(new ProductHeaderValue("VRCGroupTools"));
+        var parts=App.GitHubRepo.Split('/');
+        if(parts.Length!=2)throw new InvalidOperationException("Invalid update repository");
+        var client=new GitHubClient(new ProductHeaderValue("VRCGroupTools"));
+        var releases=await client.Repository.Release.GetAll(parts[0],parts[1]);
+        return releases.Select(r=>new UpdateRelease(r.TagName,r.Draft,r.Prerelease,r.Assets.Select(a=>new UpdateAsset(a.Name,a.BrowserDownloadUrl)).ToArray())).ToArray();
     }
-
     public async Task<bool> CheckForUpdateAsync()
     {
-        try
-        {
-            var repoParts = App.GitHubRepo.Split('/');
-            if (repoParts.Length != 2) return false;
-
-            var releases = await _gitHubClient.Repository.Release.GetAll(repoParts[0], repoParts[1]);
-            _latestRelease = releases.FirstOrDefault(r => !r.Prerelease);
-
-            if (_latestRelease == null) return false;
-
-            var latestVersion = _latestRelease.TagName.TrimStart('v');
-            var currentVersion = App.Version;
-
-            // Find the ZIP asset
-            var installerAsset = _latestRelease.Assets
-                .FirstOrDefault(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
-
-            if (installerAsset != null)
-            {
-                DownloadUrl = installerAsset.BrowserDownloadUrl;
-            }
-
-            return CompareVersions(latestVersion, currentVersion) > 0;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Update check failed: {ex.Message}");
-            return false;
-        }
+        _candidate=null;
+        try { _candidate=UpdateCatalog.Select(await _releases(),_current);return _candidate!=null; }
+        catch(Exception ex){Debug.WriteLine($"Update check failed: {ex.GetType().Name}");return false;}
     }
-
+    public async Task<string> DownloadAndStageAsync(string workspace, CancellationToken token=default)
+    {
+        var candidate=_candidate??throw new InvalidOperationException("Check for an available update first");
+        Directory.CreateDirectory(workspace);
+        string? expectedHash=null;
+        if(candidate.ChecksumUrl!=null)
+        {
+            using var check=await _http.GetAsync(candidate.ChecksumUrl,HttpCompletionOption.ResponseHeadersRead,token);check.EnsureSuccessStatusCode();
+            await using var input=await check.Content.ReadAsStreamAsync(token);using var output=new MemoryStream();
+            await UpdatePackage.CopyBoundedAsync(input,output,4096,token);
+            var text=Encoding.UTF8.GetString(output.ToArray()).TrimEnd((char)13, (char)10);
+            var parts=text.Split(new[] { "  " }, StringSplitOptions.None);
+            if(parts.Length is < 1 or > 2 || !Regex.IsMatch(parts[0], @"\A[a-fA-F0-9]{64}\z") || parts.Length == 2 && parts[1] != $"VRCGroupTools-v{candidate.Version}-win-x64.zip")
+                throw new InvalidDataException("Invalid update checksum asset");
+            expectedHash=parts[0];
+        }
+        var zip=Path.Combine(workspace,"update.zip");
+        using(var response=await _http.GetAsync(candidate.ZipUrl,HttpCompletionOption.ResponseHeadersRead,token))
+        {
+            response.EnsureSuccessStatusCode();
+            if(response.Content.Headers.ContentLength>UpdatePackage.MaxBytes)throw new InvalidDataException("Update download exceeds size limit");
+            await using var input=await response.Content.ReadAsStreamAsync(token);await using var output=new FileStream(zip,System.IO.FileMode.CreateNew);
+            await UpdatePackage.CopyBoundedAsync(input,output,UpdatePackage.MaxBytes,token);
+        }
+        return UpdatePackage.Stage(zip,Path.Combine(workspace,"staged"),expectedHash);
+    }
     public async Task DownloadAndInstallUpdateAsync()
     {
-        if (string.IsNullOrEmpty(DownloadUrl)) return;
-
+        if(_candidate==null)throw new InvalidOperationException("No newer usable release is available");
         try
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "VRCGroupTools_Update");
-            var zipPath = Path.Combine(Path.GetTempPath(), "VRCGroupTools_Update.zip");
-
-            // Clean up old temp files
-            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-            if (File.Exists(zipPath)) File.Delete(zipPath);
-
-            // Download the ZIP
-            using var httpClient = new HttpClient();
-            var response = await httpClient.GetAsync(DownloadUrl);
-            response.EnsureSuccessStatusCode();
-
-            await using var fs = new FileStream(zipPath, System.IO.FileMode.Create);
-            await response.Content.CopyToAsync(fs);
-            fs.Close();
-
-            // Validate the downloaded file has a reasonable size
-            var zipInfo = new FileInfo(zipPath);
-            if (zipInfo.Length < 1024)
-                throw new Exception("Downloaded update file appears to be invalid (too small)");
-
-            // Extract the ZIP
-            Directory.CreateDirectory(tempDir);
-            ZipFile.ExtractToDirectory(zipPath, tempDir);
-
-            // Find the new executable
-            var newExePath = Directory.GetFiles(tempDir, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
-            if (newExePath == null)
-                throw new Exception("No executable found in update package");
-
-            var currentExePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
-            if (string.IsNullOrEmpty(currentExePath))
-                throw new Exception("Could not determine current executable path");
-
-            var backupExePath = currentExePath + ".bak";
-
-            // Build the .NET bundle extract cache path so we can wipe it before relaunching,
-            // preventing stale cached DLLs from a previous version causing 0xc0000142.
-            var dotnetCacheDir = Path.Combine(Path.GetTempPath(), ".net", "VRCGroupTools");
-
-            // Use Windows (CRLF) line endings — Unix LF endings cause cmd.exe to mis-parse
-            // the script and skip commands, leaving the destination exe empty/corrupted.
-            const string nl = "\r\n";
-            var batchPath = Path.Combine(Path.GetTempPath(), "VRCGroupTools_Update.bat");
-            var batchContent =
-                "@echo off" + nl +
-                "echo Updating VRC Group Tools..." + nl +
-                // Give the app process a few seconds to fully exit before touching the file
-                "timeout /t 4 /nobreak >nul" + nl +
-                ":retry_loop" + nl +
-                $"copy /Y \"{newExePath}\" \"{currentExePath}\"" + nl +
-                "if errorlevel 1 (" + nl +
-                "    echo File still locked, retrying..." + nl +
-                "    timeout /t 2 /nobreak >nul" + nl +
-                "    goto retry_loop" + nl +
-                ")" + nl +
-                // Wipe the old .NET single-file extraction cache so the new version
-                // extracts fresh and doesn't hit stale/mismatched native DLLs.
-                $"if exist \"{dotnetCacheDir}\" rd /s /q \"{dotnetCacheDir}\"" + nl +
-                // Short pause to let the filesystem flush before launching
-                "timeout /t 1 /nobreak >nul" + nl +
-                $"start \"\" \"{currentExePath}\"" + nl +
-                // Cleanup
-                $"rd /s /q \"{tempDir}\"" + nl +
-                $"del \"{zipPath}\"" + nl +
-                $"if exist \"{backupExePath}\" del \"{backupExePath}\"" + nl +
-                "del \"%~f0\"" + nl;
-
-            File.WriteAllText(batchPath, batchContent, System.Text.Encoding.ASCII);
-
-            // Launch the batch script and close the app
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c \"{batchPath}\"",
-                UseShellExecute = true,
-                CreateNoWindow = false,
-                WindowStyle = ProcessWindowStyle.Normal
-            });
-
+            var workspace=Path.Combine(Path.GetTempPath(),"VRCGroupTools_Update_"+Guid.NewGuid().ToString("N"));
+            var staged=await DownloadAndStageAsync(workspace);
+            var info=FileVersionInfo.GetVersionInfo(staged);
+            if(info.FileVersion!=_candidate.Version+".0")throw new InvalidDataException("Downloaded executable version does not match the selected release");
+            var current=Environment.ProcessPath??throw new InvalidOperationException("Cannot determine application executable");
+            var logs=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"VRCGroupTools","update-logs");Directory.CreateDirectory(logs);
+            var script=UpdateReplacement.Script(staged,current,Environment.ProcessId,Path.Combine(logs,DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")+".log"),UpdatePackage.Hash(staged));
+            using var helper=Process.Start(UpdateReplacement.StartInfo(script))??throw new InvalidOperationException("Could not start replacement helper");
             System.Windows.Application.Current.Shutdown();
         }
-        catch (Exception ex)
+        catch(Exception ex)
         {
-            Debug.WriteLine($"Update download failed: {ex.Message}");
-            System.Windows.MessageBox.Show(
-                $"Failed to download and install update: {ex.Message}",
-                "Update Error",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
-            throw;
+            System.Windows.MessageBox.Show($"Update could not be staged. The existing application is unchanged.\n{ex.Message}","Update Error",System.Windows.MessageBoxButton.OK,System.Windows.MessageBoxImage.Error);throw;
         }
-    }
-
-    private static int CompareVersions(string v1, string v2)
-    {
-        var parts1 = v1.Split('.').Select(int.Parse).ToArray();
-        var parts2 = v2.Split('.').Select(int.Parse).ToArray();
-
-        for (int i = 0; i < Math.Max(parts1.Length, parts2.Length); i++)
-        {
-            var p1 = i < parts1.Length ? parts1[i] : 0;
-            var p2 = i < parts2.Length ? parts2[i] : 0;
-
-            if (p1 > p2) return 1;
-            if (p1 < p2) return -1;
-        }
-
-        return 0;
     }
 }

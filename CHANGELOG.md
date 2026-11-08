@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.1.21] - 2026-11-07
+
+### Fixed
+
+- Automatic occupant discovery treats every log record (including apparently genuine timestamps/envelopes) only as an untrusted hint. Before automatic eligibility, a paced read-only API lookup must return the exact recipient identity, `state=online` and exact current location. Missing/hidden/private/offline/non-friend/mismatched/expired presence never authorizes an invitation; not all occupants are supported.
+- Presence lookup pacing is enforced at actual outbound HTTP initiation with a per-service asynchronous gate and monotonic clock, so shared API waits and concurrent callers cannot compress the thirteen-second minimum. Cancellation and context revocation stop queued reads; response waits do not hold the dispatch gate.
+- Friend-to-current-instance batches now pin the acting account and authentication generation before confirmation, rechecking for each recipient and after API pacing immediately before HTTP. Same-account reauthentication also revokes the old batch.
+
+- Instance Inviter now has an actual, explicitly opted-in Auto Invite checkbox: confirm the exact group/account/current instance and filters once, then detect locally every five seconds. Group invitations only, paced at least thirteen seconds apart; no automatic load/restart/resume, instance invitations or posting.
+- Incremental process/session-pinned logs track discovery hints and departures without display-name guessing. Membership/history/filter checks precede one new-candidate presence lookup, paced at least thirteen seconds apart; positive evidence expires after twenty seconds including pacing/network time and is revalidated immediately before dispatch. Unchanged candidates (including failed/hidden/expired evidence) are never automatically re-fetched within the confirmed session. Metadata needed by enabled filters remains separately cached; manual review flows are unchanged.
+- All manual/automatic group invitations share atomic durable duplicate suppression. Sent/Unknown/InFlight stay blocked across restarts; automatic claims also block known Failed outcomes. Rejections and uncertain writes stop Auto Invite, never retry every five seconds. Off, logout/context/rejoin/filter/view/shutdown changes revoke dispatch after pacing and immediately before HTTP. Rate-limit Retry-After is respected centrally.
+- Updater now selects the newest usable stable release from **0xE69/VRCGT**, resets stale download state, requires the exact portable ZIP/root executable, bounds downloads/extraction, checks supplied SHA256s and uses a bounded Unicode-safe atomic replacement helper with backup, rollback on launch failure and persistent error logs.
+- A legacy-compatible portable ZIP is built alongside the installer. Version 1.1.18's actual updater source is exercised in an isolated fixture through discovery, download, staging, copy and dummy-executable relaunch; production App/installed executable is never started or replaced by tests.
+
+### Verification and limits
+
+- Offline AutoInviteTests and UpdateTests join every previous regression suite; compiled WPF/DI checks use a plain Application. Live VRChat invitation and installed GUI acceptance remain separate.
+- See `docs/AUTO-INVITE.md`, `docs/UPDATE-RELEASE.md` and `docs/RELEASE-VERIFICATION.md`. Public release upload/readback is a separate explicitly approved parent-agent operation, not implied by local packaging.
+
+---
+
+## [1.1.20] - 2026-11-07
+
+### Added
+
+- Persistent shared group-invite ledger and cache-aware member/history filters, exact UUID moderation lookup, and explicit Game Log ban confirmation.
+- Calendar rule editor, timezone-aware recurrence and ready news drafts. Local checks start explicitly and restart paused.
+- Integrated one-item approval windows for calendar creation and scheduled/manual news. Preview includes exact account/group/action, full payload, audience, notifications, UTC dates and actual PNG. Local saving never uploads or publishes.
+- Separate durable artwork/publication effects. Account/session/group changes, permission loss, edits and expiry stop dispatch. Partial-success handles are retained; uncertain effects cannot be retried by reopening the same draft.
+- Spec-based upload and exact-target readback, with independent news/calendar permission checks. Existing Group Posts create/update uses the same explicit approval boundary.
+- Disabled-by-default per-group public-instance Discord announcements with masked DPAPI configuration, privacy checks, durable dedup, backoff and message readback.
+
+### Verification and limits
+
+- Fake-transport publisher, scheduler/webhook, invitation/moderation/instance/metadata regressions and compiled WPF bindings under a plain Application (not production startup).
+- Self-contained win-x64 artifact and local installer. No installed app/Desktop replacement, commit, push or public release.
+- VRChat contracts are from the explicitly unofficial community specification. Secure setup and separately approved live actions/readback remain acceptance gates; notification delivery is not observable.
+- See `docs/SCHEDULER-WEBHOOK-AUDIT.md` and `docs/PUBLICATION-SETUP.md` for setup and uncertainty limitations.
+
+---
+
+## [1.1.19] - 2026-10-31
+
+### Added
+
+- Friend Manager: **Invite to Current Instance** for explicitly selected friends, independent of group configuration; the existing **Invite to Group** action remains.
+- Confirmation shows the destination world, instance number, and recipient count (including selected friends hidden by filters). No invites are sent while loading friends.
+- Cancellable, paced batches with per-friend Sent / Failed / Unknown / Not sent results. Sent and uncertain recipients are deselected to avoid accidental duplicate retries.
+
+### Safety
+
+- Current-instance detection requires a single running VRChat process, a fresh log from that process session, and a completed join. Missing, stale, disconnected, or transitioning sessions fail closed.
+- The destination is pinned before confirmation and refreshed before every recipient, including after API pacing immediately before dispatch. Instance changes abort the rest of the batch rather than retargeting it.
+- No private location strings or response bodies are logged by the new workflow. An in-flight request cannot be recalled; transport errors are reported as unknown rather than assumed failures.
+
+### Verification
+
+- Added a package-free executable test harness referencing the actual WPF project, using controlled log files, fake HTTP handlers, and a compiled-view/DI smoke test. Run instructions and limitations are in `tests/InstanceInviteTests/README.md`.
+- Version 1.1.19 is synchronized across the application, assembly metadata, and installer.
+
+---
+
 ## [1.1.17] - 2026-10-30
 
 ### Fixed

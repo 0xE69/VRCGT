@@ -92,8 +92,8 @@ usr-5678efgh"/>
                     <StackPanel>
                         <TextBlock Text="Filters" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
 
-                        <CheckBox Content="Skip already invited (DB)"
-                                  IsChecked="{Binding SkipAlreadyInvited}"
+                        <CheckBox Content="Shared group invite protection (always on)"
+                                  IsChecked="True" IsEnabled="False"
                                   Foreground="#DDD" Margin="0,0,0,8"/>
                         <CheckBox Content="Only invite 18+ verified"
                                   IsChecked="{Binding Only18Plus}"

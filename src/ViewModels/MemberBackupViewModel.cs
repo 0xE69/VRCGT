@@ -234,8 +234,13 @@ public partial class MemberBackupViewModel : ObservableObject
     [RelayCommand]
     private async Task RestoreBackupAsync()
     {
-        if (SelectedBackup == null) return;
-
+        if (SelectedBackup == null || IsRestoringBackup) return;
+        var backupId = SelectedBackup.BackupId;
+        var recipients = await _backupService.GetBackupMembersAsync(backupId);
+        var groupId = recipients.FirstOrDefault()?.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId) || recipients.Any(m => m.GroupId != groupId) || (_settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId) != groupId) { StatusMessage = "Backup does not match the selected group."; return; }
+        if (!GroupInvitePresentation.Confirm(groupId, recipients.Select(m => $"{m.DisplayName} ({m.UserId})"))) { StatusMessage = "Restore invitations cancelled."; return; }
+        if ((_settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId) != groupId) { StatusMessage = "Group changed; restore not sent."; return; }
         try
         {
             IsRestoringBackup = true;
@@ -247,7 +252,7 @@ public partial class MemberBackupViewModel : ObservableObject
             StatusMessage = $"Restoring {mode}...";
 
             var result = await _backupService.RestoreMembersAsync(
-                SelectedBackup.BackupId,
+                backupId,
                 OnlyRestoreMissing,
                 (current, total) =>
                 {
@@ -260,7 +265,8 @@ public partial class MemberBackupViewModel : ObservableObject
                 var summary = $"✓ Restore complete!\n" +
                              $"• Invites sent: {result.InvitesSent}\n" +
                              $"• Already members: {result.AlreadyMembers}\n" +
-                             $"• Failed: {result.Failed}";
+                             $"• Rejected: {result.Failed}\n" +
+                             $"• Suppressed / unknown: {result.Suppressed} (see local invitation history)";
 
                 if (result.Errors.Count > 0)
                 {
@@ -273,8 +279,9 @@ public partial class MemberBackupViewModel : ObservableObject
 
                 StatusMessage = summary;
 
-                // Refresh comparison
+                // Refresh comparison without discarding the invitation outcome report.
                 await CompareWithCurrentAsync();
+                StatusMessage = summary;
             }
             else
             {

@@ -33,6 +33,7 @@ public class RestoreResult
     public int InvitesSent { get; set; }
     public int AlreadyMembers { get; set; }
     public int Failed { get; set; }
+    public int Suppressed { get; set; }
     public List<string> Errors { get; set; } = new();
 }
 
@@ -241,7 +242,14 @@ public class MemberBackupService : IMemberBackupService
                 try
                 {
                     LoggingService.Info("BACKUP", $"Sending invite to {member.DisplayName} ({member.UserId})");
-                    var success = await _apiService.SendGroupInviteAsync(groupId, member.UserId);
+                    var outcome = await _apiService.SendTrackedAsync(groupId, member.UserId);
+                    if (!outcome.Sent && outcome.State != GroupInviteState.Failed)
+                    {
+                        result.Suppressed++;
+                        result.Errors.Add($"{member.DisplayName}: {outcome.Message}");
+                        continue;
+                    }
+                    var success = outcome.Sent;
 
                     if (success)
                     {

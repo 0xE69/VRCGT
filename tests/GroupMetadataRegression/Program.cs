@@ -1,0 +1,15 @@
+using System.ComponentModel;
+using VRCGroupTools.Models;
+var group = new GroupConfiguration { GroupId = "grp_test", GroupName = "Old name", DiscordWebhookUrl = "preserve", SecurityMonitoringEnabled = true };
+var changes = new List<string?>();
+if (group is not INotifyPropertyChanged observable) throw new Exception("FAIL: managed group does not notify UI bindings");
+observable.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+group.GroupName = "New name";
+if (!changes.Contains("GroupName") || !changes.Contains("DisplayName")) throw new Exception("FAIL: rename does not refresh label");
+if (group.DisplayName != "New name (grp_test)") throw new Exception("FAIL: wrong display name");
+changes.Clear(); group.GroupIconUrl = "new-icon";
+if (!changes.Contains("GroupIconUrl")) throw new Exception("FAIL: icon not refreshed");
+if (group.DiscordWebhookUrl != "preserve" || !group.SecurityMonitoringEnabled) throw new Exception("FAIL: settings lost");
+changes.Clear(); group.GroupName = "New name";
+if (changes.Count != 0) throw new Exception("FAIL: unchanged metadata notified unnecessarily");
+Console.WriteLine("PASS: rename, display binding, icon binding, settings preservation, unchanged metadata");

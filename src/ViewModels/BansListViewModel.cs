@@ -204,15 +204,15 @@ public partial class BansListViewModel : ObservableObject
         Status = $"Searching for '{SearchQuery}'...";
         SearchResults.Clear();
 
-        var results = await _apiService.SearchUsersAsync(SearchQuery);
-        
-        foreach (var user in results)
+        try
         {
-            SearchResults.Add(user);
+            var results = await ModerationUserSearch.SearchAsync(SearchQuery, _apiService.LookupUserByIdAsync, _apiService.SearchUsersAsync);
+            foreach (var user in results) SearchResults.Add(user);
+            Status = results.Count == 0 ? "User not found (or no name matches)." : $"Found {results.Count} users. Verify exact User ID and selected group before banning.";
         }
-
-        Status = results.Count == 0 ? "No users found." : $"Found {results.Count} users.";
-        IsSearching = false;
+        catch (ArgumentException ex) { Status = ex.Message; }
+        catch (Exception ex) { Status = $"User lookup API error (not a not-found result): {ex.Message}"; }
+        finally { IsSearching = false; }
     }
 
     [RelayCommand]
@@ -231,43 +231,24 @@ public partial class BansListViewModel : ObservableObject
             return;
         }
 
-        Status = $"Preparing to ban {SelectedSearchResult.DisplayName}...";
-        
-        // Show moderation dialog to get reason, duration, and description
-        var request = await ModerationDialogHelper.ShowModerationDialogAsync(
-            "ban",
-            groupId,
-            SelectedSearchResult.UserId,
-            SelectedSearchResult.DisplayName);
-
-        if (request == null)
+        if (IsBusy) return;
+        var selected = SelectedSearchResult;
+        var target = new GroupBanTarget(groupId, selected.UserId, selected.DisplayName, _apiService.CurrentUserId ?? "");
+        IsBusy = true;
+        try
         {
-            Status = "Ban cancelled.";
-            return;
+            Status = await GroupBanWorkflow.RunAsync(target,
+                () => SelectedSearchResult == null ? null : new GroupBanTarget(_mainViewModel.GroupId ?? "", SelectedSearchResult.UserId, SelectedSearchResult.DisplayName, _apiService.CurrentUserId ?? ""),
+                t => GroupBanWorkflow.CanBanAsync(_apiService, t),
+                async t =>
+                {
+                    if (System.Windows.MessageBox.Show($"Ban {t.DisplayName} ({t.UserId}) from {t.GroupId}?", "Confirm group ban", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) != System.Windows.MessageBoxResult.Yes) return null;
+                    return await ModerationDialogHelper.ShowModerationDialogAsync("ban", t.GroupId, t.UserId, t.DisplayName);
+                },
+                (t, request) => ModerationDialogHelper.ExecuteModerationActionAsync(t.GroupId, request, _apiService, _moderationService));
         }
-
-        Status = $"Banning {SelectedSearchResult.DisplayName}...";
-        var success = await ModerationDialogHelper.ExecuteModerationActionAsync(
-            groupId,
-            request,
-            _apiService,
-            _moderationService);
-        
-        if (success)
-        {
-            Status = $"✅ {SelectedSearchResult.DisplayName} has been banned.";
-            SearchResults.Clear();
-            SearchQuery = string.Empty;
-            BanReason = string.Empty;
-            SelectedSearchResult = null;
-            
-            // Refresh the bans list
-            await RefreshAsync();
-        }
-        else
-        {
-            Status = "❌ Failed to ban user. Check permissions.";
-        }
+        catch (Exception ex) { Status = $"Ban not confirmed: {ex.Message}"; }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]

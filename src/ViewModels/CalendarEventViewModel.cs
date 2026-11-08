@@ -15,7 +15,8 @@ public partial class CalendarEventViewModel : ObservableObject
 {
     private readonly ICalendarEventService _eventService;
     private readonly IVRChatApiService _apiService;
-    private readonly MainViewModel _mainViewModel;
+    private readonly Func<string> _currentGroup;
+    private readonly Func<List<string>> _groups;
 
     [ObservableProperty]
     private ObservableCollection<CalendarEvent> _events = new();
@@ -128,11 +129,17 @@ public partial class CalendarEventViewModel : ObservableObject
 
     public IReadOnlyList<string> RecurrenceTypes { get; } = new[] { "None", "Weekly", "Monthly", "SpecificDates" };
 
-    public CalendarEventViewModel()
+    public CalendarEventViewModel() : this(App.Services.GetRequiredService<ICalendarEventService>(),
+        App.Services.GetRequiredService<IVRChatApiService>(),
+        () => App.Services.GetRequiredService<MainViewModel>().GroupId,
+        () => App.Services.GetRequiredService<MainViewModel>().ManagedGroups.Select(g => g.GroupId).ToList()) { }
+
+    public CalendarEventViewModel(ICalendarEventService events, IVRChatApiService api, Func<string> currentGroup, Func<List<string>> groups)
     {
-        _eventService = App.Services.GetRequiredService<ICalendarEventService>();
-        _apiService = App.Services.GetRequiredService<IVRChatApiService>();
-        _mainViewModel = App.Services.GetRequiredService<MainViewModel>();
+        _eventService = events;
+        _apiService = api;
+        _currentGroup = currentGroup;
+        _groups = groups;
         InitializeLanguages();
         InitializeTimeZones();
         SyncDraftUi(Draft);
@@ -147,11 +154,11 @@ public partial class CalendarEventViewModel : ObservableObject
     
     private void RefreshGroups()
     {
-        var groups = _mainViewModel.ManagedGroups.Select(g => g.GroupId).ToList();
+        var groups = _groups();
         // Add current group if not in list
-        if (!string.IsNullOrEmpty(_mainViewModel.GroupId) && !groups.Contains(_mainViewModel.GroupId))
+        if (!string.IsNullOrEmpty(_currentGroup()) && !groups.Contains(_currentGroup()))
         {
-            groups.Add(_mainViewModel.GroupId);
+            groups.Add(_currentGroup());
         }
         ManagedGroupIds = new ObservableCollection<string>(groups);
     }
@@ -257,6 +264,7 @@ public partial class CalendarEventViewModel : ObservableObject
         Events = new ObservableCollection<CalendarEvent>(events);
         Templates = new ObservableCollection<EventTemplate>(templates);
         AutomationRules = new ObservableCollection<EventAutomationRule>(rules);
+        PendingPosts = new(await _eventService.GetPendingPostsAsync());
         
         IsBusy = false;
     }
@@ -264,6 +272,7 @@ public partial class CalendarEventViewModel : ObservableObject
     [RelayCommand]
     private async Task SaveEventAsync()
     {
+        if (!TryApplyScheduleFields()) { StatusMessage = "Choose start/end dates and valid 24-hour HH:mm clocks."; return; }
         ApplyDraftUiToModel();
         Draft.Visibility = NormalizeVisibility(Draft.Visibility);
         Draft.Category = NormalizeCategory(Draft.Category);
@@ -274,25 +283,33 @@ public partial class CalendarEventViewModel : ObservableObject
             return;
         }
 
-        if (Draft.EndTime <= Draft.StartTime)
+        if (!ScheduleTime.TryUtc(Draft.StartTime, Draft.TimeZoneId, out var startUtc) ||
+            !ScheduleTime.TryUtc(Draft.EndTime, Draft.TimeZoneId, out var endUtc))
+        {
+            StatusMessage = "Select a valid timezone and unambiguous local times (DST gap/fold needs explicit correction).";
+            return;
+        }
+        if (endUtc <= startUtc)
         {
             StatusMessage = "End time must be after start time.";
             return;
         }
 
         IsBusy = true;
-        
+        try
+        {
         // Ensure GroupId is set if not already
         if (string.IsNullOrEmpty(Draft.GroupId))
         {
-            Draft.GroupId = _mainViewModel.GroupId;
+            Draft.GroupId = _currentGroup();
         }
         
         await _eventService.AddOrUpdateEventAsync(Draft);
-        await PublishToVrChatAsync(Draft);
+        // Saving schedules is local only. Publishing requires the separate per-item artwork/content approval workflow.
+        // Never let an edit or recurrence refresh implicitly upload or create a VRChat event.
         await _eventService.GenerateRecurringEventsAsync();
         await LoadAsync();
-        StatusMessage = "Event saved.";
+        StatusMessage = "Event saved locally (not published). Scheduled posts are approval-only drafts.";
         Draft = new CalendarEvent
         {
             StartTime = DateTime.Now.AddHours(1),
@@ -309,13 +326,41 @@ public partial class CalendarEventViewModel : ObservableObject
         SyncLanguageSelections(LanguageOptions, Draft.Languages);
         SelectedLanguages.Clear();
         LanguageSearchText = "";
-        IsBusy = false;
+        }
+        catch { StatusMessage = "Could not save local schedule. Check storage permissions/data; nothing was published."; }
+        finally { IsBusy = false; }
     }
     
+    [ObservableProperty] private ObservableCollection<ScheduledPostDraft> _pendingPosts = new();
+    [RelayCommand]
+    private async Task PrepareDuePostsAsync()
+    {
+        try
+        {
+            await _eventService.RunAutomationChecksAsync();
+            PendingPosts = new(await _eventService.GetPendingPostsAsync());
+            StatusMessage = "Due drafts prepared locally. Nothing published or sent to Discord; approve each item separately before manual publication.";
+        }
+        catch { StatusMessage = "Draft preparation failed. Existing schedules/history retained; no external actions performed."; }
+    }
+
+    [RelayCommand]
+    private void StartDraftChecks()
+    {
+        if (_eventService is CalendarEventService service) service.StartAutomationService();
+        StatusMessage = "Local draft checks started for this session (60 seconds). No unattended VRChat or Discord publication.";
+    }
+    [RelayCommand]
+    private void PauseDraftChecks()
+    {
+        if (_eventService is CalendarEventService service) service.StopAutomationService();
+        StatusMessage = "Local draft checks paused.";
+    }
+
     [RelayCommand]
     private async Task AddAutomationRuleAsync()
     {
-        var rule = new EventAutomationRule { Name = "New Rule" };
+        var rule = new EventAutomationRule { Name = "New Rule", FilterGroupId = _currentGroup(), Enabled = false };
         await _eventService.AddOrUpdateAutomationRuleAsync(rule);
         await LoadAsync();
         SelectedAutomationRule = AutomationRules.FirstOrDefault(r => r.Id == rule.Id);
@@ -366,46 +411,19 @@ public partial class CalendarEventViewModel : ObservableObject
     }
     
     [RelayCommand]
-    private async Task UploadImageForDraftAsync()
+    private void UploadImageForDraft()
     {
-        var dialog = new OpenFileDialog { Filter = "Images|*.png;*.jpg;*.jpeg;*.gif" };
-        if (dialog.ShowDialog() == true)
-        {
-             StatusMessage = "Uploading image...";
-             try
-             {
-                 var imageId = await _apiService.UploadImageAsync(dialog.FileName);
-                 if (imageId != null)
-                 {
-                     Draft.ExternalImageId = imageId;
-                     StatusMessage = "Image uploaded successfully.";
-                 }
-                 else
-                 {
-                     StatusMessage = "Image upload failed.";
-                 }
-             }
-             catch (Exception ex)
-             {
-                 StatusMessage = $"Upload error: {ex.Message}";
-             }
-        }
+        BrowseEventThumbnail();
+        StatusMessage = "Artwork selected locally. Upload happens only after exact event preview approval.";
     }
 
     [RelayCommand]
     private async Task DeleteEventAsync(CalendarEvent? evt)
     {
         if (evt == null) return;
-        var groupId = _mainViewModel.GroupId;
+        var groupId = _currentGroup();
         IsBusy = true;
-        if (!string.IsNullOrWhiteSpace(groupId) && !string.IsNullOrWhiteSpace(evt.ExternalId))
-        {
-            var deleted = await _apiService.DeleteGroupEventAsync(groupId, evt.ExternalId);
-            if (!deleted)
-            {
-                StatusMessage = "VRChat delete failed; removing local copy only (see console for details).";
-            }
-        }
+        // Local deletion only; never implicitly delete a remote event.
         await _eventService.DeleteEventAsync(evt.Id);
         await LoadAsync();
         StatusMessage = "Event deleted.";
@@ -500,7 +518,7 @@ public partial class CalendarEventViewModel : ObservableObject
     [RelayCommand]
     private async Task SyncFromVrChatAsync()
     {
-        var groupId = _mainViewModel.GroupId;
+        var groupId = _currentGroup();
         if (string.IsNullOrWhiteSpace(groupId))
         {
             StatusMessage = "Set a Group ID first (sidebar).";
@@ -520,6 +538,8 @@ public partial class CalendarEventViewModel : ObservableObject
             {
                 var mapped = new CalendarEvent
                 {
+                    GroupId = groupId,
+                    TimeZoneId = TimeZoneInfo.Local.Id,
                     ExternalId = evt.Id,
                     ExternalImageId = evt.ImageId,
                     Name = evt.Title,
@@ -631,6 +651,7 @@ public partial class CalendarEventViewModel : ObservableObject
 
     private void SyncDraftUi(CalendarEvent value)
     {
+        SyncScheduleFields(value);
         value.Languages ??= new List<string>();
         value.Tags ??= new List<string>();
         value.Platforms ??= new List<string>();
@@ -716,84 +737,7 @@ public partial class CalendarEventViewModel : ObservableObject
             .ToList();
     }
 
-    private async Task PublishToVrChatAsync(CalendarEvent evt)
-    {
-        var groupId = !string.IsNullOrEmpty(evt.GroupId) ? evt.GroupId : _mainViewModel.GroupId;
-        if (string.IsNullOrWhiteSpace(groupId))
-        {
-            StatusMessage = "Set a Group ID first (sidebar or dropdown) to publish to VRChat.";
-            return;
-        }
 
-        var platforms = MapPlatforms(evt.Platforms);
-        if (platforms == null || platforms.Count == 0)
-        {
-            StatusMessage = "Select at least one platform (PC, Android, or iOS).";
-            return;
-        }
-
-        var languages = MapLanguages(evt.Languages) ?? new List<string>();
-
-        var request = new GroupEventCreateRequest
-        {
-            Title = evt.Name,
-            Description = evt.Description,
-            StartsAt = evt.StartTime.ToUniversalTime(),
-            EndsAt = evt.EndTime.ToUniversalTime(),
-            Category = evt.Category.ToLowerInvariant(),
-            AccessType = evt.Visibility.Equals("group", StringComparison.OrdinalIgnoreCase) ? "group" : "public",
-            SendCreationNotification = evt.SendNotification,
-            Languages = languages,
-            Platforms = platforms,
-            Tags = evt.Tags
-        };
-
-        if (!string.IsNullOrWhiteSpace(evt.ThumbnailPath))
-        {
-            try
-            {
-                var imageId = evt.ExternalImageId;
-                if (string.IsNullOrWhiteSpace(imageId))
-                {
-                    StatusMessage = "Uploading image to VRChat...";
-                    imageId = await _apiService.UploadImageAsync(evt.ThumbnailPath);
-                }
-
-                if (!string.IsNullOrWhiteSpace(imageId))
-                {
-                    request.ImageId = imageId;
-                    evt.ExternalImageId = imageId;
-                }
-                else
-                {
-                    Console.WriteLine("[EVENT] Image upload failed or unsupported; continuing without image.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EVENT] Image upload exception: {ex.Message}");
-            }
-        }
-
-        try
-        {
-            var created = await _apiService.CreateGroupEventAsync(groupId, request);
-            if (created != null)
-            {
-                evt.ExternalId = created.Id;
-                await _eventService.AddOrUpdateEventAsync(evt);
-                StatusMessage = "Event published to VRChat.";
-            }
-            else
-            {
-                StatusMessage = "Failed to publish to VRChat (no response).";
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Publish failed: {ex.Message}";
-        }
-    }
 
     private string NormalizeVisibility(string visibility)
     {

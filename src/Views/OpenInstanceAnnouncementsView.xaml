@@ -1,0 +1,24 @@
+<UserControl x:Class="VRCGroupTools.Views.OpenInstanceAnnouncementsView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ DataContextChanged="ContextChanged" Unloaded="ViewUnloaded">
+ <Border Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
+  <StackPanel>
+   <TextBlock Text="Discovered open group instances → Discord (opt-in)" Foreground="White" FontWeight="Bold"/>
+   <TextBlock Text="{Binding GroupId}" Foreground="White" Margin="0,8"/>
+   <TextBlock Foreground="#CCC" TextWrapping="Wrap" Text="Separate from audit notifications. Only freshly verified group-public instances are advertised; members/plus/private/unknown are withheld. Once per full instance and destination, including restarts. No closure notifications. No mentions. Checks only prepare previews, NEVER send. Review and approve EACH message explicitly; destination channel/server and exact content are shown before sending. Checks every 2 minutes; launch/logout/group switch starts paused."/>
+   <CheckBox Content="Enable local announcement drafts for this exact group (not permission to send)" IsChecked="{Binding OptIn}" Foreground="White" Margin="0,12"/>
+   <TextBlock Text="Discord webhook URL (masked; encrypted for this Windows user; never exported)" Foreground="#CCC"/>
+   <PasswordBox x:Name="WebhookSecret" Margin="0,6" AutomationProperties.Name="Open-instance Discord webhook secret"/>
+   <WrapPanel Margin="0,10">
+    <Button Content="Save encrypted destination" Click="SaveClicked" Margin="0,0,8,8"/>
+    <Button Content="Start checks" Command="{Binding StartCommand}" Margin="0,0,8,8"/>
+    <Button Content="Pause" Command="{Binding PauseCommand}" Margin="0,0,8,8"/>
+    <Button Content="Disable for group" Command="{Binding DisableCommand}" Margin="0,0,8,8"/>
+    <Button Content="Review ready messages (approve each)" Command="{Binding ReviewReadyCommand}" Margin="0,0,8,8"/>
+    <Button Content="Refresh status" Command="{Binding RefreshStatusCommand}" Margin="0,0,8,8"/>
+   </WrapPanel>
+   <ItemsControl ItemsSource="{Binding Ready}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Content}" Foreground="#CCC" TextWrapping="Wrap" Margin="0,6"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="#CCC"/>
+  </StackPanel>
+ </Border>
+</UserControl>

@@ -95,6 +95,10 @@ public partial class GroupInfoViewModel : ObservableObject
                 return;
             }
 
+            // Sync only fresh API data, not stale cached details, by the returned group ID.
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+                _mainViewModel.UpdateManagedGroupMetadata(info.Id, info.Name, info.IconUrl));
+
             var createdAt = info.CreatedAt?.ToLocalTime().ToString("g") ?? "Unknown";
             var groupUrl = $"https://vrchat.com/home/group/{info.Id}";
 

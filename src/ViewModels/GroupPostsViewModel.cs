@@ -28,6 +28,7 @@ public partial class GroupPostsViewModel : ObservableObject
     [ObservableProperty] private bool _isEditMode;
     [ObservableProperty] private string? _editingPostId;
     
+    private string _publicationDraftKey = Guid.NewGuid().ToString();
     private int _offset;
     private const int PageSize = 20;
 
@@ -181,26 +182,16 @@ public partial class GroupPostsViewModel : ObservableObject
 
         try
         {
-            if (IsEditMode && !string.IsNullOrEmpty(EditingPostId))
-            {
-                var updated = await _apiService.UpdateGroupPostAsync(groupId, EditingPostId, PostTitle, PostText, PostVisibility, SendNotification);
-                if (updated == null)
-                {
-                    Status = "Post failed - see log (GROUP-POST) for the API error.";
-                    return;
-                }
-                Status = "Post updated!";
-            }
-            else
-            {
-                var created = await _apiService.CreateGroupPostAsync(groupId, PostTitle, PostText, null, PostVisibility, SendNotification);
-                if (created == null)
-                {
-                    Status = "Post failed - see log (GROUP-POST) for the API error.";
-                    return;
-                }
-                Status = "Post created!";
-            }
+            if (_apiService is not IApprovalPublicationTransport transport) { Status = "Approval publisher unavailable."; return; }
+
+            PublicationDraft Current() => new(IsEditMode ? EditingPostId ?? "" : _publicationDraftKey,
+                _apiService.CurrentUserId ?? "", _mainViewModel.GroupId, IsEditMode ? "news-update" : "news",
+                PostTitle, PostText, PostVisibility, SendNotification, ExistingPostId: IsEditMode ? EditingPostId : null);
+            var report = await new ApprovalPublisher(transport).PublishAsync(Current,
+                preview => Task.FromResult(VRCGroupTools.Views.PublicationApprovalWindow.Confirm(preview)));
+            Status = report.ToString();
+            if (report.Publication.State != "Confirmed") return;
+            _publicationDraftKey = Guid.NewGuid().ToString();
 
             ShowCreatePanel = false;
             IsEditMode = false;

@@ -106,18 +106,19 @@ public partial class UserSearchViewModel : ObservableObject
             HasSearched = true;
             Console.WriteLine($"[USER-SEARCH] IsSearching={IsSearching}, HasSearched={HasSearched}");
             SearchResults.Clear();
-            var queryTrimmed = SearchQuery.Trim();
+            var directUserId = ModerationUserSearch.UserId(SearchQuery);
+            var queryTrimmed = directUserId ?? SearchQuery.Trim();
             Console.WriteLine($"[USER-SEARCH] Trimmed query: '{queryTrimmed}'");
 
             // Check if it's a User ID (starts with "usr_")
-            if (queryTrimmed.StartsWith("usr_", StringComparison.OrdinalIgnoreCase))
+            if (directUserId != null)
             {
                 StatusMessage = $"Looking up User ID: {queryTrimmed}...";
                 Console.WriteLine($"[USER-SEARCH] Mode: Direct User ID lookup");
                 Console.WriteLine($"[USER-SEARCH] Calling API: GetUserAsync({queryTrimmed})");
                 
                 // Direct user lookup
-                var user = await _apiService!.GetUserAsync(queryTrimmed);
+                var user = await _apiService!.LookupUserByIdAsync(queryTrimmed);
                 Console.WriteLine($"[USER-SEARCH] API Response: {(user != null ? $"Found '{user.DisplayName}'" : "User not found")}");
                 
                 if (user != null)
@@ -456,13 +457,13 @@ public partial class UserSearchViewModel : ObservableObject
             return;
         }
 
+        var recipient = SelectedUserProfile.UserId;
+        if (!GroupInvitePresentation.Confirm(groupId, new[] { $"{SelectedUserProfile.DisplayName} ({recipient})" })) { StatusMessage = "Cancelled"; return; }
         IsLoadingUser = true;
         try
         {
-            var ok = await _apiService.SendGroupInviteAsync(groupId, SelectedUserProfile.UserId);
-            StatusMessage = ok
-                ? $"Invite sent to {SelectedUserProfile.DisplayName}"
-                : "Failed to send invite";
+            var outcome = await _apiService.SendTrackedAsync(groupId, recipient, () => _mainViewModel.GroupId == groupId);
+            StatusMessage = outcome.Message;
         }
         catch (Exception ex)
         {

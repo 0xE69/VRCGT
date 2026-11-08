@@ -148,11 +148,12 @@ public partial class InviteToGroupViewModel : ObservableObject
             return;
         }
 
+        var recipient = UserId.Trim();
+        if (!GroupInvitePresentation.Confirm(groupId, new[] { recipient })) { Status = "Cancelled"; return; }
         IsBusy = true;
-        Status = "Sending invite...";
-        var ok = await _apiService.SendGroupInviteAsync(groupId, UserId.Trim());
-        IsBusy = false;
-        Status = ok ? "✓ Invite sent successfully!" : "✗ Invite failed.";
+        try { var outcome = await _apiService.SendTrackedAsync(groupId, recipient, () => _mainViewModel.GroupId == groupId); Status = outcome.Message; }
+        catch (Exception ex) { Status = $"Stopped safely: {ex.Message}"; }
+        finally { IsBusy = false; }
     }
 
     [RelayCommand]
@@ -171,10 +172,11 @@ public partial class InviteToGroupViewModel : ObservableObject
             return;
         }
 
+        var recipient = SelectedUserProfile.UserId;
+        if (!GroupInvitePresentation.Confirm(groupId, new[] { $"{SelectedUserProfile.DisplayName} ({recipient})" })) { Status = "Cancelled"; return; }
         IsBusy = true;
-        Status = $"Sending invite to {SelectedUserProfile.DisplayName}...";
-        var ok = await _apiService.SendGroupInviteAsync(groupId, SelectedUserProfile.UserId);
-        IsBusy = false;
-        Status = ok ? $"✓ Invite sent to {SelectedUserProfile.DisplayName}!" : "✗ Invite failed.";
+        try { var outcome = await _apiService.SendTrackedAsync(groupId, recipient, () => _mainViewModel.GroupId == groupId); Status = outcome.Message; }
+        catch (Exception ex) { Status = $"Stopped safely: {ex.Message}"; }
+        finally { IsBusy = false; }
     }
 }

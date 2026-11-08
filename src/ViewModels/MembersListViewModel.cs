@@ -130,6 +130,28 @@ public partial class MembersListViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task LookupUuidAsync()
+    {
+        if (IsBusy) return;
+        var groupId = _mainViewModel.GroupId;
+        if (string.IsNullOrWhiteSpace(groupId)) { Status = "Select a group first."; return; }
+        try
+        {
+            var userId = ModerationUserSearch.UserId(Filter);
+            if (userId == null) { Status = "Enter an exact usr_<UUID> or a bare dashed user UUID."; return; }
+            IsBusy = true;
+            var user = await _apiService.LookupUserByIdAsync(userId);
+            if (_mainViewModel.GroupId != groupId) { Status = "Group changed; lookup cancelled."; return; }
+            if (user == null) { Status = $"User not found: {Filter}"; return; }
+            await SelectMemberAsync(new GroupMember { UserId = userId, DisplayName = user.DisplayName });
+            Status = $"Resolved {user.DisplayName} ({userId}) for {groupId}. Membership not established; ban does not require membership.";
+        }
+        catch (ArgumentException ex) { Status = ex.Message; }
+        catch (Exception ex) { Status = $"User lookup API error (not not-found): {ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
     private async Task SelectMemberAsync(GroupMember? member)
     {
         if (member == null) return;
@@ -315,23 +337,28 @@ public partial class MembersListViewModel : ObservableObject
     [RelayCommand]
     private async Task BanMemberAsync()
     {
-        if (SelectedMember == null) return;
+        if (SelectedMember == null || IsBusy) return;
+        var target = SelectedMember;
         
         var groupId = _mainViewModel.GroupId;
         if (string.IsNullOrWhiteSpace(groupId)) return;
         
+        var pinned = new GroupBanTarget(groupId, target.UserId, target.DisplayName, _apiService.CurrentUserId ?? "");
+        if (!await GroupBanWorkflow.CanBanAsync(_apiService, pinned)) { Status = "Ban permission unavailable."; return; }
+        if (System.Windows.MessageBox.Show($"Ban {target.DisplayName} ({target.UserId}) from {groupId}?", "Confirm group ban", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) != System.Windows.MessageBoxResult.Yes) return;
         // Show moderation dialog
         var request = await Helpers.ModerationDialogHelper.ShowModerationDialogAsync(
             "ban",
             groupId,
-            SelectedMember.UserId,
-            SelectedMember.DisplayName
+            target.UserId,
+            target.DisplayName
         );
         
         if (request == null) return; // User cancelled
+        if (_mainViewModel.GroupId != groupId || SelectedMember != target || _apiService.CurrentUserId != pinned.ActingUserId || request.TargetUserId != target.UserId || !await GroupBanWorkflow.CanBanAsync(_apiService, pinned)) { Status = "Group/user/account/permission changed; ban not sent."; return; }
         
         IsBusy = true;
-        Status = $"Banning {SelectedMember.DisplayName}...";
+        Status = $"Banning {target.DisplayName}...";
         
         try
         {
@@ -345,15 +372,16 @@ public partial class MembersListViewModel : ObservableObject
                 _apiService.CurrentUserDisplayName ?? "Unknown"
             );
             
+            if (_mainViewModel.GroupId != groupId || SelectedMember != target || _apiService.CurrentUserId != pinned.ActingUserId) { Status = "Context changed; ban not sent."; return; }
             // Execute the ban
-            var success = await _apiService.BanGroupMemberAsync(groupId, SelectedMember.UserId, request.Reason, request.Description);
+            var success = await _apiService.BanGroupMemberAsync(groupId, target.UserId, request.Reason, request.Description);
             if (success)
             {
-                Members.Remove(SelectedMember);
+                Members.Remove(target);
                 OnPropertyChanged(nameof(FilteredMembers));
                 ShowMemberPanel = false;
-                var bannedUserName = SelectedMember.DisplayName;
-                var bannedUserId = SelectedMember.UserId;
+                var bannedUserName = target.DisplayName;
+                var bannedUserId = target.UserId;
                 SelectedMember = null;
                 Status = $"Member banned: {request.Reason}";
                 

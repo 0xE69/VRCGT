@@ -17,6 +17,10 @@ public partial class FriendInviterViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IDatabaseService _dbService;
     private readonly ICacheService _cacheService;
+    private readonly CurrentInstanceInviteWorkflow _instanceInviteWorkflow;
+
+    [ObservableProperty]
+    private bool _isInvitingInstance;
 
     [ObservableProperty]
     private ObservableCollection<FriendInviterItemViewModel> _friends = new();
@@ -49,14 +53,35 @@ public partial class FriendInviterViewModel : ObservableObject
         IVRChatApiService apiService,
         ISettingsService settingsService,
         IDatabaseService dbService,
-        ICacheService cacheService)
+        ICacheService cacheService,
+        CurrentInstanceInviteWorkflow instanceInviteWorkflow)
     {
+        _instanceInviteWorkflow = instanceInviteWorkflow;
         _apiService = apiService;
         _settingsService = settingsService;
         _dbService = dbService;
         _cacheService = cacheService;
         
         _ = LoadFriendsAsync();
+    }
+
+    public bool CanManageFriends => !IsLoading && !IsInvitingInstance;
+    public bool CanInviteCurrentInstance => CanManageFriends && SelectedCount > 0;
+
+    partial void OnIsLoadingChanged(bool value) => RefreshActionState();
+    partial void OnIsInvitingInstanceChanged(bool value) => RefreshActionState();
+    partial void OnSelectedCountChanged(int value) => RefreshActionState();
+
+    private void RefreshActionState()
+    {
+        OnPropertyChanged(nameof(CanManageFriends));
+        OnPropertyChanged(nameof(CanInviteCurrentInstance));
+        RefreshCommand.NotifyCanExecuteChanged();
+        SyncMembersCommand.NotifyCanExecuteChanged();
+        SelectAllCommand.NotifyCanExecuteChanged();
+        DeselectAllCommand.NotifyCanExecuteChanged();
+        InviteToGroupCommand.NotifyCanExecuteChanged();
+        InviteToCurrentInstanceCommand.NotifyCanExecuteChanged();
     }
 
     private FriendInviterItemViewModel CreateFriendViewModel(FriendInfo friend)
@@ -79,17 +104,17 @@ public partial class FriendInviterViewModel : ObservableObject
         ApplyFilters();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageFriends))]
     private async Task RefreshAsync()
     {
         Console.WriteLine("[FRIEND-MANAGER] RefreshAsync called");
         await LoadFriendsAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageFriends))]
     private async Task SyncMembersAsync()
     {
-        if (IsLoading) return;
+        if (!CanManageFriends) return;
 
         var currentGroupId = _settingsService.CurrentGroupId;
         if (string.IsNullOrEmpty(currentGroupId))
@@ -139,7 +164,7 @@ public partial class FriendInviterViewModel : ObservableObject
     private async Task LoadFriendsAsync()
     {
         Console.WriteLine("[FRIEND-MANAGER] LoadFriendsAsync called");
-        if (IsLoading)
+        if (!CanManageFriends)
         {
             Console.WriteLine("[FRIEND-MANAGER] Already loading, skipping");
             return;
@@ -296,7 +321,7 @@ public partial class FriendInviterViewModel : ObservableObject
         Console.WriteLine($"[FRIEND-MANAGER] FilteredCount updated to: {FilteredCount}, on UI thread: {Application.Current?.Dispatcher?.CheckAccess()}");
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageFriends))]
     private void SelectAll()
     {
         foreach (var friend in FilteredFriends)
@@ -306,7 +331,7 @@ public partial class FriendInviterViewModel : ObservableObject
         UpdateSelectedCount();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageFriends))]
     private void DeselectAll()
     {
         foreach (var friend in Friends)
@@ -321,9 +346,45 @@ public partial class FriendInviterViewModel : ObservableObject
         SelectedCount = Friends.Count(f => f.IsSelected);
     }
 
-    [RelayCommand]
+    [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanInviteCurrentInstance))]
+    private async Task InviteToCurrentInstanceAsync(System.Threading.CancellationToken cancellationToken)
+    {
+        if (IsLoading || IsInvitingInstance) return;
+        var selected = Friends.Where(f => f.IsSelected).ToArray();
+        try
+        {
+            IsInvitingInstance = true;
+            StatusMessage = "Preparing current-instance invites...";
+            var report = await _instanceInviteWorkflow.RunAsync(selected.Select(f => f.Friend.UserId), cancellationToken);
+            foreach (var outcome in report.Outcomes)
+            {
+                foreach (var friend in selected.Where(f => f.Friend.UserId == outcome.UserId))
+                {
+                    friend.InstanceInviteResult = outcome.Status switch
+                    {
+                        InstanceInviteStatus.Unknown => "Unknown (check VRChat before retrying)",
+                        InstanceInviteStatus.NotSent => "Not sent",
+                        _ => outcome.Status.ToString()
+                    };
+                    if (outcome.Status is InstanceInviteStatus.Sent or InstanceInviteStatus.Unknown) friend.IsSelected = false;
+                }
+            }
+            StatusMessage = $"{report.Outcomes.Count(o => o.Status == InstanceInviteStatus.Sent)} sent, " +
+                $"{report.Outcomes.Count(o => o.Status == InstanceInviteStatus.Failed)} failed, " +
+                $"{report.Outcomes.Count(o => o.Status == InstanceInviteStatus.Unknown)} unknown, " +
+                $"{report.Outcomes.Count(o => o.Status == InstanceInviteStatus.NotSent)} not sent. {report.Message}";
+        }
+        finally
+        {
+            IsInvitingInstance = false;
+            UpdateSelectedCount();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageFriends))]
     private async Task InviteToGroupAsync()
     {
+        if (!CanManageFriends) return;
         var selectedFriends = Friends.Where(f => f.IsSelected).ToList();
         if (selectedFriends.Count == 0)
         {
@@ -331,26 +392,31 @@ public partial class FriendInviterViewModel : ObservableObject
             return;
         }
 
-        // Get the current group ID from settings
-        var groupId = _settingsService.Settings.GroupId;
+        // Pin the explicitly selected group for this batch.
+        var groupId = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
         if (string.IsNullOrEmpty(groupId))
         {
             MessageBox.Show("No group configured. Please set up a group first.", "No Group", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
+        if (!GroupInvitePresentation.Confirm(groupId, selectedFriends.Select(f => $"{f.Friend.DisplayName} ({f.Friend.UserId})"))) return;
         try
         {
             IsLoading = true;
             var successCount = 0;
             var failCount = 0;
+            var suppressedCount = 0;
 
             foreach (var friendVM in selectedFriends)
             {
                 StatusMessage = $"Inviting {friendVM.Friend.DisplayName} to group...";
 
                 // Invite to group using group ID
-                var success = await _apiService.SendGroupInviteAsync(groupId, friendVM.Friend.UserId);
+                var outcome = await _apiService.SendTrackedAsync(groupId, friendVM.Friend.UserId, () => (_settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId) == groupId);
+                friendVM.GroupInviteResult = outcome.Message;
+                if (!outcome.Sent && outcome.State != GroupInviteState.Failed) { suppressedCount++; friendVM.IsSelected = false; continue; }
+                var success = outcome.Sent;
 
                 if (success)
                 {
@@ -366,8 +432,8 @@ public partial class FriendInviterViewModel : ObservableObject
                 await Task.Delay(500);
             }
 
-            StatusMessage = $"Invites sent: {successCount} succeeded, {failCount} failed";
-            MessageBox.Show($"Sent {successCount} group invites successfully.\n{failCount} failed.", "Invites Sent", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusMessage = $"Invites: {successCount} sent, {failCount} rejected, {suppressedCount} suppressed/unknown. See row status and Game Log history.";
+            MessageBox.Show(StatusMessage, "Group invitations", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -393,6 +459,11 @@ public partial class FriendInviterItemViewModel : ObservableObject
     private bool _isInGroup;
 
     public FriendInfo Friend { get; }
+
+    [ObservableProperty]
+    private string? _instanceInviteResult;
+
+    [ObservableProperty] private string? _groupInviteResult;
 
     public FriendInviterItemViewModel(FriendInfo friend, FriendInviterViewModel? parent, bool isInGroup = false)
     {

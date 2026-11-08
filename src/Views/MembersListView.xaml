@@ -36,6 +36,7 @@
                          Margin="10,0,0,0"
                              Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Foreground="White" CaretBrush="White"/>
+                    <Button Content="Lookup UUID" Command="{Binding LookupUuidCommand}" Margin="8,0,0,0" ToolTip="Direct user lookup, independent of loaded/cached member rows. Does not ban on lookup."/>
                     <ComboBox ItemsSource="{Binding RoleFilters}"
                               SelectedItem="{Binding SelectedRole}"
                               Width="160"

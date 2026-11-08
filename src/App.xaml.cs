@@ -25,7 +25,7 @@ public partial class App : Application
     private static extern bool FreeConsole();
 
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string Version => "1.1.18";
+    public static string Version => "1.1.21";
     public static string GitHubRepo => "0xE69/VRCGT";
     public static string BindingLogPath { get; private set; } = string.Empty;
 
@@ -231,7 +231,7 @@ public partial class App : Application
             : BaseTheme.Dark;
     }
 
-    private void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(IServiceCollection services)
     {
         // Database & Cache
         services.AddSingleton<IDatabaseService, DatabaseService>();
@@ -247,6 +247,7 @@ public partial class App : Application
         services.AddSingleton<IDiscordWebhookService, DiscordWebhookService>();
         services.AddSingleton<IDiscordPresenceService, DiscordPresenceService>();
         services.AddSingleton<ICalendarEventService, CalendarEventService>();
+        services.AddSingleton<OpenInstanceAnnouncementService>();
         services.AddSingleton<IModerationService, ModerationService>();
         services.AddSingleton<IAutoCloserService, AutoCloserService>();
 
@@ -273,6 +274,16 @@ public partial class App : Application
         services.AddTransient<AppSettingsViewModel>();
         services.AddSingleton<IInstanceInviterService, InstanceInviterService>();
         services.AddTransient<InstanceInviterViewModel>();
+        services.AddTransient<CurrentInstanceInviteWorkflow>(sp => CurrentInstanceInviteWorkflow.Create(
+            sp.GetRequiredService<IVRChatApiService>(),
+            sp.GetRequiredService<IInstanceInviterService>(),
+            (destination, count) => MessageBox.Show(
+                $"Invite {count} selected friend(s) to your current VRChat instance?\n\n" +
+                $"World: {destination.WorldId}\nInstance: {destination.InstanceId.Split('~')[0]}\n\n" +
+                "This includes selected friends hidden by filters. Access restrictions still apply.\n" +
+                "Sending stops if your instance changes. Continue?",
+                "Confirm Current Instance Invites", MessageBoxButton.YesNo, MessageBoxImage.Question,
+                MessageBoxResult.No) == MessageBoxResult.Yes));
         services.AddTransient<FriendInviterViewModel>();
         services.AddTransient<GameLogViewModel>();
         services.AddTransient<BulkInviterViewModel>();
