@@ -29,6 +29,8 @@ public interface IVRChatApiService
     Task<bool> SendAutomaticGroupInviteAsync(string groupId, string userId, Func<bool> canSend, CancellationToken cancellationToken) => throw new NotSupportedException("Automatic guarded invitations unavailable");
     Task<GroupPostResult?> CreateGroupPostAsync(string groupId, string title, string text, IEnumerable<string>? roleIds = null, string visibility = "public", bool sendNotification = true, string? imageId = null);
     Task<UserDetails?> GetUserAsync(string userId);
+    // Separate fail-closed contract: implementations must validate the actual response id, never a fallback DTO id.
+    Task<UserDetails?> GetExactUserIdentityAsync(string userId) => Task.FromResult<UserDetails?>(null);
     Task<UserPresence?> GetUserPresenceAsync(string userId, Func<bool> canRead, CancellationToken cancellationToken) => Task.FromResult<UserPresence?>(null);
     Task<UserDetails?> LookupUserByIdAsync(string userId) => GetUserAsync(userId);
     Task<List<UserSearchResult>> SearchUsersAsync(string query);
@@ -48,6 +50,7 @@ public interface IVRChatApiService
         IEnumerable<string>? roleIds = null,
         string type = "group");
     Task<GroupMemberApiResult?> GetGroupMemberAsync(string groupId, string userId);
+    Task<GroupMembershipState> CheckGroupMembershipAsync(string groupId, string userId) => Task.FromResult(GroupMembershipState.Unknown);
     Task<List<GroupRole>> GetGroupRolesAsync(string groupId);
     Task<List<string>> GetGroupMemberRolesAsync(string groupId, string userId);
     Task<bool> AssignGroupRoleAsync(string groupId, string userId, string roleId);
@@ -1061,6 +1064,7 @@ public partial class VRChatApiService : IVRChatApiService
     {
         if (string.IsNullOrWhiteSpace(groupId) || string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("Group and recipient are required");
         var actingUserId = CurrentUserId;
+        var actingSession = InvitationSession;
         // Claim before pacing/dispatch. Storage failure fails closed without touching the API.
         if (!(automatic ? await _groupInviteLedger.TryClaimAutomaticAsync(groupId, userId) : await _groupInviteLedger.TryClaimAsync(groupId, userId)))
             throw new GroupInviteSuppressedException(await _groupInviteLedger.GetStateAsync(groupId, userId));
@@ -1078,7 +1082,7 @@ public partial class VRChatApiService : IVRChatApiService
             {
                 Content = new StringContent(JsonConvert.SerializeObject(new { userId }), Encoding.UTF8, "application/json")
             };
-            if (cancellationToken.IsCancellationRequested || !canSend() || CurrentUserId != actingUserId)
+            if (cancellationToken.IsCancellationRequested || !canSend() || !IsLoggedIn || InvitationSession != actingSession || CurrentUserId != actingUserId)
             {
                 await _groupInviteLedger.CompleteAsync(groupId, userId, GroupInviteState.NotSent);
                 throw new GroupInviteSuppressedException(GroupInviteState.NotSent);

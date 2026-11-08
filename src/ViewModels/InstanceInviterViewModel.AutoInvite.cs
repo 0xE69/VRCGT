@@ -15,44 +15,49 @@ public partial class InstanceInviterViewModel
     private Dictionary<string, GroupInviteState> _history = new();
     private readonly Dictionary<string, UserDetails?> _userDetails = new();
     private int _detailsBudget;
-    private AutomaticPresenceCorroborator? _presence;
-    private Func<DateTimeOffset> _presenceUtcNow = () => DateTimeOffset.UtcNow;
+    private readonly HashSet<string> _approvedHistory = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GroupMembershipState> _exactMembership = new();
+    private DateTimeOffset _nextMembershipRead;
+    private string? _eligibilityGroup;
+    private bool _futureHistoryAuthorised;
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty] private bool _includeFutureHistory = true;
+    partial void OnIncludeFutureHistoryChanged(bool value) => StopAutoInvite("Auto Invite off: history scope changed. Reconfirm scope.");
     public ObservableCollection<string> AutoInviteLog { get; } = new();
     public Func<AutoGroupInviteContext, string, bool> ConfirmAutoInvite { get; set; } = (context, filters) => MessageBox.Show(
-        $"Enable automatic GROUP invitations?\n\nGroup: {context.GroupId}\nActing account: {context.AccountId}\nCurrent instance: {context.WorldId}:{context.InstanceId}\n\nFilters: {filters}\n\nOnly resolved IDs, not yourself, cached non-members from a timestamped complete membership cache, and users without previous sent/in-flight/unknown/failed invitations are eligible. Local logs are untrusted discovery hints, never proof of presence. Each new candidate needs a read-only API identity/location match (online in the exact instance), fresh for at most 20 seconds including pacing. Hidden/offline/non-friend/unknown locations are skipped without automatic retry; coverage is NOT all occupants. Review those users manually. Presence reads are paced at least 13 seconds apart; unchanged polls make no API requests. Checks run locally every 5 seconds; sends are paced at least 13 seconds apart. Stop on context/filter changes or leaving this view. No restart/resume. Failed invitations require deliberate manual retry. This does NOT send friends instance invitations or publish posts.",
-        "Confirm Auto Invite — current instance to selected group", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        $"Enable Auto GROUP invitations — current and previously encountered users?\n\nGroup: {context.GroupId}\nActing account: {context.AccountId}\n\n{filters}\n\nUntrusted/user-controlled Game History is discovery, NOT verified live presence. The visible snapshot plus future exact-ID LOCAL tracking records only if that scope is explicitly included below. Raw-log imports never silently broaden consent. Source records may be fabricated; this is NOT proof of encounter or presence. Bounded read-only discovery from the default LOCAL VRChat output logs only (16 latest files, last 5 MB/file, 1 MB/check); no contacts or arbitrary import scan. Unsupported client headers are not guaranteed readable. Valid exact IDs only; self, known members, blocked/invalid identities and unknown membership are skipped. Membership reads, if required, are bounded/paced; errors stay pending, not assumed non-members. Room changes/closure and closing VRChat do not stop this queue. Local checks every 5 seconds; sends >=13 seconds apart. Off/logout/account-auth/group/filter changes or closing this view/app stop it. Disabled on restart. No automatic retry of Failed/Unknown/InFlight/Sent. This does NOT invite friends to instances or publish posts.",
+        "Confirm exact group, account and history scope", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 
     partial void OnAutoInviteEnabledChanged(bool value)
     {
         if (value) _ = StartAutoInviteAsync();
-        else { ++_autoGeneration; _autoSession?.Stop(); }
+        else { ++_autoGeneration; _futureHistoryAuthorised=false; _approvedHistory.Clear(); _autoSession?.Stop(); }
     }
     private AutoGroupInviteContext? ReadAutoContext()
     {
         var group = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
         var account = _apiService.CurrentUserId;
-        var instance = _instanceInviterService.GetCurrentInstance();
-        if (!_apiService.IsLoggedIn || string.IsNullOrWhiteSpace(account) || string.IsNullOrWhiteSpace(group) || instance == null || string.IsNullOrEmpty(instance.SessionKey)) return null;
-        // No world-owner exception unless details have been explicitly verified; fail closed in another group's instance.
-        if (!instance.IsGroupInviteAllowed(group)) return null;
-        return new(group, account, _apiService.InvitationSession, instance.SessionKey, instance.WorldId, instance.InstanceId);
+        if (!_apiService.IsLoggedIn || !ApprovalPublisher.Id(account ?? "", "usr") || !ApprovalPublisher.Id(group ?? "", "grp")) return null;
+        // Group invitations target membership, not a destination. History consent survives room/client changes.
+        return new(group!, account!, _apiService.InvitationSession, "reviewed-history", "", "");
     }
     public async Task StartAutoInviteAsync()
     {
+        if (_autoSession?.IsRunning == true) return;
         var generation = ++_autoGeneration;
         try
         {
             var context = ReadAutoContext();
             if (_disposed || IsLoading || context == null || SkipJustJoined && MinInstanceTimeSeconds < 0 || _autoSession?.PendingSend.IsCompleted == false)
-            { StopAutoInvite("Auto Invite unavailable: sign in, select a group and join a permitted current instance; wait for any pending request."); return; }
+            { StopAutoInvite("Auto Invite unavailable: authenticate, select a group and review retained history; wait for any pending request."); return; }
             await LoadLocalEligibilityAsync(context.GroupId);
-            if (_membership is not { IsComplete: true } || _membership.CapturedUtc == default)
-            { StopAutoInvite("Auto Invite off: a timestamped COMPLETE membership cache is required. Refresh the group's member cache first."); return; }
-            var filters = $"18+={Only18Plus}; skip Visitor={SkipVisitors}, New={SkipNewUsers}, User={SkipUsers}, Known={SkipKnown}; minimum time={(SkipJustJoined ? MinInstanceTimeSeconds + "s (unknown times skipped)" : "off")}; search={SearchQuery}";
+            await DiscoverAutoUsersAsync();
+            var reviewed = FilteredInstanceUsers.Select(r => r.User.UserId).Where(id => ApprovalPublisher.Id(id,"usr")).Distinct(StringComparer.Ordinal).ToArray();
+            var filters = $"Local reader: {_instanceInviterService.EncounterHistoryDiagnostic}\nHistory scope: {reviewed.Length} visible exact IDs, retained limit {GroupInviteLedger.EncounterLimit}; current AND previously encountered. Include future exact-ID local tracking discovery={IncludeFutureHistory} (NOT raw-log imports/contacts).\n18+={Only18Plus}; skip Visitor={SkipVisitors}, New={SkipNewUsers}, User={SkipUsers}, Known={SkipKnown}; minimum time={(SkipJustJoined ? MinInstanceTimeSeconds + "s (unknown times skipped)" : "off")}; search={SearchQuery}\nExact recipients:\n{string.Join("\n", reviewed)}";
             if (generation != _autoGeneration || !AutoInviteEnabled || ReadAutoContext() != context) return;
             if (!ConfirmAutoInvite(context, filters) || generation != _autoGeneration || ReadAutoContext() != context)
             { StopAutoInvite("Auto Invite not started: confirmation declined or context changed."); return; }
-            _presence = new(context, () => _presenceUtcNow());
+            _approvedHistory.Clear(); _approvedHistory.UnionWith(reviewed);
+            _futureHistoryAuthorised=IncludeFutureHistory;
             _autoSession = new(context, ReadAutoContext, DiscoverAutoUsersAsync, IsAutoEligibleAsync, StillAutoEligible,
                 async (id, guard, token) =>
                 {
@@ -72,7 +77,7 @@ public partial class InstanceInviterViewModel
                     AddAutoLog(message);
                     if (message.StartsWith("Auto Invite stopped", StringComparison.Ordinal)) AutoInviteEnabled = false;
                 });
-            AddAutoLog("Auto Invite on — local checks every 5 seconds; API presence corroboration required. Hidden/non-friend/unknown presence is skipped; not all occupants are supported. Shared history prevents repeats.");
+            AddAutoLog($"Auto GROUP invitations on — {reviewed.Length} reviewed history IDs; checks every 5 seconds, sends >=13 seconds. Unknown membership pending. No location/client requirement.");
             await _autoSession.RunAsync();
         }
         catch { StopAutoInvite("Auto Invite stopped: local cache/request unavailable. No automatic retry."); }
@@ -87,6 +92,8 @@ public partial class InstanceInviterViewModel
     public void StopAutoInvite(string reason = "Auto Invite off.")
     {
         ++_autoGeneration;
+        _approvedHistory.Clear();
+        _futureHistoryAuthorised=false;
         _autoSession?.Stop(reason);
         if (AutoInviteEnabled) AutoInviteEnabled = false;
         if (_autoSession != null) AddAutoLog(reason);
@@ -94,6 +101,7 @@ public partial class InstanceInviterViewModel
     public void Dispose() { _disposed = true; StopAutoInvite("Auto Invite stopped: view/application closed."); }
     private async Task LoadLocalEligibilityAsync(string group)
     {
+        if (_eligibilityGroup != group) { _exactMembership.Clear(); _eligibilityGroup=group; }
         _membership = await _inviteLedger.ReadMembershipAsync(group);
         _history = (await _inviteLedger.ReadAsync(group)).ToDictionary(r => r.UserId, r => r.State);
     }
@@ -101,18 +109,32 @@ public partial class InstanceInviterViewModel
     {
         var context = ReadAutoContext();
         if (context == null) return new();
+        EnsureIdentityScope();
         await LoadLocalEligibilityAsync(context.GroupId);
-        var users = await _instanceInviterService.GetCurrentInstanceUsersAsync(_apiService);
-        _detailsBudget = 1; // at most one new detail lookup per detection cycle, never a blanket N+1 fetch
+        var local = await _instanceInviterService.ReadLocalEncounterHistoryAsync();
+        // Only deltas from the approved LOCAL reader can enter future scope. Retained/imported records alone cannot.
+        var fresh = local.Where(u => ApprovalPublisher.Id(u.UserId,"usr")).Select(u => new SeenUser { UserId=u.UserId, DisplayName=u.DisplayName, LastSeenAt=u.JoinTime, Source="LOCAL VRChat log — untrusted discovery" }).ToList();
+        if (fresh.Count > 0)
+        {
+            await _inviteLedger.SaveEncountersAsync(fresh);
+            if (_futureHistoryAuthorised && AutoInviteEnabled) _approvedHistory.UnionWith(fresh.Select(r=>r.UserId));
+        }
+        var retained = await _inviteLedger.ReadEncountersAsync();
+        var users = retained.Select(r => new InstanceUser { UserId=r.UserId, DisplayName=r.DisplayName, JoinTime=r.LastSeenAt, IsAgeVerified=r.IsAgeVerified, Tags=r.Tags, ProfilePicUrl=r.ProfilePicUrl }).ToList();
+        _detailsBudget = 1;
         InstanceUsers.Clear();
         foreach (var user in users)
         {
             ApplyKnownDetails(user);
-            var state = _history.GetValueOrDefault(user.UserId);
-            InstanceUsers.Add(new(user, this) { GroupInviteResult = $"{GroupInviteEligibility.Membership(user.UserId, _membership)} · {state} · {_presence?.Describe(context, user.UserId) ?? "presence pending — logs alone cannot authorize"}" });
+            InstanceUsers.Add(new(user,this) { GroupInviteResult=$"Untrusted retained Game History · {MembershipOf(user.UserId)} · {_history.GetValueOrDefault(user.UserId)} · {(_approvedHistory.Contains(user.UserId) ? "reviewed scope" : "not authorised / review required")}" });
         }
-        ApplyInstanceUserFilters();
-        return users;
+        ApplyInstanceUserFilters(); return users;
+    }
+    private GroupMembershipState MembershipOf(string id)
+    {
+        if (_exactMembership.GetValueOrDefault(id)==GroupMembershipState.Blocked) return GroupMembershipState.Blocked;
+        var cached = GroupInviteEligibility.Membership(id,_membership);
+        return cached != GroupMembershipState.Unknown ? cached : _exactMembership.GetValueOrDefault(id,GroupMembershipState.Unknown);
     }
     private void ApplyKnownDetails(InstanceUser user)
     {
@@ -120,11 +142,23 @@ public partial class InstanceInviterViewModel
         user.IsAgeVerified = detail.IsAgeVerified; user.Tags = detail.Tags; user.ProfilePicUrl = detail.ProfilePicUrl ?? "";
     }
     private bool NeedsFilterDetails => Only18Plus || SkipVisitors || SkipNewUsers || SkipUsers || SkipKnown;
+    private AutoGroupInviteContext? _identityScope;
+    private void EnsureIdentityScope()
+    {
+        var scope=ReadAutoContext();
+        if (_identityScope==scope) return;
+        _identityScope=scope; _userDetails.Clear(); _exactMembership.Clear(); _nextMembershipRead=default;
+    }
+    private bool HasExactIdentity(string id) => _identityScope!=null && _identityScope==ReadAutoContext() && _userDetails.TryGetValue(id,out var detail) && detail?.UserId==id;
     private async Task ResolveFilterDetailsAsync(InstanceUser user)
     {
+        EnsureIdentityScope();
+        var scope=_identityScope;
+        if (scope==null) return;
         if (_userDetails.ContainsKey(user.UserId)) { ApplyKnownDetails(user); return; }
         _userDetails[user.UserId] = null; // reserve/cache failures too; overlapping refresh cannot duplicate a lookup
-        var details = await _apiService.GetUserAsync(user.UserId);
+        var details = await _apiService.GetExactUserIdentityAsync(user.UserId);
+        if (scope!=ReadAutoContext() || scope!=_identityScope) return;
         _userDetails[user.UserId] = details?.UserId == user.UserId ? details : null;
         ApplyKnownDetails(user);
     }
@@ -132,7 +166,7 @@ public partial class InstanceInviterViewModel
     private bool BasicEligibility(InstanceUser user, bool automatic, bool claimed = false)
     {
         if (!ApprovalPublisher.Id(user.UserId, "usr") || user.UserId == _apiService.CurrentUserId) return false;
-        if (_membership?.CapturedUtc == default || GroupInviteEligibility.Membership(user.UserId, _membership) != GroupMembershipState.CachedNonMember) return false;
+        if (MembershipOf(user.UserId) != GroupMembershipState.CachedNonMember) return false;
         var state = _history.GetValueOrDefault(user.UserId);
         if (!claimed && (automatic ? state is not (GroupInviteState.None or GroupInviteState.NotSent) : !GroupInviteEligibility.CanSelect(user.UserId, GroupMembershipState.CachedNonMember, state))) return false;
         if (SkipJustJoined && (MinInstanceTimeSeconds < 0 || user.JoinTime == DateTime.MinValue || (DateTime.Now - user.JoinTime).TotalSeconds < MinInstanceTimeSeconds)) return false;
@@ -148,33 +182,23 @@ public partial class InstanceInviterViewModel
     }
     private async Task<bool> IsAutoEligibleAsync(InstanceUser user)
     {
-        if (!BasicEligibility(user, true)) return false; // ledger/membership before any enrichment HTTP
-        if ((Only18Plus || SkipVisitors || SkipNewUsers || SkipUsers || SkipKnown) && !_userDetails.ContainsKey(user.UserId))
+        EnsureIdentityScope();
+        if (!AutoInviteEnabled || !_approvedHistory.Contains(user.UserId) || !ApprovalPublisher.Id(user.UserId,"usr") || user.UserId==_apiService.CurrentUserId || _history.GetValueOrDefault(user.UserId) is not (GroupInviteState.None or GroupInviteState.NotSent)) return false;
+        if (MembershipOf(user.UserId)==GroupMembershipState.Unknown && !_exactMembership.ContainsKey(user.UserId) && DateTimeOffset.UtcNow>=_nextMembershipRead)
         {
-            if (_detailsBudget <= 0) return false;
-            --_detailsBudget;
-            await ResolveFilterDetailsAsync(user);
-            ApplyInstanceUserFilters();
+            _exactMembership[user.UserId]=GroupMembershipState.Unknown;
+            _nextMembershipRead=DateTimeOffset.UtcNow.AddSeconds(13);
+            var context=ReadAutoContext();
+            if (context!=null) _exactMembership[user.UserId]=await _apiService.CheckGroupMembershipAsync(context.GroupId,user.UserId);
+            _nextMembershipRead=DateTimeOffset.UtcNow.AddSeconds(13);
         }
-        if (!PassDetailFilters(user)) return false;
-        var context = ReadAutoContext();
-        if (!AutoInviteEnabled || context == null) return false;
-        var generation = _autoGeneration;
-        var presence = _presence ??= new(context, () => _presenceUtcNow());
-        bool Valid() => AutoInviteEnabled && generation == _autoGeneration && ReadAutoContext() == context;
-        var corroborated = await presence.ResolveAsync(context, user.UserId, _apiService, Valid);
-        var row = InstanceUsers.FirstOrDefault(u => u.User.UserId == user.UserId);
-        if (row != null) row.GroupInviteResult = presence.Describe(context, user.UserId);
-        return Valid() && corroborated;
+        if (!BasicEligibility(user,true)) return false;
+        if (!_userDetails.ContainsKey(user.UserId))
+        {
+            if (_detailsBudget<=0) return false;
+            --_detailsBudget; await ResolveFilterDetailsAsync(user); ApplyInstanceUserFilters();
+        }
+        return AutoInviteEnabled && _approvedHistory.Contains(user.UserId) && HasExactIdentity(user.UserId) && PassDetailFilters(user);
     }
-    private bool StillAutoEligible(InstanceUser user)
-    {
-        var context = ReadAutoContext();
-        if (!AutoInviteEnabled || context == null || _presence?.Confirms(context, user.UserId) != true || !BasicEligibility(user, true, claimed: true) || !PassDetailFilters(user)) return false;
-        // Revalidate the bounded API evidence and LOCAL departure/context after pacing, before central HTTP.
-        // A forged log row remains only a hint and cannot produce API evidence.
-        if (_instanceInviterService is InstanceInviterService local)
-            return local.GetLocalUsers().Any(u => u.UserId == user.UserId && u.JoinTime == user.JoinTime);
-        return InstanceUsers.Any(u => u.User.UserId == user.UserId);
-    }
+    private bool StillAutoEligible(InstanceUser user) => AutoInviteEnabled && !_disposed && HasExactIdentity(user.UserId) && _approvedHistory.Contains(user.UserId) && BasicEligibility(user,true,claimed:true) && PassDetailFilters(user);
 }

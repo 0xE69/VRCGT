@@ -68,6 +68,7 @@ public partial class GameLogViewModel : ObservableObject
         VRCGroupTools.Data.IDatabaseService? database = null)
     {
         _apiService = apiService;
+        ConfirmGroupInvites = (group, users) => Task.FromResult(MessageBox.Show($"Send {users.Count} GROUP invitations?\n\nExact group: {group}\nActing account: {_apiService.CurrentUserId}\n\n{string.Join("\n", users)}\n\nGame History is untrusted discovery, not verified live presence. Prior Sent/InFlight/Unknown block duplicates. Failed retries are deliberate.", "Confirm group/account/history recipients", MessageBoxButton.YesNo, MessageBoxImage.Question)==MessageBoxResult.Yes);
         _settingsService = settingsService;
         _ledger = ledger ?? new GroupInviteLedger();
         _cache = cache;
@@ -76,7 +77,7 @@ public partial class GameLogViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task RefreshGroupAsync() => await RefreshGroupContextAsync();
+    private async Task RefreshGroupAsync() => await LoadRetainedHistoryAsync();
 
     public async Task RefreshGroupContextAsync()
     {
@@ -103,6 +104,7 @@ public partial class GameLogViewModel : ObservableObject
             foreach (var row in SeenUsers)
             {
                 row.Membership = GroupInviteEligibility.Membership(row.User.UserId, snapshot);
+                if (row.Membership==GroupMembershipState.Unknown && _checkedMembership.TryGetValue((groupId,row.User.UserId),out var exact)) row.Membership=exact;
                 row.InviteState = states.GetValueOrDefault(row.User.UserId, GroupInviteState.None);
             }
             GroupContext = $"Group: {groupId} · Membership cache: {(snapshot.IsComplete ? snapshot.CapturedUtc.ToLocalTime().ToString("g") : "incomplete/unknown — Sync members")} · History: {history.Count}";
@@ -139,7 +141,7 @@ public partial class GameLogViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadAsync()
     {
-        await ScanGameLogAsync();
+        await LoadRetainedHistoryAsync();
     }
 
     [RelayCommand]
@@ -154,7 +156,9 @@ public partial class GameLogViewModel : ObservableObject
             SeenUsers.Clear();
             FilteredUsers.Clear();
 
-            var users = await Task.Run(() => ParseGameLog());
+            var parsed = await Task.Run(() => ParseGameLog());
+            await _ledger.SaveEncountersAsync(parsed);
+            var users = await _ledger.ReadEncountersAsync();
             TotalUsersFound = users.Count;
 
             if (users.Count == 0)
@@ -175,9 +179,10 @@ public partial class GameLogViewModel : ObservableObject
 
             // Fetch additional details from API
             await FetchUserDetailsAsync();
+            await _ledger.SaveEncountersAsync(SeenUsers.Select(r=>r.User).ToList());
             await RefreshGroupContextAsync();
 
-            StatusMessage = $"Loaded {SeenUsers.Count} recently seen users";
+            StatusMessage = $"Loaded {SeenUsers.Count} current/past discovery records; not verified live presence";
         }
         catch (Exception ex)
         {
@@ -208,6 +213,7 @@ public partial class GameLogViewModel : ObservableObject
 
             // Get all recent log files (last 7 days worth)
             var logFiles = Directory.GetFiles(vrchatLogPath, "output_log_*.txt")
+                .Where(f => new FileInfo(f).Length <= 20 * 1024 * 1024) // Explicit scan only; bounded, never background authorisation.
                 .OrderByDescending(f => File.GetLastWriteTime(f))
                 .Take(10) // Check last 10 log files
                 .ToList();
@@ -362,7 +368,7 @@ public partial class GameLogViewModel : ObservableObject
                         // Display names are not unique identities. Never select an arbitrary ban/invite target.
                         var match = matches.Count == 1 ? matches[0] : null;
 
-                        if (match != null)
+                        if (match != null && ApprovalPublisher.Id(match.UserId,"usr"))
                         {
                             userVM.User.UserId = match.UserId;
                             userVM.User.ProfilePicUrl = match.ProfilePicUrl ?? string.Empty;
@@ -375,11 +381,11 @@ public partial class GameLogViewModel : ObservableObject
                         Console.WriteLine($"[GAME-LOG] Search failed for {userVM.User.DisplayName}: {searchEx.Message}");
                     }
                 }
-                else
+                else if (ApprovalPublisher.Id(userVM.User.UserId,"usr"))
                 {
                     // Fetch full details
                     var details = await _apiService.GetUserAsync(userVM.User.UserId);
-                    if (details != null)
+                    if (details?.UserId == userVM.User.UserId)
                     {
                         userVM.User.ProfilePicUrl = details.ProfilePicUrl ?? string.Empty;
                         userVM.User.IsAgeVerified = details.IsAgeVerified;
@@ -464,6 +470,36 @@ public partial class GameLogViewModel : ObservableObject
         UpdateSelectedCount();
     }
 
+    internal bool IsSelf(string id) => id == _apiService.CurrentUserId;
+
+    public async Task LoadRetainedHistoryAsync()
+    {
+        SeenUsers.Clear();
+        foreach(var user in await _ledger.ReadEncountersAsync()) SeenUsers.Add(new(user,this));
+        TotalUsersFound=SeenUsers.Count; await RefreshGroupContextAsync(); ApplyFilters();
+        StatusMessage=$"Retained Game History: {SeenUsers.Count} current/past records (max {GroupInviteLedger.EncounterLimit}); untrusted discovery, not live presence.";
+    }
+
+    [RelayCommand]
+    private async Task CheckVisibleMembershipAsync()
+    {
+        var group=SelectedGroupId; var account=_apiService.CurrentUserId; var auth=_apiService.InvitationSession;
+        if(IsLoading || !_apiService.IsLoggedIn || !ApprovalPublisher.Id(group??"","grp")) return;
+        IsLoading=true;
+        try
+        {
+            foreach(var row in FilteredUsers.Where(r=>r.Membership is GroupMembershipState.Unknown or GroupMembershipState.ApiError && ApprovalPublisher.Id(r.User.UserId,"usr") && !IsSelf(r.User.UserId) && r.InviteState is GroupInviteState.None or GroupInviteState.NotSent or GroupInviteState.Failed).Take(20).ToList())
+            {
+                var state=await _apiService.CheckGroupMembershipAsync(group!,row.User.UserId);
+                if(SelectedGroupId!=group || _apiService.CurrentUserId!=account || _apiService.InvitationSession!=auth || !_apiService.IsLoggedIn) return;
+                row.Membership=state;
+                _checkedMembership[(group!,row.User.UserId)]=state;
+            }
+            ApplyFilters(); StatusMessage="Reviewed at most 20 visible unknown memberships; 200 null alone proves non-member. Unknown/API errors remain pending; no automatic retry.";
+        } finally { IsLoading=false; }
+    }
+    private readonly Dictionary<(string Group,string User),GroupMembershipState> _checkedMembership=new();
+
     public void UpdateSelectedCount()
     {
         SelectedCount = SeenUsers.Count(u => u.IsSelected);
@@ -515,22 +551,25 @@ public partial class GameLogViewModel : ObservableObject
         if (IsLoading) return;
         var groupId = SelectedGroupId;
         if (string.IsNullOrWhiteSpace(groupId)) { StatusMessage = "Select a group first"; return; }
+        var actor = _apiService.CurrentUserId; var auth = _apiService.InvitationSession;
+        bool ContextValid() => _apiService.IsLoggedIn && actor == _apiService.CurrentUserId && auth == _apiService.InvitationSession && SelectedGroupId == groupId;
+        if (!ContextValid() || !ApprovalPublisher.Id(groupId,"grp")) { StatusMessage="Authenticate and select an exact group first."; return; }
         IsLoading = true;
         try
         {
             await RefreshGroupContextAsync();
             var selected = FilteredUsers.Where(u => u.IsSelected && u.CanInvite).GroupBy(u => u.User.UserId, StringComparer.Ordinal).Select(g => g.First()).ToList();
-            if (selected.Count == 0) { StatusMessage = "Select eligible visible non-members. Unknown membership requires a member sync."; return; }
+            if (selected.Count == 0) { StatusMessage = "Select eligible visible non-members. Unknown membership requires visible exact membership checks or a member sync."; return; }
             if (!await ConfirmGroupInvites(groupId, selected.Select(u => $"{u.User.DisplayName} ({u.User.UserId})").ToList())) { StatusMessage = "Invitations cancelled"; return; }
             int sent = 0, failed = 0, suppressed = 0;
             foreach (var row in selected)
             {
                 await InvitePacing();
-                if (SelectedGroupId != groupId) { StatusMessage = "Selected group changed. Remaining invitations not sent."; return; }
+                if (!ContextValid()) { StatusMessage = "Group/account/authentication changed. Remaining invitations not sent."; return; }
                 if (!FilteredUsers.Contains(row) || !row.IsSelected || !row.CanInvite) continue;
                 try
                 {
-                    var success = await _apiService.SendGroupInviteGuardedAsync(groupId, row.User.UserId, () => SelectedGroupId == groupId);
+                    var success = await _apiService.SendGroupInviteGuardedAsync(groupId, row.User.UserId, () => ContextValid() && row.IsSelected && FilteredUsers.Contains(row) && row.CanInvite);
                     row.InviteState = success ? GroupInviteState.Sent : GroupInviteState.Failed;
                     if (success) sent++; else failed++;
                 }
@@ -553,6 +592,7 @@ public class SeenUser
     public List<string> Tags { get; set; } = new();
     public DateTime LastSeenAt { get; set; }
     public string? WorldId { get; set; }
+    public string Source { get; set; } = "Game Log import — untrusted discovery, not verified live presence";
 }
 
 public partial class GameLogUserViewModel : ObservableObject
@@ -566,8 +606,8 @@ public partial class GameLogUserViewModel : ObservableObject
     private GroupMembershipState _membership = GroupMembershipState.Unknown;
     [ObservableProperty]
     private GroupInviteState _inviteState = GroupInviteState.None;
-    public bool CanInvite => GroupInviteEligibility.CanSelect(User.UserId, Membership, InviteState);
-    public string GroupStatus => $"{Membership} · Invite: {InviteState}";
+    public bool CanInvite => ApprovalPublisher.Id(User.UserId,"usr") && (_parent?.IsSelf(User.UserId) != true) && GroupInviteEligibility.CanSelect(User.UserId, Membership, InviteState);
+    public string GroupStatus => $"{Membership} · Invite: {InviteState} · {User.Source}";
     partial void OnMembershipChanged(GroupMembershipState value) { OnPropertyChanged(nameof(CanInvite)); OnPropertyChanged(nameof(GroupStatus)); if (!CanInvite) IsSelected = false; }
     partial void OnInviteStateChanged(GroupInviteState value) { OnPropertyChanged(nameof(CanInvite)); OnPropertyChanged(nameof(GroupStatus)); if (!CanInvite) IsSelected = false; }
     public SeenUser User { get; }

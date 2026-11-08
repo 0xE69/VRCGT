@@ -16,7 +16,16 @@ public partial class GameLogView : UserControl
             finally { refreshing = false; }
         }
         timer.Tick += Refresh;
-        Loaded += (s, e) => { Refresh(s, e); timer.Start(); };
+        Loaded += async (s, e) =>
+        {
+            if (DataContext is VRCGroupTools.ViewModels.GameLogViewModel vm && !vm.IsLoading)
+            {
+                try { refreshing=true; await vm.LoadRetainedHistoryAsync(); }
+                catch { vm.StatusMessage="Retained Game History unavailable; no invitations sent."; }
+                finally { refreshing=false; }
+            }
+            Refresh(s,e); timer.Start();
+        };
         Unloaded += (s, e) => timer.Stop();
     }
 }

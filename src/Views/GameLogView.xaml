@@ -30,6 +30,7 @@
             <TextBlock Text="{Binding GroupContext}" Foreground="#B0B0B0" TextWrapping="Wrap" Margin="0,8,0,4"/>
             <WrapPanel>
                 <Button Content="Refresh local history" Command="{Binding RefreshGroupCommand}" Margin="0,0,8,4"/>
+                <Button Content="Check visible unknown memberships (max 20, paced API)" Command="{Binding CheckVisibleMembershipCommand}" Margin="0,0,8,4"/>
                 <Button Content="Sync members (API)" Command="{Binding SyncMembersCommand}" Margin="0,0,8,4"/>
                 <CheckBox Content="Hide sent / pending / unknown invites" IsChecked="{Binding HidePriorInvites}" Foreground="White" Margin="0,0,8,4"/>
             </WrapPanel>

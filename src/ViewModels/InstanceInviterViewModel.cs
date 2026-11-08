@@ -237,9 +237,9 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
         else
         {
             CurrentInstanceDisplay = _instanceInviterService.DetectionDiagnostic.Display;
-            StatusMessage = "Current instance unverified; invitations are blocked. Share the diagnostic code and app version for support, not your VRChat log.";
+            StatusMessage = "Current instance unverified (informational). GROUP invitations remain available from retained Game History. Friend-to-instance invitations still require a verified destination.";
             CurrentInstanceDetails = null;
-            InstanceUsers.Clear();
+            _ = RefreshInstanceUsersAsync();
         }
     }
 
@@ -268,7 +268,7 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
         {
             var group = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
             if (!string.IsNullOrWhiteSpace(group)) await LoadLocalEligibilityAsync(group);
-            var users = await _instanceInviterService.GetCurrentInstanceUsersAsync(_apiService);
+            var users = await DiscoverAutoUsersAsync();
             // Explicit manual refresh resolves only NEW eligible IDs whose enabled filters need metadata.
             // Auto polling uses its separate one-new-lookup-per-cycle budget; neither path re-fetches unchanged users.
             if (NeedsFilterDetails)
@@ -564,32 +564,7 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Check if the current instance allows group invites (anti-abuse restriction)
-        // Only allow invites from: the group's own instances OR non-group instances
-        // Exception: World owners can always send invites from their own worlds
-        // Block invites when in another group's instance to prevent abuse
-        var isWorldOwner = !string.IsNullOrEmpty(_apiService.CurrentUserId) && 
-                          CurrentInstanceDetails?.OwnerId == _apiService.CurrentUserId;
-        
-        if (CurrentInstance != null && !isWorldOwner && !CurrentInstance.IsGroupInviteAllowed(groupId))
-        {
-            var instanceGroupId = CurrentInstance.GetInstanceGroupId();
-            if (!silent)
-                MessageBox.Show(
-                    $"Instance invite is restricted when you're in another group's instance.\n\n" +
-                    $"You can only send group invites from:\n" +
-                    $"• Your own group's instances\n" +
-                    $"• Non-group (public/friends/private) instances\n" +
-                    $"• Worlds you own (any instance type)\n\n" +
-                    $"Current instance belongs to group: {instanceGroupId}",
-                    "Instance Restriction",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            else
-                StatusMessage = "Auto-invite blocked: Cannot invite from another group's instance";
-            return;
-        }
-
+        // Group invitations do not depend on a current instance or world ownership.
         var confirmedContext = ReadAutoContext();
         if (confirmedContext == null || confirmedContext.GroupId != groupId) return;
         if (!GroupInvitePresentation.Confirm(groupId, selectedUsers.Select(u => $"{u.User.DisplayName} ({u.User.UserId})"))) return;

@@ -20,11 +20,11 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="💌 Instance Inviter" 
+            <TextBlock Text="💌 Group Inviter (Game History)"
                       FontSize="28" 
                       FontWeight="Bold" 
                       Foreground="White"/>
-            <TextBlock Text="Invite users from your current VRChat instance to your group" 
+            <TextBlock Text="Auto GROUP invitations — current and previously encountered users"
                       Foreground="#888" 
                       FontSize="14" 
                       Margin="0,5,0,0"/>
@@ -33,7 +33,7 @@
         <!-- Current Instance Info -->
         <Border Grid.Row="1" Background="#2D2D30" CornerRadius="8" Padding="20" Margin="0,0,0,15">
             <StackPanel>
-                <TextBlock Text="📍 Current Instance" 
+                <TextBlock Text="📍 Current Instance — informational for GROUP invitations"
                           FontSize="18"
                           FontWeight="SemiBold"
                           Foreground="White"
@@ -98,7 +98,7 @@
                                  Foreground="White"
                                  Margin="0,0,20,10"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,20,10">
-                            <CheckBox Content="Min Time in Instance:" 
+                            <CheckBox Content="Min time since encounter:"
                                      IsChecked="{Binding SkipJustJoined}"
                                      ToolTip="Skip users who haven't been in the instance long enough"
                                      Foreground="White"
@@ -118,10 +118,11 @@
                         </StackPanel>
                     </WrapPanel>
 
-                    <CheckBox x:Name="AutoInviteCheckBox" Grid.Column="1" Content="Auto Invite (every 5 seconds)" IsChecked="{Binding AutoInviteEnabled, Mode=TwoWay}" Foreground="White" VerticalAlignment="Center" ToolTip="Explicit opt-in. Local checks every 5 seconds; each new candidate requires fresh API identity/location corroboration. Hidden/non-friend/unknown presence is skipped, not all occupants are supported. Always off on restart/context/filter changes."/>
+                    <CheckBox x:Name="AutoInviteCheckBox" Grid.Column="1" Content="Auto GROUP invitations (5s queue checks)" IsChecked="{Binding AutoInviteEnabled, Mode=TwoWay}" Foreground="White" VerticalAlignment="Center" ToolTip="Explicit opt-in confirms exact group/account, visible history IDs and filters. Continues after room changes, room closure or VRChat client exit; off on account/auth/group/filter changes or app close. Always disabled on restart."/>
                 </Grid>
-                <TextBox TextChanged="OnFilterTextChanged" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Filter instance users by name or exact ID (editing stops Auto Invite)" Foreground="White" Margin="0,8,0,4"/>
-                <TextBlock Text="Automatic invites require fresh API-confirmed presence. Hidden/non-friend/unknown locations are skipped (not all occupants); logs alone never authorize. Review skipped users manually." Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                <TextBox TextChanged="OnFilterTextChanged" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Filter retained current/past history by name or exact ID (edits stop Auto Invite)" Foreground="White" Margin="0,8,0,4"/>
+                <TextBlock Text="Retained Game History is untrusted discovery, NOT verified live presence. Review the visible current/past scope; enabling confirms exact IDs and filters. Future local tracking records only enter the consented queue when that explicit scope is enabled; raw imports require re-confirmation. No current instance or visible API location required. Unknown membership remains pending." Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                <CheckBox Content="History scope includes future exact-ID local tracking records (untrusted discovery; confirmed when enabling)" IsChecked="{Binding IncludeFutureHistory}" Foreground="#BBB" Margin="0,5,0,0"/>
                 <TextBlock x:Name="AutoInviteStatus" Text="{Binding StatusMessage}" Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
                 <Expander Header="Auto Invite activity — persistent outcomes in Game Log / shared local history" Foreground="#BBB" Margin="0,5,0,0">
                     <ListBox x:Name="AutoInviteActivity" ItemsSource="{Binding AutoInviteLog}" MaxHeight="100" Foreground="#BBB" Background="Transparent"/>
@@ -151,7 +152,7 @@
                               VerticalAlignment="Center" 
                               Margin="0,0,10,0"/>
                     <TextBlock Grid.Column="1" 
-                              Text="Users in Instance" 
+                              Text="Current and previously encountered users"
                               FontSize="18" 
                               FontWeight="SemiBold" 
                               Foreground="White" 
@@ -174,13 +175,13 @@
                            HorizontalAlignment="Center"
                            Visibility="{Binding FilteredInstanceUsers.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
                     <TextBlock Text="⚠️" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,15"/>
-                    <TextBlock Text="No users detected in this instance" 
+                    <TextBlock Text="No retained encounter records"
                               FontSize="16" 
                               FontWeight="SemiBold" 
                               Foreground="White" 
                               HorizontalAlignment="Center"
                               Margin="0,0,0,10"/>
-                    <TextBlock Text="Try refreshing instance detection or adjust your filters" 
+                    <TextBlock Text="Scan/review Game Log history, refresh or adjust your filters"
                               FontSize="13" 
                               Foreground="#888" 
                               HorizontalAlignment="Center"/>
@@ -248,7 +249,7 @@
 
                                         <!-- Time Tracker -->
                                         <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="10,0,0,0">
-                                            <TextBlock Text="⏱️ Time in Instance" 
+                                            <TextBlock Text="⏱️ Since encounter"
                                                       Foreground="#888" 
                                                       FontSize="10"
                                                       HorizontalAlignment="Right"/>

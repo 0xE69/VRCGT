@@ -86,9 +86,34 @@ tests.AddRange(ApiTests.All());
 tests.AddRange(UntrustedLogTests.All());
 tests.AddRange(PresenceTests.All());
 tests.AddRange(PresenceDispatchTests.All());
+tests.AddRange(HistoryTests.All());
+tests.AddRange(ReviewRegressionTests.All());
+Add("Historical group context needs account and group, not a current instance",()=>{
+    using var temp=new Temp();
+    var api=Proxy.Make<IVRChatApiService>((m,_)=>m.Name switch {"get_IsLoggedIn"=>true,"get_CurrentUserId"=>"usr_33333333-3333-3333-3333-333333333333","get_InvitationSession"=>1L,_=>null});
+    var settings=new AppSettings {GroupId="grp_11111111-1111-1111-1111-111111111111"};
+    var vm=new VRCGroupTools.ViewModels.InstanceInviterViewModel(api,Proxy.Make<ISettingsService>((m,_)=>m.Name switch {"get_Settings"=>settings,"get_CurrentGroupId"=>settings.GroupId,_=>null}),Proxy.Make<IInstanceInviterService>((_,_)=>null),Proxy.Make<ICacheService>((_,_)=>null),new GroupInviteLedger(temp.Db));
+    var context=typeof(VRCGroupTools.ViewModels.InstanceInviterViewModel).GetMethod("ReadAutoContext",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(vm,null);
+    Check(context!=null,"Historical GROUP invitations wrongly require an active instance"); vm.Dispose();return Task.CompletedTask;
+});
+Add("Encounter history persists independently of instance/client and defaults to no consent",async()=>{
+    using var temp=new Temp();var ledger=new GroupInviteLedger(temp.Db);
+    var save=typeof(GroupInviteLedger).GetMethod("SaveEncountersAsync"); var read=typeof(GroupInviteLedger).GetMethod("ReadEncountersAsync");
+    Check(save!=null&&read!=null,"Retained encounter queue missing");
+    var users=new List<VRCGroupTools.ViewModels.SeenUser>{new(){UserId=PresenceTests.User,DisplayName="Past user",LastSeenAt=DateTime.Now.AddDays(-1)}};
+    await (Task)save!.Invoke(ledger,new object[]{users})!;
+    var reloaded=await (Task<List<VRCGroupTools.ViewModels.SeenUser>>)read!.Invoke(new GroupInviteLedger(temp.Db),null)!;
+    Check(reloaded.Single().UserId==PresenceTests.User,"Restart discarded historical identity");
+});
+Add("Historical group eligibility ignores API private location",async()=>{
+    using var f=new PresenceTests.Harness(PresenceTests.Json(PresenceTests.User,"private"));await f.Discover();
+    Check(await f.Eligible(),"Valid consented nonmember wrongly blocked by private location");
+});
+var filter=Environment.GetEnvironmentVariable("VRCGT_TEST_FILTER");
+var executed=tests.Where(t=>filter==null || t.Item1.Contains(filter,StringComparison.OrdinalIgnoreCase)).ToList();
 var failures=0;
-foreach(var (name,run) in tests)try{await run();Console.WriteLine("PASS "+name);}catch(Exception e){failures++;Console.WriteLine("FAIL "+name+": "+e.Message);}
-Console.WriteLine($"{tests.Count-failures}/{tests.Count} passed");return failures==0?0:1;
+foreach(var (name,run) in executed)try{await run();Console.WriteLine("PASS "+name);}catch(Exception e){failures++;Console.WriteLine("FAIL "+name+": "+e.Message);}
+Console.WriteLine($"{executed.Count-failures}/{executed.Count} passed");return failures==0?0:1;
 
 sealed class Fixture {
     public AutoGroupInviteContext? Context=new("g","a",1,"client","world","instance");

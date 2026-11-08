@@ -13,7 +13,7 @@ public sealed class GroupInviteSuppressedException : Exception
 
 /// <summary>Group-wide local ledger, intentionally shared across accounts: changing sender must not re-invite a recipient.
 /// Atomic SQLite claims survive crashes. An orphaned InFlight is deliberately never retried automatically.</summary>
-public sealed class GroupInviteLedger
+public sealed partial class GroupInviteLedger
 {
     private readonly string _connectionString;
     public GroupInviteLedger(string? databasePath = null)

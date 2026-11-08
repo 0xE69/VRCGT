@@ -1,4 +1,10 @@
-# Instance Inviter Auto Invite — 1.1.22
+# Auto GROUP invitations — current and previously encountered users (1.1.23)
+
+**The 1.1.22 instructions below are historical and superseded.** Current manual/automatic GROUP invitations use retained Game History after room changes/closure or VRChat client exit, without current-instance/API-presence/location/ownership requirements. Review exact group/account/history IDs/count/filters when enabling, including the explicitly chosen future-local-tracking scope. New raw imports/contacts never silently broaden scope. Logs are untrusted discovery, not verified live presence or proof of encounter. Auto is disabled on restart and stops on off/logout/account-auth/group/filter/scope/view/app changes. Five-second checks do not override thirteen-second send pacing or shared durable duplicate suppression. Unknown/error membership remains pending; no blanket complete-cache activation requirement. See `releases/1.1.23-HISTORY-GROUP-INVITES.md` for current use/limits.
+
+Current 1.1.23 identity checks require an actual matching API `id`, independently of optional filters; cached failures do not retry on unchanged polls. New discovery reads known-format Joined records incrementally from the default LOCAL VRChat logs (latest 16 files, last 5 MB/file, 1 MB/check), without current-instance completion or a live process. Joined/Left pairs are retained. Explicit future scope never includes arbitrary imports. Unknown client headers remain unsupported and are reported; this does not resolve the pending v2 log-header investigation.
+
+# Archived: Instance Inviter Auto Invite — 1.1.22
 
 Current-client marker compatibility and bounded scan diagnostics are documented in `releases/1.1.22-LOG-MARKERS.md`. Logs remain untrusted hints; the API corroboration and final dispatch guards below are unchanged. Initial scans are synchronous and can pause the UI; no freeze-free claim is made.
 

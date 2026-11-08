@@ -14,6 +14,9 @@ public interface IInstanceInviterService
     InstanceDetectionDiagnostic DetectionDiagnostic => new(InstanceDetectionCode.Unknown);
     Task<bool> InviteToCurrentInstanceAsync(string userId, IVRChatApiService apiService);
     Task<List<InstanceUser>> GetCurrentInstanceUsersAsync(IVRChatApiService apiService);
+    // Only the approved local VRChat output-log directory; independent of live-instance detection.
+    Task<List<InstanceUser>> ReadLocalEncounterHistoryAsync() => Task.FromResult(new List<InstanceUser>());
+    string EncounterHistoryDiagnostic => "Unsupported reader";
 }
 
 public class InstanceInviterService : IInstanceInviterService
@@ -34,6 +37,10 @@ public class InstanceInviterService : IInstanceInviterService
         _processStartedUtc = processStartedUtc;
         _utcNow = utcNow;
     }
+
+    private readonly LocalEncounterHistoryReader _encounterReader = new();
+    public string EncounterHistoryDiagnostic => _encounterReader.Diagnostic;
+    public Task<List<InstanceUser>> ReadLocalEncounterHistoryAsync() => Task.FromResult(_encounterReader.Read(_logDirectory));
 
     private static DateTime? GetProcessStartedUtc()
     {
@@ -146,6 +153,74 @@ public class InstanceInviterService : IInstanceInviterService
     }
     private void ResetUsers() { _localUsers.Clear(); _usersSession = null; _usersFile = null; _usersOffset = 0; _partial = ""; }
 
+}
+
+// Read-only, bounded discovery, NOT proof of encounter. Do not reuse this reader for a live destination.
+// Known bare/second-resolution Log envelope only; other client headers remain unsupported.
+internal sealed class LocalEncounterHistoryReader
+{
+    private sealed class Cursor { public long Offset; public byte[] Partial=Array.Empty<byte>(); public bool Discard; }
+    private readonly Dictionary<string,Cursor> _files=new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _gate=new();
+    private static readonly Regex Joined=new(@"^(?:\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\s+Log\s+-\s+)?\[Behaviour\]\s+OnPlayerJoined\s+(?<name>.*?)\s+\((?<id>usr_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\)\s*$",RegexOptions.Compiled);
+    public string Diagnostic { get; private set; }="No recognized local history records";
+    public List<InstanceUser> Read(string directory)
+    {
+        lock (_gate)
+        {
+            var found=new Dictionary<string,InstanceUser>(StringComparer.Ordinal);
+            try
+            {
+                if (!Directory.Exists(directory)) { Diagnostic="Local log directory missing"; return new(); }
+                var files=Directory.GetFiles(directory,"output_log_*.txt").OrderByDescending(File.GetLastWriteTimeUtc).Take(16).ToArray();
+                foreach (var old in _files.Keys.Except(files,StringComparer.OrdinalIgnoreCase).ToArray()) _files.Remove(old);
+                var budget=1_000_000; var unsupported=false; var read=false;
+                foreach (var file in files)
+                {
+                    if (budget<=0) break;
+                    using var stream=new FileStream(file,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
+                    if (!_files.TryGetValue(file,out var cursor) || stream.Length<cursor.Offset)
+                    {
+                        cursor=new Cursor { Offset=Math.Max(0,stream.Length-5_000_000) }; cursor.Discard=cursor.Offset>0; _files[file]=cursor;
+                    }
+                    var count=(int)Math.Min(budget,stream.Length-cursor.Offset);
+                    if (count<=0) continue;
+                    stream.Position=cursor.Offset; var bytes=new byte[count]; var length=stream.Read(bytes,0,count);
+                    cursor.Offset+=length; budget-=length; read|=length>0;
+                    var combined=new byte[cursor.Partial.Length+length]; cursor.Partial.CopyTo(combined,0); Array.Copy(bytes,0,combined,cursor.Partial.Length,length);
+                    var start=0;
+                    for(var i=0;i<combined.Length;i++)
+                    {
+                        if(combined[i]!=10) continue;
+                        if(!cursor.Discard && i-start<=16_384)
+                        {
+                            var line=System.Text.Encoding.UTF8.GetString(combined,start,i-start).TrimEnd('\r');
+                            var match=Joined.Match(line);
+                            if(match.Success)
+                            {
+                                var id=match.Groups["id"].Value;
+                                var joined=DateTime.MinValue;
+                                if(line.Length>=19) DateTime.TryParseExact(line[..19],"yyyy.MM.dd HH:mm:ss",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out joined);
+                                // Left/disconnect/room-ended records never delete history.
+                                found.Remove(id); found[id]=new() { UserId=id,DisplayName=match.Groups["name"].Value,JoinTime=joined };
+                                if(found.Count>GroupInviteLedger.EncounterLimit) found.Remove(found.Keys.First());
+                            }
+                            else if(line.Contains("OnPlayerJoined",StringComparison.Ordinal)) unsupported=true;
+                        }
+                        start=i+1; cursor.Discard=false;
+                    }
+                    var remaining=combined.Length-start;
+                    cursor.Discard|=remaining>16_384;
+                    cursor.Partial=cursor.Discard?Array.Empty<byte>():combined[start..];
+                }
+                if(unsupported) Diagnostic="Unsupported player record format; only known envelopes/exact IDs read (not all client headers supported)";
+                else if(found.Count>0) Diagnostic="Known-format LOCAL log discovery only; 16 latest files, last 5 MB/file, 1 MB/check; NOT verified encounter";
+                else if(read) Diagnostic="No recognized exact-ID local records in scanned range (format may be unsupported)";
+                return found.Values.ToList();
+            }
+            catch { Diagnostic="Local history read unavailable; retained queue unchanged"; return found.Values.ToList(); }
+        }
+    }
 }
 
 public class CurrentInstanceInfo

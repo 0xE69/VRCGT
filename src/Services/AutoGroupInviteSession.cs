@@ -1,6 +1,6 @@
 namespace VRCGroupTools.Services;
 
-/// <summary>One explicitly confirmed current-instance → group session. Never restored from settings.</summary>
+/// <summary>One explicitly confirmed account/group/history scope. Never restored from settings. Legacy location fields are unused by group history consent.</summary>
 public sealed record AutoGroupInviteContext(string GroupId, string AccountId, long LoginSession, string ClientSession, string WorldId, string InstanceId);
 
 public sealed class AutoGroupInviteSession : IDisposable
@@ -37,7 +37,7 @@ public sealed class AutoGroupInviteSession : IDisposable
     {
         if (!IsRunning) return false;
         try { if (_context() == _confirmed) return true; } catch { }
-        Stop("Auto Invite stopped: account, selected group, client session or instance changed.");
+        Stop("Auto Invite stopped: account/authentication, selected group or authorised history scope changed.");
         return false;
     }
     public async Task RunAsync()

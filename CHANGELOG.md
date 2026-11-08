@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.23] - 2026-11-08
+
+### Fixed — GROUP invitations from Game History
+
+- Manual Game History and explicitly enabled Auto GROUP invitations support current and previously encountered users after room changes, instance closure and VRChat client exit. Group eligibility does not depend on current instance/session/world ownership, `JoinNotObserved`, API presence or visible location. Friend-to-instance live-destination/account-authentication guards and publication/privacy approvals remain unchanged.
+- Strict recipient identity validation requires the actual matching API response `id`, even with every optional profile filter off. Missing/malformed/mismatched IDs and HTTP/network errors never authorise a send, and failures are cached per account/authentication/group scope rather than retried every five seconds. The final post-pacing guard requires that strict evidence; broad legacy profile consumers keep their existing contract.
+- New bounded incremental read-only discovery consumes known-format Joined records from the default local VRChat logs without a completed join, live client or current instance. Left/disconnect/room ending do not remove encountered IDs. Explicit future-local-history consent never includes arbitrary raw imports; unsupported headers remain unsupported and are reported.
+- Retain up to 1,000 encounter records in the existing local database, with source warnings: logs and user-controlled history are untrusted discovery, not verified live presence or proof of encounter. Loading/refreshing/select-all never starts automatic sending.
+- Enabling Auto confirms exact selected group, acting account, visible current/past history IDs/count/filters and whether future exact-ID local tracking records are included. Raw-log imports/contacts do not silently expand scope. Checks run every five seconds without overlapping sends; sending remains paced at least thirteen seconds apart. Off, logout, account/auth/group/filter/history-scope changes and view/app close revoke consent. Always disabled after restart.
+- Shared durable exact-group/recipient ledger suppresses duplicates across entrypoints before HTTP, including Sent/InFlight/Unknown; Failed requires deliberate manual retry, never automatic retry. Membership uses known cached evidence or bounded, paced exact membership reads; only successful `200 null` proves nonmembership when unknown. API errors/unknown and blocked/invalid/self/unresolved identities are skipped, not assumed eligible. No blanket complete-cache activation requirement.
+- Manual Game History confirmation pins account/authentication and group before confirmation and rechecks after pacing at dispatch. Exact valid UUIDs/unique API identities replace display-name guessing.
+
+### Verification and limits
+
+- Offline tests use temporary databases, fake transports and plain WPF Application; no production startup, real login, invitations or user database access. Candidate ZIP/installer are local review artifacts until parent review/publication.
+- The published 1.1.22 log-header issue remains unconfirmed pending v2 diagnostic user data; this release does not change or claim to fix parser header formats. Existing source/marker diagnostics remain informational for group invitations.
+- See `docs/releases/1.1.23-HISTORY-GROUP-INVITES.md` for scope and evidence.
+
+---
+
 ## [1.1.22] - 2026-11-08
 
 ### Fixed

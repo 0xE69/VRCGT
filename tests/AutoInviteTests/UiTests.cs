@@ -45,7 +45,7 @@ static class UiTests
                 typeof(App).GetMethod("ConfigureServices",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,new object[]{services});
                 services.AddSingleton<IVRChatApiService>(api); services.AddSingleton(settingsProxy); services.AddSingleton<IInstanceInviterService>(instance);services.AddSingleton(ledger);services.AddSingleton(Proxy.Make<ICacheService>((_,_)=>null));
                 using var provider=services.BuildServiceProvider();var vm=provider.GetRequiredService<InstanceInviterViewModel>();
-                var confirmations=0; vm.ConfirmAutoInvite=(context,filters)=>{confirmations++;Assert(context.GroupId==group&&context.AccountId==account&&context.InstanceId=="123"&&filters.Contains("18+="),"Confirmation not exact");return true;};
+                var confirmations=0; vm.ConfirmAutoInvite=(context,filters)=>{confirmations++;Assert(context.GroupId==group&&context.AccountId==account&&context.InstanceId==""&&filters.Contains("18+=")&&filters.Contains("History scope:"),"Confirmation not exact");return true;};
                 var view=new InstanceInviterView { DataContext=vm }; view.Measure(new Size(1200,1000)); view.Arrange(new Rect(0,0,1200,1000));Pump();
                 var check=(CheckBox)view.FindName("AutoInviteCheckBox");
                 Assert(check!=null&&BindingOperations.GetBindingExpression(check,CheckBox.IsCheckedProperty)?.Status==BindingStatus.Active,"Compiled checkbox binding missing");
@@ -53,8 +53,8 @@ static class UiTests
                 check.SetCurrentValue(CheckBox.IsCheckedProperty,true);Pump();
                 Assert(confirmations==1&&vm.AutoInviteEnabled,"Explicit checkbox did not start confirmed session");
                 var session=(AutoGroupInviteSession)typeof(InstanceInviterViewModel).GetField("_autoSession",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(vm)!;
-                await session.TickAsync();await session.PendingSend;Assert(handler.Calls==2&&await ledger.GetStateAsync(group,user)==GroupInviteState.Sent,"Integrated automatic dispatch not tracked");
-                await session.TickAsync();Assert(handler.Calls==2,"Unchanged poll duplicated HTTP");
+                await session.TickAsync();await session.PendingSend;Assert(handler.Calls==3&&await ledger.GetStateAsync(group,user)==GroupInviteState.Sent,$"Integrated automatic dispatch not tracked: calls={handler.Calls}, state={await ledger.GetStateAsync(group,user)}, status={vm.StatusMessage}");
+                await session.TickAsync();Assert(handler.Calls==3,"Unchanged poll duplicated HTTP");
                 Assert(((TextBlock)view.FindName("AutoInviteStatus")).Text.Contains("Sent"),"Visible status binding did not update");
                 vm.SkipVisitors=true;Assert(!vm.AutoInviteEnabled&&!session.IsRunning,"Filter edit did not revoke consent");
                 vm.SkipVisitors=false;check.SetCurrentValue(CheckBox.IsCheckedProperty,true);Pump();Assert(confirmations==2,"Re-enable must reconfirm");
@@ -63,7 +63,7 @@ static class UiTests
                 view.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));Assert(!vm.AutoInviteEnabled,"Leaving view did not stop");
                 var reloaded=new GroupInviteLedger(temp.Db);Assert(await reloaded.GetStateAsync(group,user)==GroupInviteState.Sent,"Restart forgot automatic invite");
                 try { await api.SendGroupInviteAsync(group,user);throw new Exception("Manual path bypassed automatic ledger"); } catch(GroupInviteSuppressedException){}
-                Assert(handler.Calls==2,"Cross-entrypoint duplicate reached HTTP");
+                Assert(handler.Calls==3,"Cross-entrypoint duplicate reached HTTP");
                 const string newcomer="usr_66666666-6666-6666-6666-666666666666";
                 vm.Only18Plus=true;System.IO.File.AppendAllText(temp.Log,$"[Behaviour] OnPlayerJoined Newcomer ({newcomer})\n");
                 handler.Body=$"{{\"id\":\"{newcomer}\",\"ageVerificationStatus\":\"18+\",\"ageVerified\":true,\"tags\":[\"system_trust_basic\"]}}";
