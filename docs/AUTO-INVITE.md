@@ -1,4 +1,6 @@
-# Instance Inviter Auto Invite — 1.1.21
+# Instance Inviter Auto Invite — 1.1.22
+
+Current-client marker compatibility and bounded scan diagnostics are documented in `releases/1.1.22-LOG-MARKERS.md`. Logs remain untrusted hints; the API corroboration and final dispatch guards below are unchanged. Initial scans are synchronous and can pause the UI; no freeze-free claim is made.
 
 This feature sends **group invitations only to API-corroborated, eligible occupants of the current VRChat instance**. It does not cover all occupants: non-friend/private/hidden/unavailable locations are skipped, even if a log claims they joined. Logs are untrusted discovery hints, not presence authority. Manual explicit recipient review remains available. It does not invite friends to an instance, ban anyone, upload artwork or publish posts/events.
 

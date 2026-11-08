@@ -1,4 +1,32 @@
-# Local package verification — 1.1.21
+# Local package verification — 1.1.22
+
+Current evidence: `releases/1.1.22-LOG-MARKERS.md` and ignored `installer/Output/verification-1.1.22/`. Actual frozen artifacts and hashes are in `installer/Output/package-manifest.json`; source inputs are frozen in `verification-1.1.22/source-manifest.json`. The section explicitly labelled historical retains 1.1.21 evidence; those older hashes/counts are not the 1.1.22 candidate.
+
+## Frozen 1.1.22 result
+
+All seven suites passed before packaging (Update base invocation: 31 checks) and again frozen with `--no-build`. Frozen results: Publication **25**, GroupInvite **10**, InstanceInvite **57**, GroupMetadata **1**, SchedulerWebhook **30**, AutoInvite **69**, Update **33** (candidate ZIP checks included): **225 passing checks, zero failures**. The base updater invocation is 31 checks; actual candidate acceptance adds two. Full Release rebuild: **0 errors, 12 inherited nullable warnings**. Inno compilation succeeds with the existing x64 identifier deprecation warnings.
+
+Package verification confirms file version **1.1.22.0**, self-contained win-x64 runtime/WPF/SQLite bundle, and embedded DLL equality with the tested Release DLL. The informational suffix remains historical `+8d68b4b94717d0767cd244b3436d2194577d178c`; it is not a release-source commit claim.
+
+| Artifact | Bytes | SHA256 |
+|---|---:|---|
+| `src/bin/Publish/VRCGroupTools.exe` | 183315081 | `11d1d6d91be621b579883bd7a816cc48f227e750746478f6cae5ed478e7254b5` |
+| `installer/Output/VRCGroupTools_Setup_1.1.22.exe` | 53536565 | `01e515fd2031f6483b8101ebba24517d001b252dcd6e6605bbe838c87030658f` |
+| `installer/Output/VRCGroupTools-v1.1.22-win-x64.zip` | 72624652 | `ea4d6df38b6c886ce82effede351b89f4d2990e0e07a335e0f98d79da15b51b9` |
+| `installer/Output/VRCGroupTools-v1.1.22-win-x64.zip.sha256` | 101 | `f4673403484b9c493a8b64eacd25ecf5fa4399c131067d8b53ceda6c9514853f` |
+
+The ZIP has exactly root `VRCGroupTools.exe` and `SHA256SUMS.txt`. All existing 1.1.21 installer/ZIP/sidecar hashes remain unchanged. The exact legacy 1.1.18 source fixture hash is unchanged. Correct 1.1.21 candidate acceptance with expected version 1.1.21 also remains **33/33**; passing that old ZIP while demanding 1.1.22 fails both candidate checks (**31/33**, expected negative control), rather than silently blessing old bits. The new updater rejects its mismatched checksum asset before staging; legacy candidate staging rejects the executable file version.
+
+Frozen candidate reproduction (ZIP path **and expected version are required**):
+
+```bash
+'C:/Users/mail/AppData/Local/hermes/cache/tools/dotnet8/dotnet.exe' run --no-build --project tests/UpdateTests -c Release -- C:/Users/mail/Projects/VRCGT/installer/Output/VRCGroupTools-v1.1.22-win-x64.zip 1.1.22
+python installer/verify-package.py
+```
+
+No production application or installer startup, installed replacement, live VRChat client, login, user DB or API invitations were exercised. Installer signing/install acceptance, parent independent review/public release/readback, and real-user detection/upgrade acceptance remain pending. Initial near-64 MB detection is synchronous and measured approximately 644 ms / 384 MB process peak on this host; no freeze-free UI claim is made.
+
+## Historical local package verification — 1.1.21
 
 **Regenerated after the authorized final HTTP-dispatch pacing repair. Ready for parent independent review and authorized release publication; not yet published.** See `releases/1.1.21-PRESENCE-FIX.md` for architecture, limited coverage, pinned community schema and RED→GREEN proof. Previous 1.1.21 hashes/counts are historical and superseded here.
 

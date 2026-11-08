@@ -15,44 +15,83 @@ public sealed class IncrementalInstanceSessionReader
     private string? _pendingLocation;
     private CurrentInstanceInfo? _current;
     private readonly object _lock = new();
+    public InstanceDetectionDiagnostic DetectionDiagnostic { get; private set; } = new(InstanceDetectionCode.Unknown);
+    private CurrentInstanceInfo? Unavailable(InstanceDetectionCode code)
+    {
+        DetectionDiagnostic = new(code);
+        _source = null; _current = null; _pendingLocation = null; _partial = "";
+        return null;
+    }
+    // Syntax anchoring prevents marker substrings in names from acting as events.
+    // Logs (even forged full envelopes) remain untrusted hints, not API presence.
+    private static readonly Regex BehaviourRecord = new(@"^(?:\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\s+Log\s+-\s+)?\[Behaviour\]\s+(?<payload>.*)$", RegexOptions.Compiled);
+    private static bool IsEvent(string payload, string marker) => payload == marker
+        || payload.StartsWith(marker + " ", StringComparison.Ordinal)
+        || payload.StartsWith(marker + ":", StringComparison.Ordinal);
     private static readonly Regex Location = new(@"(?<world>wrld_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):(?<instance>[^\s]+)", RegexOptions.Compiled);
     public CurrentInstanceInfo? Read(string directory, DateTime? process, DateTime now)
     {
         lock (_lock)
         {
-            if (process == null || process > now || !Directory.Exists(directory)) { _source = null; return null; }
+            if (process == null) return Unavailable(InstanceDetectionCode.ProcessUnavailable);
+            if (process > now) return Unavailable(InstanceDetectionCode.ClockMismatch);
+            if (!Directory.Exists(directory)) return Unavailable(InstanceDetectionCode.LogDirectoryMissing);
             var file = Directory.GetFiles(directory, "output_log_*.txt").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
-            if (file == null) { _source = null; return null; }
+            if (file == null) return Unavailable(InstanceDetectionCode.LogMissing);
             var info = new FileInfo(file);
-            if (info.CreationTimeUtc < process.Value.AddSeconds(-5) || info.LastWriteTimeUtc < process.Value || now - info.LastWriteTimeUtc > TimeSpan.FromMinutes(2) || info.LastWriteTimeUtc > now.AddSeconds(5)) { _source = null; return null; }
+            if (info.CreationTimeUtc < process.Value.AddSeconds(-5) || info.LastWriteTimeUtc < process.Value)
+                return Unavailable(InstanceDetectionCode.LogSessionMismatch);
+            if (info.LastWriteTimeUtc > now.AddSeconds(5)) return Unavailable(InstanceDetectionCode.ClockMismatch);
+            if (now - info.LastWriteTimeUtc > TimeSpan.FromMinutes(2)) return Unavailable(InstanceDetectionCode.LogNotFresh);
             var source = $"{process.Value.Ticks}:{file}:{info.CreationTimeUtc.Ticks}";
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (source != _source || stream.Length < _offset)
             {
-                _source = source; _offset = Math.Max(0, stream.Length - 5_000_000);
+                if (stream.Length > CurrentInstanceSessionReader.MaximumInitialLogBytes) return Unavailable(InstanceDetectionCode.LogScanLimit);
+                _source = source; _offset = 0;
                 _current = null; _pendingLocation = null; _partial = ""; ++_joinGeneration;
+                DetectionDiagnostic = new(InstanceDetectionCode.JoinNotObserved);
             }
             stream.Position = _offset;
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            var text = _partial + reader.ReadToEnd(); _offset = stream.Position;
+            var appended = CurrentInstanceSessionReader.ReadBoundedSnapshot(stream);
+            if (appended == null || _partial.Length + appended.Length > CurrentInstanceSessionReader.MaximumInitialLogBytes)
+                return Unavailable(InstanceDetectionCode.LogScanLimit);
+            var text = _partial + appended; _offset = stream.Position;
             var lines = text.Split('\n'); _partial = lines[^1];
             foreach (var line in lines.Take(lines.Length - 1))
             {
-                if (!line.Contains("[Behaviour]")) continue;
-                if (line.Contains("OnDisconnected") || line.Contains("OnLeftRoom") || line.Contains("Joining or Creating Room:"))
-                { _current = null; _pendingLocation = null; ++_joinGeneration; continue; }
-                if (line.Contains("Joining ") || line.Contains("Rejoining local world:"))
+                var envelope = BehaviourRecord.Match(line);
+                if (!envelope.Success) continue;
+                var payload = envelope.Groups["payload"].Value.TrimEnd('\r');
+                if (IsEvent(payload, "OnDisconnected") || IsEvent(payload, "OnLeftRoom") || payload.StartsWith("Entering Room:", StringComparison.Ordinal))
                 {
-                    _current = null; ++_joinGeneration;
-                    var match = Location.Match(line); _pendingLocation = match.Success ? match.Value : null;
+                    _current = null; _pendingLocation = null; ++_joinGeneration;
+                    DetectionDiagnostic = new(payload.StartsWith("Entering Room:", StringComparison.Ordinal) ? InstanceDetectionCode.JoinIncomplete : InstanceDetectionCode.LeftOrDisconnected);
                     continue;
                 }
-                if (line.Contains("OnJoinedRoom") && _pendingLocation != null)
+                if (payload.StartsWith("Joining or Creating Room:", StringComparison.Ordinal))
+                {
+                    // Name-only second stage of the SAME join. It supplies no address and
+                    // cannot establish one, but must not discard a valid pending Joining.
+                    _current = null;
+                    DetectionDiagnostic = new(InstanceDetectionCode.JoinIncomplete);
+                    continue;
+                }
+                if (payload.StartsWith("Joining ", StringComparison.Ordinal) || payload.StartsWith("Rejoining local world:", StringComparison.Ordinal))
+                {
+                    _current = null; ++_joinGeneration;
+                    var address = payload.StartsWith("Joining ", StringComparison.Ordinal) ? payload[8..] : payload["Rejoining local world:".Length..].TrimStart();
+                    var match = Location.Match(address); _pendingLocation = match.Success && match.Index == 0 ? match.Value : null;
+                    DetectionDiagnostic = new(_pendingLocation != null ? InstanceDetectionCode.JoinIncomplete : InstanceDetectionCode.LocationUnrecognized);
+                    continue;
+                }
+                if ((IsEvent(payload, "OnJoinedRoom") || IsEvent(payload, "Successfully joined room")) && _pendingLocation != null)
                 {
                     var match = Location.Match(_pendingLocation);
                     _current = new() { WorldId = match.Groups["world"].Value, InstanceId = match.Groups["instance"].Value,
                         FullLocation = match.Value, DetectedAt = now.ToLocalTime(), SessionKey = source + ":" + _joinGeneration };
                     _pendingLocation = null;
+                    DetectionDiagnostic = new(InstanceDetectionCode.Detected);
                 }
             }
             return _current;

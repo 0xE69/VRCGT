@@ -166,6 +166,8 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Compiled Friend Manager exposes both destinations and cancel through real DI", UiTests.WiredViewAndDependencyInjection),
 };
 tests.AddRange(AccountPinTests.All());
+tests.AddRange(DetectionTests.All());
+tests.AddRange(LiveMarkerTests.All());
 int failed = 0;
 foreach (var test in tests)
 {

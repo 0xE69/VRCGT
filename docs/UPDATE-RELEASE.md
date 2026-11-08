@@ -1,4 +1,4 @@
-# Update delivery and legacy compatibility — 1.1.21
+# Update delivery and legacy compatibility — 1.1.22
 
 ## Actual consumer and root cause
 
@@ -24,9 +24,9 @@ python installer/verify-package.py
 
 Expected release assets:
 
-- `installer/Output/VRCGroupTools-v1.1.21-win-x64.zip`
-- `installer/Output/VRCGroupTools-v1.1.21-win-x64.zip.sha256`
-- `installer/Output/VRCGroupTools_Setup_1.1.21.exe`
+- `installer/Output/VRCGroupTools-v1.1.22-win-x64.zip`
+- `installer/Output/VRCGroupTools-v1.1.22-win-x64.zip.sha256`
+- `installer/Output/VRCGroupTools_Setup_1.1.22.exe`
 - Optionally the package/source-verification manifests and release notes after reviewing provenance/privacy.
 
 Portable ZIP entries are exactly `VRCGroupTools.exe` and `SHA256SUMS.txt`. The sidecar verifies the ZIP; the internal manifest verifies the executable. Both are checked by the new updater when supplied. Checksums are integrity checks, not a publisher signature. Existing 1.1.18 ignores these manifests but still selects the sole correct executable. `verify-package.py` verifies source/PE versions, bundled Release DLL equality, self-contained runtime/WPF/SQLite content, ZIP-root equality with the same published EXE and hashes of actual artifacts.
@@ -43,6 +43,14 @@ A WPF rebuild may change assembly bytes. After any rebuild affecting frozen bina
 
 ## Offline acceptance evidence
 
+Candidate checks now require both the ZIP and explicit expected release version:
+
+```bash
+'C:/Users/mail/AppData/Local/hermes/cache/tools/dotnet8/dotnet.exe' run --no-build --project tests/UpdateTests -c Release -- C:/Users/mail/Projects/VRCGT/installer/Output/VRCGroupTools-v1.1.22-win-x64.zip 1.1.22
+```
+
+The unchanged legacy source still simulates installed 1.1.18; only fixture release metadata/expected candidate version are parameterized. A base invocation is 31 checks; candidate acceptance adds two.
+
 `UpdateTests` runs the actual 1.1.18 source with isolation-only substitutions (namespace/version/repository, disposable temp/target paths, process-launch capture and app-shutdown capture). Its real GitHub client reads loopback release metadata; its real HttpClient downloads a fixture ZIP. The original staging and generated batch are exercised against a compiled disposable dummy EXE, and that EXE actually relaunches and writes a marker. No production App or installed executable is started or replaced.
 
 The legacy self-deleting batch can return a nonzero cmd exit after successful copy/start, and redirected Windows `timeout` warns about noninteractive input. The test asserts actual destination bytes and a real relaunch marker, not an invented zero helper exit. The new helper has independent real-process success, Unicode/metacharacter, missing-parent, tamper-rejection and launch-failure rollback tests. Catalog/download/archive tests use local fixtures/fake HTTP, not live releases or API writes.
@@ -51,6 +59,6 @@ The legacy self-deleting batch can return a nonzero cmd exit after successful co
 
 The checkout includes preserved uncommitted 1.1.20 features plus this fix. An executable built from that dirty tree is **not** the contents of the old HEAD merely because informational metadata contains its SHA. Do not attach a new release tag to old HEAD and describe it as matching source. The parent must review the full candidate diff/untracked source, exclude runtime/user data/credentials, and choose an authorised release commit/source snapshot before public publication. This child does not commit, push, create tags or publish.
 
-After review, commit the exact frozen source paths (including untracked production/tests/docs) to the authorized public release-source commit and tag that new commit, not old HEAD. Compare each committed blob's working-tree bytes or normalized checkout SHA256 against `installer/Output/verification-1.1.21-dispatch/source-manifest.json` before tagging; Git autocrlf can change blob line endings, so compare a checkout with the same attributes rather than naïvely comparing raw blob SHA256. No application rebuild is needed if the compile inputs remain identical: this release explicitly retains the build-time informational suffix `+8d68b4b94717d0767cd244b3436d2194577d178c`, while the tag/commit plus frozen manifest identifies the reviewed dirty-tree source actually compiled. The suffix is historical build metadata, not a claim that old HEAD contains the release source. Documentation-only publication receipts can be recorded separately. If code/build inputs change at review, rebuild/retest/repackage instead of reusing these hashes.
+After review, commit the exact frozen source paths (including untracked production/tests/docs) to the authorized public release-source commit and tag that new commit, not old HEAD. Compare each committed blob's working-tree bytes or normalized checkout SHA256 against `installer/Output/verification-1.1.22/source-manifest.json` before tagging; Git autocrlf can change blob line endings, so compare a checkout with the same attributes rather than naïvely comparing raw blob SHA256. No application rebuild is needed if the compile inputs remain identical: this release explicitly retains the build-time informational suffix `+8d68b4b94717d0767cd244b3436d2194577d178c`, while the tag/commit plus frozen manifest identifies the reviewed dirty-tree source actually compiled. The suffix is historical build metadata, not a claim that old HEAD contains the release source. Documentation-only publication receipts can be recorded separately. If code/build inputs change at review, rebuild/retest/repackage instead of reusing these hashes.
 
 After the parent publishes, read back exact release/tag/stable/latest status and asset names from **0xE69/VRCGT**, download the public portable ZIP into a fresh scratch directory, and compare its ZIP and contained EXE hashes with the frozen package manifest. Public discoverability is not proof that a particular user's installed 1.1.18 GUI has completed the real upgrade; that final installed-app acceptance remains separate.

@@ -1,50 +1,24 @@
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace VRCGroupTools.Services;
 
 /// <summary>Reads a fresh snapshot only; never emits log lines or private location modifiers.</summary>
 public static class CurrentInstanceSessionReader
 {
-    private static readonly Regex Location = new(
-        @"(?<world>wrld_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):(?<instance>[^\s]+)",
-        RegexOptions.Compiled);
-
-    public static CurrentInstanceInfo? Read(string directory, DateTime? processStartedUtc, DateTime utcNow)
+    // A tail without its join baseline cannot establish the latest completed session.
+    // Bound initial scanning and fail closed beyond it rather than guessing from a tail.
+    internal const long MaximumInitialLogBytes = 64_000_000;
+    internal static string? ReadBoundedSnapshot(FileStream stream)
     {
-        if (processStartedUtc == null || processStartedUtc > utcNow || !Directory.Exists(directory)) return null;
-        var file = Directory.GetFiles(directory, "output_log_*.txt")
-            .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
-        if (file == null) return null;
-        var modifiedUtc = File.GetLastWriteTimeUtc(file);
-        if (File.GetCreationTimeUtc(file) < processStartedUtc.Value.AddSeconds(-5)
-            || modifiedUtc < processStartedUtc.Value
-            || utcNow - modifiedUtc > TimeSpan.FromMinutes(2)
-            || modifiedUtc > utcNow.AddSeconds(5)) return null;
-        using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        if (stream.Length > 5_000_000) stream.Seek(-5_000_000, SeekOrigin.End);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        var lines = reader.ReadToEnd().Split('\n');
-        var joined = false;
-        foreach (var line in lines.Reverse())
-        {
-            if (!line.Contains("[Behaviour]")) continue;
-            if (line.Contains("OnLeftRoom") || line.Contains("OnDisconnected")
-                || line.Contains("Joining or Creating Room:")) return null;
-            if (line.Contains("OnJoinedRoom")) { joined = true; continue; }
-            if (!line.Contains("Joining ") && !line.Contains("Rejoining local world:")) continue;
-            if (!joined) return null;
-            var match = Location.Match(line);
-            if (!match.Success) return null;
-            return new()
-            {
-                WorldId = match.Groups["world"].Value,
-                InstanceId = match.Groups["instance"].Value,
-                FullLocation = match.Value,
-                DetectedAt = utcNow.ToLocalTime()
-            };
-        }
-        return null;
+        // Snapshot the byte count: concurrent log appends belong to the next poll.
+        var length = stream.Length - stream.Position;
+        if (length > MaximumInitialLogBytes) return null;
+        var bytes = new byte[(int)length];
+        stream.ReadExactly(bytes);
+        return Encoding.UTF8.GetString(bytes);
     }
+    // Share the transition reducer: latest incomplete joins cannot fall back to history.
+    public static CurrentInstanceInfo? Read(string directory, DateTime? processStartedUtc, DateTime utcNow)
+        => new IncrementalInstanceSessionReader().Read(directory, processStartedUtc, utcNow);
 }

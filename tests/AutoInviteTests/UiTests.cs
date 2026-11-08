@@ -76,6 +76,11 @@ static class UiTests
                 typeof(InstanceInviterView).GetMethod("OnApplicationExit",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,new object?[]{app,null});
                 Assert(!vm.AutoInviteEnabled,"Application-exit handler did not revoke automatic consent");
                 vm.AutoInviteEnabled=true;Assert(!vm.AutoInviteEnabled,"Disposed session restarted automatically");
+                System.IO.File.Delete(temp.Log);
+                typeof(InstanceInviterViewModel).GetMethod("UpdateCurrentInstance", BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(vm,null);Pump();
+                var detectionText = view.FindName("InstanceDetectionStatus") as TextBlock;
+                Assert(detectionText != null && detectionText.Text.Contains("LogMissing") && detectionText.TextWrapping == TextWrapping.Wrap,"Compiled detection diagnostic must be visible, bound and wrapped, not clipped in a horizontal StackPanel");
+                Assert(handler.Calls==afterDetails,"Unverified detection caused network requests");
                 vm.Dispose(); result.SetResult();
             }
             catch(Exception e){result.SetException(e);}

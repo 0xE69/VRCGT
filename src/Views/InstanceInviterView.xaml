@@ -39,15 +39,17 @@
                           Foreground="White"
                           Margin="0,0,0,15"/>
                 
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                    <TextBlock Text="🌍 " 
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="🌍 "
                               FontSize="16"
                               VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding CurrentInstanceDisplay}" 
+                    <TextBlock x:Name="InstanceDetectionStatus" Grid.Column="1" Text="{Binding CurrentInstanceDisplay}"
+                              TextWrapping="Wrap"
                               FontSize="14"
                               Foreground="White"
                               VerticalAlignment="Center"/>
-                </StackPanel>
+                </Grid>
                 
                 <Button Content="🔄 Refresh Instance Detection" 
                        Command="{Binding RefreshCommand}"

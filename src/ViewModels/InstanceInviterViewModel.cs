@@ -236,8 +236,8 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
         }
         else
         {
-            CurrentInstanceDisplay = "No instance detected. Please join a VRChat world.";
-            StatusMessage = "Not in an instance";
+            CurrentInstanceDisplay = _instanceInviterService.DetectionDiagnostic.Display;
+            StatusMessage = "Current instance unverified; invitations are blocked. Share the diagnostic code and app version for support, not your VRChat log.";
             CurrentInstanceDetails = null;
             InstanceUsers.Clear();
         }

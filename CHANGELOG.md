@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.22] - 2026-11-08
+
+### Fixed
+
+- Current-instance detection accepts the reported `Entering Room:` → `Joining` → name-only `Joining or Creating Room:` → `Successfully joined room` sequence. The second stage preserves the valid pending address; completion requires that address in the current transition. Legacy `OnJoinedRoom` remains supported.
+- New room entries, new joins, leave/disconnect, process/log replacement and truncation invalidate earlier state. Latest incomplete or malformed transitions never fall back to a historical destination. Event prefixes are matched at the Behaviour payload start, not as substrings inside world names; logs remain untrusted hints, never authenticated API presence.
+- Separately fixes first-refresh baseline loss beyond the old five-megabyte tail using a bounded 64 MB initial scan and incremental appends. Scan-limit, freshness and session failures display privacy-safe diagnostic codes rather than declaring the user offline. Automatic API corroboration, pacing, opt-in and final-send guards are unchanged.
+
+### Verification and limits
+
+- The sanitized report established a fresh 1,930,060-byte log, six successful-join markers and zero `OnJoinedRoom` markers. This is a confirmed marker-compatibility defect, not a quiet-log or five-megabyte-tail diagnosis. Report-derived fixtures use only marker order/metadata and synthetic redacted payloads, not a captured private log.
+- Offline RED→GREEN proof covers both shipped 1.1.21 source and the candidate. Real client acceptance still requires the user to test the update. See `docs/releases/1.1.22-LOG-MARKERS.md` and `docs/RELEASE-VERIFICATION.md`.
+
+---
+
 ## [1.1.21] - 2026-11-07
 
 ### Fixed

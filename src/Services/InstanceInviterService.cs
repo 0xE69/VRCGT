@@ -11,6 +11,7 @@ namespace VRCGroupTools.Services;
 public interface IInstanceInviterService
 {
     CurrentInstanceInfo? GetCurrentInstance();
+    InstanceDetectionDiagnostic DetectionDiagnostic => new(InstanceDetectionCode.Unknown);
     Task<bool> InviteToCurrentInstanceAsync(string userId, IVRChatApiService apiService);
     Task<List<InstanceUser>> GetCurrentInstanceUsersAsync(IVRChatApiService apiService);
 }
@@ -21,6 +22,7 @@ public class InstanceInviterService : IInstanceInviterService
     private readonly Func<DateTime?> _processStartedUtc;
     private readonly Func<DateTime> _utcNow;
     private readonly IncrementalInstanceSessionReader _sessionReader = new();
+    public InstanceDetectionDiagnostic DetectionDiagnostic { get; private set; } = new(InstanceDetectionCode.Unknown);
 
     public InstanceInviterService() : this(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low", "VRChat", "VRChat"),
@@ -39,18 +41,37 @@ public class InstanceInviterService : IInstanceInviterService
         try
         {
             // Multiple clients cannot be associated reliably with one log. Fail closed.
-            return processes.Length == 1 && !processes[0].HasExited
-                ? processes[0].StartTime.ToUniversalTime() : null;
+            if (processes.Length == 0) throw new InstanceDetectionException(InstanceDetectionCode.ClientNotRunning);
+            if (processes.Length != 1) throw new InstanceDetectionException(InstanceDetectionCode.MultipleClients);
+            return !processes[0].HasExited ? processes[0].StartTime.ToUniversalTime() : null;
         }
         finally { foreach (var process in processes) process.Dispose(); }
     }
 
     public CurrentInstanceInfo? GetCurrentInstance()
     {
-        try { return _sessionReader.Read(_logDirectory, _processStartedUtc(), _utcNow()); }
+        DateTime? process;
+        try { process = _processStartedUtc(); }
+        catch (InstanceDetectionException ex)
+        {
+            DetectionDiagnostic = new(ex.Code);
+            return null;
+        }
         catch (Exception)
         {
-            // Files may rotate or disappear. Neither log contents nor exceptions containing locations are logged.
+            DetectionDiagnostic = new(InstanceDetectionCode.ProcessInspectionFailed);
+            return null;
+        }
+        try
+        {
+            var current = _sessionReader.Read(_logDirectory, process, _utcNow());
+            DetectionDiagnostic = _sessionReader.DetectionDiagnostic;
+            return current;
+        }
+        catch (Exception)
+        {
+            // Never expose exceptions that may contain a user path or private location.
+            DetectionDiagnostic = new(InstanceDetectionCode.LogReadFailed);
             return null;
         }
     }

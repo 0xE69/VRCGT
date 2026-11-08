@@ -15,8 +15,10 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 EXE = ROOT / "src/bin/Publish/VRCGroupTools.exe"
-INSTALLER = ROOT / "installer/Output/VRCGroupTools_Setup_1.1.21.exe"
-VERSION = "1.1.21"
+version_match = re.search(r"<Version>(.*?)</Version>", (ROOT / "src/VRCGroupTools.csproj").read_text())
+assert version_match is not None, "Project version missing"
+VERSION = version_match.group(1)
+INSTALLER = ROOT / f"installer/Output/VRCGroupTools_Setup_{VERSION}.exe"
 ZIP = ROOT / f"installer/Output/VRCGroupTools-v{VERSION}-win-x64.zip"
 ZIP_CHECKSUM = ZIP.with_suffix(".zip.sha256")
 

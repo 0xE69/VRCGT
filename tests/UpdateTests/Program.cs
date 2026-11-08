@@ -19,17 +19,19 @@ Add("Updater has injected offline discovery and download boundaries",()=>Check(t
 Add("Safe bounded package staging replaces arbitrary first-executable extraction",()=>Check(typeof(UpdateService).Assembly.GetType("VRCGroupTools.Services.UpdatePackage")!=null,"Safe staging missing"));
 tests.AddRange(PackageTests.All());
 tests.Add(("Actual v1.1.18 updater selects ZIP, downloads local fixture, stages, copies and relaunches isolated dummy",LegacyTests.UpgradeFrom118));
-if(args.Length==1)
+if(args.Length != 0 && args.Length != 2) throw new ArgumentException("Candidate checks require ZIP path AND expected release version");
+if(args.Length==2)
 {
-    var candidate=Path.GetFullPath(args[0]);
-    tests.Add(("Actual 1.1.18 updater discovers/downloads/stages the frozen candidate without executing it",()=>LegacyTests.StageCandidate(candidate)));
+    var candidate=Path.GetFullPath(args[0]); var version=args[1];
+    Check(UpdateCatalog.ParseVersion("v"+version)?.ToString(3)==version,"Expected candidate version must be a stable three-part version");
+    tests.Add(("Actual 1.1.18 updater discovers/downloads/stages the frozen candidate without executing it",()=>LegacyTests.StageCandidate(candidate, version)));
     tests.Add(("New updater verifies and stages the actual candidate ZIP, sidecar and embedded EXE",async()=>{
         using var fixture=new UpdateFixture();var zip=File.ReadAllBytes(candidate);var sidecar=File.ReadAllBytes(candidate+".sha256");
         using var http=new System.Net.Http.HttpClient(new DownloadHandler(uri=>uri.EndsWith(".sha256")?sidecar:zip));
-        var service=new UpdateService(()=>Task.FromResult<IReadOnlyList<UpdateRelease>>(new[]{PackageTests.FixtureRelease(true)}),http,"1.1.18");
+        var service=new UpdateService(()=>Task.FromResult<IReadOnlyList<UpdateRelease>>(new[]{PackageTests.FixtureRelease(version, true)}),http,"1.1.18");
         Check(await service.CheckForUpdateAsync(),"Frozen candidate was not discoverable in fixture");var staged=await service.DownloadAndStageAsync(Path.Combine(fixture.Dir,"actual-candidate"));
         using var archive=ZipFile.OpenRead(candidate);using var payload=archive.GetEntry("VRCGroupTools.exe")!.Open();
-        Check(UpdatePackage.Hash(staged)==Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant()&&FileVersionInfo.GetVersionInfo(staged).FileVersion=="1.1.21.0","Actual candidate staging bytes/version mismatch");
+        Check(UpdatePackage.Hash(staged)==Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant()&&FileVersionInfo.GetVersionInfo(staged).FileVersion==version+".0","Actual candidate staging bytes/version mismatch");
     }));
 }
 var failed=0;foreach(var(n,a)in tests)try{await a();Console.WriteLine("PASS "+n);}catch(Exception e){failed++;Console.WriteLine("FAIL "+n+": "+e.Message);}Console.WriteLine($"{tests.Count-failed}/{tests.Count} passed");return failed==0?0:1;
