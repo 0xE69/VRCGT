@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.1.23] - 2026-11-08
+
+### Changed
+
+- Manual Game History and explicitly enabled Auto GROUP invitations can use retained current and past encounters, including after room changes, client exit or when the recipient is offline/private. Group invitations do not require a current destination instance or live presence; invitations to an instance still require a confirmed destination.
+- Enabling Auto GROUP Invite confirms the exact acting account, target group, visible history/filter scope and optional future local discovery. Local checks run every five seconds; API calls and sends remain separately paced. It starts disabled after restart and stops on opt-out or context changes.
+- Bounded local Joined-record discovery and retained history (up to 1,000 encounters) do not require a completed room join. Logs/history remain untrusted discovery, not authenticated encounter proof; arbitrary imports do not silently broaden consent.
+- Shared durable group/recipient history suppresses duplicate and uncertain invitations across features. Known members, self and invalid identities are skipped; unknown membership/API errors do not authorize sends. Strict identity responses must match the recipient, even with optional profile filters off.
+- Unknown/unsupported log-header formats can still prevent discovery. This release does not claim to fix the separate reported 1.1.22 header-format incident.
+
+---
+
+## [1.1.22] - 2026-11-08
+
+### Fixed
+
+- Recognize the current VRChat Successfully joined room marker and preserve a pending address through the name-only Joining or Creating Room stage; retain legacy OnJoinedRoom support.
+- Use consistent snapshot/incremental transition handling without falling back to an earlier destination after a new/incomplete join, departure, disconnect, log truncation or process change.
+- Replace the old five-megabyte initial tail with a bounded 64 MB snapshot plus incremental reading; provide actionable unknown/read/session/format diagnostics.
+- API corroboration and invitation dispatch guards remain in place. Unsupported client log-header formats are not claimed fixed.
+
+---
+
+## [1.1.21] - 2026-11-08
+
+### Added
+
+- Explicitly enabled automatic group invitations with local five-second discovery checks, separately paced requests and persistent cross-feature duplicate suppression. This release requires corroborated API-visible current presence; history-based group invitations arrive in 1.1.23.
+- Friend Manager can invite selected friends to a confirmed current instance, with cancellable paced batches and per-recipient outcomes.
+- Last Seen Users non-member filtering/invitation history, Game Log moderation actions and UUID target lookup.
+- Approval-first event/news publishing, calendar recurrence/timezone scheduling and opt-in Discord instance-announcement previews. Saving a draft does not publish it.
+- Hardened stable-release selection, bounded ZIP checks, checksums and replacement/rollback handling; a legacy-updater-compatible portable ZIP accompanies the installer.
+- Invitation confirmation is invalidated when account/authentication context changes. Untrusted log text alone cannot authorize automatic invitations.
+
+---
+
+## [1.1.18] - 2026-10-30
+
+### Changed
+
+- User Search exposes Ban from Group for non-members, using the existing moderation confirmation and permission-checked API flow.
+- Auto Closer distinguishes already-closed instances from new successful closes and other failures. Already-closed results enter the cooldown without incrementing the close count or sending a new auto-closed Discord announcement.
+
+---
+
 ## [1.1.17] - 2026-10-30
 
 ### Fixed
@@ -69,6 +114,8 @@
 ---
 
 ## [1.1.13] - 2026-10-28
+
+> Historical entry retained from the previous changelog. A separate published 1.1.13 release could not be verified in the current release/tag records.
 
 ### Fixed
 

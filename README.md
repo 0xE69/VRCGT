@@ -1,444 +1,107 @@
-# VRCGT - VRChat Group Tools
+# VRC Group Tools (VRCGT)
 
-A powerful desktop toolkit for VRChat group owners and moderators. Fast login, rich group insights, member management, posts, calendar events, invites, audit logs, Discord webhooks, and more—all in one modern WPF app.
+A Windows desktop application for VRChat group owners and moderators. VRCGT brings group information, member moderation, invitations, events, audit logs, security tools and optional Discord notifications into one WPF interface.
 
-![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4) ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6) ![License](https://img.shields.io/badge/License-MIT-green) ![Build](https://img.shields.io/github/actions/workflow/status/0xE69/VRCGT/build.yml?branch=main)
+[![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/8.0) [![Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-0078D6)](https://github.com/0xE69/VRCGT/releases) [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE) [![Build](https://img.shields.io/github/actions/workflow/status/0xE69/VRCGT/build.yml?branch=main)](https://github.com/0xE69/VRCGT/actions)
 
----
+**Latest published release: [v1.1.23](https://github.com/0xE69/VRCGT/releases/tag/v1.1.23) (8 November 2026).** See [the complete released changelog](CHANGELOG.md) for version-by-version changes. This README describes the published 1.1.23 feature set; it does **not** announce unreleased development work.
 
-## ✨ Features
+> **Source/version distinction:** The published `v1.1.23` binaries correspond to [the `v1.1.23` release source](https://github.com/0xE69/VRCGT/tree/v1.1.23), commit `0e24d2a74038ce7326efa3448b572fb8dd5ef100`. The default `main` branch currently has a `1.1.18` project version and is **not** the source tree used for that release. Check out the release tag to build or inspect the exact published version.
 
-### 🔐 Authentication
-- Secure VRChat login with 2FA (TOTP/Email) support
-- Session caching for instant re-login
-- Automatic session restoration on app startup
+## Download and install
 
-### 📊 Group Dashboard
-- Group name, privacy level, member counts, and online stats
-- Creation date, owner info, and group links
-- Rules, description, and gallery preview
-- Role management and permissions overview
-- Upcoming and past events display
+Choose an artifact from [v1.1.23 Releases](https://github.com/0xE69/VRCGT/releases/tag/v1.1.23):
 
-### 👥 User Search & Moderation
-- Search any VRChat user by username or User ID
-- View detailed user profiles with avatar, bio, and badges
-- Age verification status display (18+ badge)
-- Highlight existing group members
-- **Moderation Actions:**
-  - Kick users from group
-  - Ban/Unban users
-  - Assign and remove roles
-  - Send group invites
+| Artifact | Purpose |
+| --- | --- |
+| `VRCGroupTools_Setup_1.1.23.exe` | Windows installer |
+| `VRCGroupTools-v1.1.23-win-x64.zip` | Portable, self-contained Windows x64 application |
+| `VRCGroupTools-v1.1.23-win-x64.zip.sha256` | Integrity checksum for the ZIP |
 
-### 📨 Invite to Group
-- Search users by name or paste User ID directly
-- Click-to-preview user profile before inviting
-- View age verification status and bio
-- Quick "Use" button to select user
-- One-click invite sending
+1. Download from the release page. If using the ZIP, extract it first and run `VRCGroupTools.exe`; otherwise launch the installer.
+2. Sign in to VRChat and complete any required two-factor authentication.
+3. Select the correct VRChat group. Group-owner or moderator permissions are needed for actions that change group membership, roles or content.
+4. Review permissions, group settings and invitation filters before starting any automated action.
 
-### 📬 Inviter Hub (New!)
-- **Instance Inviter**: Detect users in your current VRChat instance and invite them to your group.
-    - Filter by Trust Level (Visitor, New User, User, Known, Trusted).
-    - **18+ Only Filter**: Only show users with confirmed 18+ age verification.
-    - "Select All" and bulk invite capabilities.
-    - **Anti-abuse protection**: Prevents sending group invites from another group's instance.
-- **Friend Inviter**: Quickly invite your online friends to your group.
-- **Game Log Scanner**: Parse VRChat game logs to find and invite users you've recently encountered.
-    - Filter by 18+ verification status.
-    - View trust levels and last seen timestamps.
-    - Bulk invite capabilities.
-- **Join Requests**: Monitor and process group join requests.
-    - Filter requests by 18+ status (age verification check).
-    - Approve or block users directly.
-    - View user details and profile pictures.
+**Windows requirements:** Windows 10 or 11, 64-bit. Release packages are self-contained for .NET 8; a separate .NET Desktop Runtime installation should not be required for those assets. Windows and security software may warn about the **unsigned** installer/executable. Check that the file came from the intended GitHub release and verify its checksum before deciding whether to run it. A checksum verifies file integrity, **not** publisher identity or safety.
 
-### �📅 Calendar Events
-- Create and manage group events
-- **Event Options:**
-  - Title, description, category
-  - Start/end time with date pickers
-  - Visibility (Public/Group)
-  - Platform tags (Windows, Android, iOS)
-  - Language tags with searchable dropdown
-  - Send notification toggle
-  - Thumbnail upload support
-- **Recurrence Support:**
-  - Weekly (select days)
-  - Monthly (specific dates)
-  - Specific dates list
-  - Recurrence end date
-- **Templates:** Save and reuse event configurations
-- Sync events from VRChat
-- Duplicate and delete events
+**Updating:** VRCGT checks the public GitHub release feed for stable updates. Close the application before replacing files. If an automatic replacement is blocked by permissions or endpoint policy, install the release manually. An update check or successful offline test does not guarantee every Windows installation will update successfully.
 
-### 📝 Group Posts
-- View existing group posts with pagination
-- Create new posts with title and content
-- Visibility settings (Public/Group/Friends)
-- Send notification option
-- Edit existing posts
-- Delete posts
+## Features
 
-### 🌐 Instance Creator
-- Build VRChat launch links with full customization:
-  - Region selection (US, EU, JP)
-  - Access type (Public, Friends+, Friends, Invite+, Invite, Group)
-  - Queue enabled toggle
-  - Age gate (18+) toggle
-- Schedule instances with time zone support
-- Copy link, send invite, or launch directly
+### Group management and moderation
 
-### 👤 Members List
-- Browse all group members
-- Filter by role
-- View member details
-- Quick moderation actions
+- **Dashboard:** Group information, membership statistics, roles, rules, gallery and scheduled events.
+- **User search and profiles:** Look up users by username or user ID, inspect profile details and perform permission-checked group actions.
+- **Members and bans:** Review members, manage roles, kick or ban users, and unban where authorised. User Search also supports banning a non-member from a group.
+- **Join requests and invitations:** Review join requests, look up recipients, and use available age-verification and trust-level filters.
+- **18+ Badge Scanner:** Review age-verification status, filter/export results and initiate explicit moderation actions.
+- **Kill Switch and recovery:** Snapshot role assignments before bulk removal and use the restore controls for saved role snapshots.
+- **Member backups:** Save group membership snapshots, compare changes and re-invite missing users. Re-invitation is not a guarantee that VRChat will restore a previous member or their roles.
+- **Security Monitor:** Configurable moderation thresholds, trusted-user exemptions, incident records and optional security-alert webhooks.
 
-### 🚫 Bans List
-- View all banned users
-- Unban users with one click
-- Ban details and dates
+### Inviter Hub and Game History (v1.1.23)
 
-### 📜 Audit Logs
-- Full audit log history
-- Filter by action type
-- Date range selection
-- Search functionality
-- Auto-refresh toggle
-- Fetch complete history
-- Cached locally for speed
-- **Real-time Security Monitoring:** Automatically tracks suspicious actions
-- **Instance & World Info:** View instance IDs and world names for relevant log entries
-- **Enhanced CSV Export:** Export logs with instance and world data
+- **Manual group invitations:** Invite selected users from retained current or past Game History encounters, even after a room change, VRChat client exit or when recipients are offline/private. These are **group invitations**, not invitations to join an instance.
+- **Auto GROUP Invite:** An explicitly enabled option with confirmation of the acting account, target group, history/filter scope and optional future local discovery. It starts **disabled after every restart** and stops when consent or relevant account/group/context is changed.
+- **Pacing and duplicate protection:** Local discovery checks run every five seconds, but API operations and invitation sends are independently paced. A shared persistent group/recipient ledger suppresses duplicate and uncertain invitations; failed/unknown membership or identity checks do not silently authorise sending.
+- **Local discovery limits:** The application retains up to 1,000 encounter records, using a bounded scan of supported VRChat log formats. Logs provide untrusted discovery hints, **not** authenticated proof that a user was encountered. Imported lists do not automatically expand the consented Auto GROUP Invite scope.
+- **Other invite tools:** Instance Inviter, Friend Inviter, Game Log Scanner and text/CSV bulk import support manual selection and relevant eligibility filters. Inviting someone **to a specific VRChat instance** still requires a valid, confirmed destination; friend-to-instance batches are cancellable and paced.
 
-### 🔍 18+ Badge Scanner
-- Scan entire group for age verification status
-- Filter by verified/unverified/unknown
-- **Moderation Actions:**
-  - Manual selection with checkboxes
-  - Select All Unverified / Unselect All buttons
-  - Kick Selected members
-  - Kick All Unverified (bulk action)
-  - Rate-limited to 500ms per action
-- **Copy to Clipboard:**
-  - Copy unverified user list
-  - Copy filtered results
-  - Pipe-delimited format (DisplayName|UserID)
-- Export results to CSV
-- Progress tracking with real-time stats
+For the precise behaviour and constraints, read the [v1.1.23 Auto GROUP Invite documentation](https://github.com/0xE69/VRCGT/blob/v1.1.23/docs/AUTO-INVITE.md) and [release notes](https://github.com/0xE69/VRCGT/releases/tag/v1.1.23).
 
-### ⚡ Kill Switch (Role Removal)
-- Emergency bulk role removal from group members
-- Automatically creates a snapshot before removing roles
-- Select specific members or roles to remove
-- **Snapshot & Restore:**
-  - All role assignments saved to local database before removal
-  - View historical snapshots with timestamps
-  - Restore roles individually or in bulk
-  - Track which roles have been restored
-- Rate-limited API calls to avoid VRChat restrictions
-- Progress tracking with success/failure counts
-- Excludes default "Member" role from removal
+### Events, instances and communications
 
-### � **NEW: Member Backup & Recovery System**
-- **Create Snapshots:** Save complete member lists with roles and join dates
-- **Disaster Recovery:** Restore members after mass removals or attacks
-- **Smart Comparison:** See exactly who's missing vs who's new
-- **Selective Restore:** Re-invite only missing members or everyone
-- **Backup History:** Keep multiple snapshots with custom descriptions
-- **Progress Tracking:** Real-time progress for backup/restore operations
-- **Rate Limited:** Automatic delays to respect VRChat API limits
-- **Status Tracking:** See which members were successfully re-invited
+- **Calendar and group events:** Create, edit and schedule events with timezone and recurrence controls; review publication requests before publishing.
+- **Group posts and announcements:** View and manage posts, with approval-oriented publishing for supported event/news workflows.
+- **Instance Creator and Auto Closer:** Create instance links and configure age-gate, region and group-access rules for monitoring/closing non-compliant group instances.
+- **Audit logs:** Review moderation and group activity, filter/search records and export available data.
+- **Discord integration:** Optional category-based webhooks for group/member/role/instance and other events, security alerts and opt-in instance-announcement previews.
+- **Settings and update checks:** Manage group-specific settings, local data options and GitHub release update checks.
 
-### 🔒 **NEW: Security Monitor**
-- **Automated Threat Detection:** Monitor and respond to suspicious moderator behavior
-- **Configurable Thresholds:** Set limits for kicks, bans, role removals, and more
-- **Preemptive Ban Tracking:** Separate thresholds for banning non-group-members vs group members
-- **Trusted User Exclusions:** Exempt specific trusted users from all security threshold monitoring
-- **Automatic Response:** Remove roles from users exceeding thresholds
-- **Discord Alerts:** Receive rich notifications when incidents are detected
-- **Owner Protection:** Require owner role for automatic actions
-- **Incident History:** View all security events with full details
-- **Action Tracking:** Every monitored action logged to database
-- **Multiple Categories:**
-  - Excessive kicks (e.g., 5 kicks in 10 minutes)
-  - Excessive bans (e.g., 3 bans in 10 minutes)
-  - Mass role removals (e.g., 5 removals in 10 minutes)
-  - Bulk invite rejections (e.g., 10 rejections in 10 minutes)
-  - Content deletions (e.g., 5 posts deleted in 10 minutes)
-- **Separate Webhook:** Configure dedicated security alert webhook
+## Known limitations and security
 
-### 🚫 **NEW: Instance Auto Closer**
-- **Age Gate Enforcement:** Automatically close group instances that aren't age-gated (18+)
-- **Region Restrictions:** Optionally restrict instances to specific regions (US, EU, JP)
-- **Configurable Intervals:** Set how often to check for non-compliant instances
-- **Discord Notifications:** Receive alerts when instances are auto-closed
-- **Manual Override:** View and manually close any active group instance
-- **Real-time Monitoring:** Toggle monitoring on/off with status tracking
+- **Log compatibility:** Unsupported VRChat output-log headers can prevent encounter discovery. The unresolved 1.1.22 log-header incident is **not claimed fixed** by v1.1.23. Some initial log scans may temporarily pause the UI.
+- **Live acceptance:** Release verification included offline tests with fake transports and disposable data; those results do **not** establish successful live invites, real-client log detection or every installed-app update scenario.
+- **Invitation coverage:** Private/hidden identifiers, invalid or ambiguous records, API failures and VRChat permissions can limit actions. VRCGT does not guarantee discovery of every person in a room, invitation delivery or automatic recovery of every group member.
+- **Outstanding dependency advisory:** The dependency review identified [CVE-2025-6965 / GHSA-2m69-gcr7-jv3q](https://github.com/advisories/GHSA-2m69-gcr7-jv3q) in the baseline transitive SQLite dependency graph. **This documentation change and the Dependabot cleanup do not remediate it.** Review the advisory and dependency updates before treating a future release as fixed.
+- **Unsigned builds:** Installer and executable checksums prove integrity of downloaded bytes but do not replace code signing.
 
-### �🔔 Discord Webhooks
-- Configure webhook URL (supports discord.com and discordapp.com)
-- **Comprehensive Event Notifications:**
-  - **Member Events:** Joins, leaves, updates, role assignments
-  - **Role Events:** Create, update, delete role changes
-  - **Instance Events:** Create, update, delete instances
-  - **Group Events:** Name, description, icon, banner, privacy changes
-  - **Invite & Join Events:** Requests, invites, approvals, rejections
-  - **Announcement Events:** Create, update, delete announcements
-  - **Gallery Events:** Image submissions, approv
-  - **Security Events:** Threshold violations and automatic responses (via separate webhook)als, deletions
-  - **Post Events:** Create, update, delete posts
-- **Bulk Controls:**
-  - Select All / Deselect All toggles
-  - Organized by event categories
-- Test webhook connection
-- Rich embed notifications with color coding and emojis
+Report problems or check outstanding work in [GitHub Issues](https://github.com/0xE69/VRCGT/issues). Do not publish credentials, tokens, unredacted VRChat logs or group-member personal data in issue reports.
 
-### ⚙️ Settings
-- **Auto-Update System:**
-  - Automatic update checks on startup
-  - Downloads from GitHub releases
-  - One-click update and restart
-  - ZIP-based updates with automatic executable replacement
-- **Startup Options:**
-  - Start with Windows (registry integration)
-- Theme customization
-- Region and timezone settings
-- Local data management
-- About and version info
+## Build from source
 
----
+**Prerequisites:** Windows 10/11 x64, Git, and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). The project targets `net8.0-windows` and uses WPF.
 
-## 🚀 Quick Start
+To build **the published 1.1.23 source**, rather than whatever is currently on `main`:
 
-1. **Download:** Get the latest release from [Releases](../../releases) or build from source
-2. **Run:** Launch `VRCGroupTools.exe`
-   - **Windows SmartScreen Warning?** This appears because the app isn't code-signed (signing certificates cost $$$). The app is safe and open source. Click **"More info"** → **"Run anyway"**
-3. **Login:** Enter your VRChat credentials + 2FA code
-4. **Set Group:** Enter your Group ID (`grp_...` or short code) in the sidebar
-5. **Explore:** Navigate modules from the left sidebar
-
-### 🛡️ Security Note
-
-**Windows SmartScreen Warning:** The application may show "Windows protected your PC" on first run. This is normal for unsigned applications. To proceed:
-1. Click **"More info"**
-2. Click **"Run anyway"**
-
-The application is:
-- ✅ **Open Source** - All code is visible on GitHub
-- ✅ **Scanned by GitHub Actions** - Built in a clean environment
-- ✅ **No Telemetry** - Your data stays local
-- ✅ **Community Verified** - Check the issues and discussions
-
-**Why unsigned?** Code signing certificates cost $300-500/year. Once the project grows, we'll invest in proper signing.
-
----
-
-## 💻 System Requirements
-
-- **OS:** Windows 10/11 (64-bit)
-- **Runtime:** .NET 8 Desktop Runtime (included in self-contained builds)
-- **Account:** VRChat account with group moderator/owner rights for moderation features
-
----
-
-## 🔨 Building from Source
-
-### Prerequisites
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
-- Windows 10/11
-- Git (optional, for cloning)
-
-### Quick Build
-```cmd
-:: Clone the repository
+```powershell
 git clone https://github.com/0xE69/VRCGT.git
 cd VRCGT
+git fetch --tags
+git checkout v1.1.23
 
-:: Run the build script
-build.bat
+dotnet restore src/VRCGroupTools.csproj
+dotnet build src/VRCGroupTools.csproj -c Release --no-restore
+dotnet publish src/VRCGroupTools.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src/bin/Publish
 ```
 
-### Manual Build
-```cmd
-:: Navigate to source directory
-cd src
+The published application will be built at `src/bin/Publish/VRCGroupTools.exe`. You may also use `build.bat` from the repository root. To produce an installer, publish the application first, then compile `installer/setup.iss` with [Inno Setup](https://jrsoftware.org/isinfo.php).
 
-:: Restore packages
-dotnet restore
+Building from the same source does **not** by itself reproduce a byte-identical signed or verified release artifact. Compare source/tag provenance and the release-provided hashes as appropriate.
 
-:: Build release version
-dotnet build -c Release
+The repository has GitHub Actions for builds; the published v1.1.23 installer/portable ZIP and its verification evidence are described on the [release page](https://github.com/0xE69/VRCGT/releases/tag/v1.1.23).
 
-:: Publish self-contained executable
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o bin/Publish
-```
+## Local data and privacy
 
-### Output
-The compiled executable will be in `src/bin/Publish/VRCGroupTools.exe`
+VRCGT uses the application data folder `%LOCALAPPDATA%\VRCGroupTools\` for settings, its SQLite database, logs and crash reports. Examples include `settings.json`, `vrcgrouptools.db`, `Logs/` and `CrashReports/`.
 
-### Creating an Installer (Optional)
-1. Install [Inno Setup](https://jrsoftware.org/isinfo.php)
-2. Open `installer/setup.iss`
-3. Compile to create the installer
+Some data stays in these local files, but application actions can also contact the **VRChat API**, **GitHub** for updates, and **Discord** if you configure webhooks. Therefore, "no data is sent to third parties" would be inaccurate. Treat the local database, history, logs and webhook configuration as sensitive, and review what each external integration sends before enabling it.
 
----
+## Contributing, licence and disclaimer
 
-## 🔄 GitHub Actions CI/CD
+Contributions and bug reports are welcome through [pull requests](https://github.com/0xE69/VRCGT/pulls) and [issues](https://github.com/0xE69/VRCGT/issues). Changes intended for a release should be reviewed and tested separately from development-only notes. Released user-facing changes belong in [`CHANGELOG.md`](CHANGELOG.md), not a second README changelog.
 
-This project includes automated builds via GitHub Actions:
+VRCGT is licensed under the [MIT License](LICENSE).
 
-- **On Push/PR:** Builds and uploads artifacts
-- **On Tag (v*):** Creates a GitHub Release with the compiled binary
-
-To create a release:
-```cmd
-git tag v1.0.7
-git push origin v1.0.7
-```
-
----
-
-## 📁 Data & Privacy
-
-All data is stored locally in `%LocalAppData%\VRCGroupTools\`:
-- `settings.json` - App configuration
-- `vrcgrouptools.db` - SQLite database for caching, security logs, and backups
-- `Logs/` - Application logs
-- `CrashReports/` - Error reports
-
-**Privacy:** 
-- Credentials are sent directly to VRChat's official API
-- No data is sent to third parties
-- Discord webhooks are configured and stored locally
-- All security monitoring and backups stored locally
-
----
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-## ⚠️ Disclaimer
-
-This project is not affiliated with, endorsed by, or connected to VRChat Inc. VRChat and related marks are trademarks of VRChat Inc. Use at your own risk and in accordance with VRChat's Terms of Service.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📋 Changelog
-
-### v1.1.5 (2026-01-26)
-**🔒 Security Enhancements & Auto Closer**
-
-**New Features:**
-- **Instance Auto Closer** 🚫
-  - Automatically close non-age-gated (18+) group instances
-  - Optional region restrictions for instances
-  - Configurable check intervals
-  - Discord notifications when instances are closed
-  - Manual instance management with refresh and close buttons
-  - Real-time monitoring toggle
-
-- **Game Log Scanner** 📜
-  - New tab in Inviter Hub to parse VRChat game logs
-  - Find and invite users you've recently encountered
-  - Filter by 18+ verification status
-  - View trust levels and last seen timestamps
-  - Bulk invite capabilities
-
-- **Trusted User Exclusions** ⭐
-  - Add trusted staff user IDs exempt from all security thresholds
-  - Useful for staff who perform bulk moderation actions
-
-- **Preemptive Ban Differentiation** 🛡️
-  - Separate threshold settings for preemptive bans (banning non-members)
-  - Higher default threshold (20) since banning known troublemakers is common
-  - Distinguishes between group member bans vs non-member bans in security tracking
-
-**Improvements:**
-- **Audit Logs**: Now display instance ID and world name for relevant events
-- **CSV Export**: Audit log exports include instance and world data
-- **Instance Inviter**: Anti-abuse protection prevents invites from other groups' instances
-- **Security Monitor**: Better differentiation between action types
-
-### v1.1.0 (2026-01-24)
-**📬 Inviter Hub & Moderation**
-
-**New Features:**
-- **Inviter Hub**: Centralized tab for all recruiting tools.
-  - **Instance Inviter**: Detect and invite users from your current VRChat instance. Includes 18+ filtering.
-  - **Friend Inviter**: Bulk invite online friends.
-  - **Join Requests**: Manage group requests with new 18+ verification filters.
-- **Profile Viewer**: Click on any user in search/lists to view their full profile (Bio, Status, Badges).
-- **18+ Filters**: Added verified 18+ filtering to Instance Inviter, Friend Inviter, and Join Requests.
-
-**Improvements:**
-- UI Tweaks for better readability.
-- Performance improvements in API scanning.
-
-### v1.0.7 (2026-01-15)
-**🔧 Stability & Caching**
-
-**Improvements:**
-- Prevent duplicate Discord audit webhook posts
-- Added cache load options for group info, posts, bans, and badge scans
-
-### v1.0.6 (2025-01-14)
-**🔒 Security & Recovery Features**
-
-**New Features:**
-- **Security Monitor System** 🔒
-  - Automatic detection of suspicious moderator behavior
-  - Configurable thresholds for kicks, bans, role removals, invite rejections, and content deletions
-  - Automatic role removal for users exceeding limits
-  - Dedicated Discord webhook for security alerts
-  - Owner-only protection mode
-  - Complete incident history and action logging
-  - Real-time monitoring integrated with audit logs
-
-- **Member Backup & Recovery System** 💾
-  - Create complete snapshots of all group members with roles
-  - Smart comparison between backups and current membership
-  - Selective member restoration (missing only or all)
-  - Multiple backup history with custom descriptions
-  - Progress tracking for backup/restore operations
-  - Visual status indicators (missing/re-invited)
-  - Rate-limited API calls for safe restoration
-
-**Improvements:**
-- Enhanced database schema with security and backup tables
-- Additional VRChat API methods for member role management
-- Improved error handling and logging throughout
-- Better performance with indexed database queries
-
-### v1.0.5 (2025-12-XX)
-- Initial public release
-- Core group management features
-- Discord webhook integration
-- Kill Switch functionality
-- 18+ Badge Scanner
-- Calendar events and posts management
-
----
-
-## 🙏 Acknowledgments
-
-- VRChat community for feedback and testing
-- Material Design In XAML for UI components
-- All contributors and supporters
+**Unofficial project.** VRCGT is not affiliated with or endorsed by VRChat Inc. Use it in compliance with VRChat's policies and the permissions of the groups you manage.
