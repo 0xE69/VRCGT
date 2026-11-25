@@ -41,11 +41,16 @@ public partial class VRChatApiService
         try
         {
             var wait=_nextExactMembershipRead-DateTimeOffset.UtcNow;
-            if (wait>TimeSpan.Zero) await Task.Delay(wait);
+            if (wait>TimeSpan.Zero)
+            {
+                GroupInvitePresentation.WriteActivity($"Waiting {Math.Ceiling(wait.TotalSeconds)}s to check membership for {userId}.");
+                await Task.Delay(wait);
+            }
             await RateLimitAsync();
             if (!IsLoggedIn || CurrentUserId!=account || InvitationSession!=generation) return GroupMembershipState.Unknown;
             _nextExactMembershipRead=DateTimeOffset.UtcNow.AddSeconds(13);
             using var response=await _httpClient.GetAsync($"groups/{groupId}/members/{userId}?apiKey={ApiKey}");
+            GroupInvitePresentation.WriteActivity($"Membership check for {userId} returned HTTP {(int)response.StatusCode} ({response.StatusCode}).");
             if (!response.IsSuccessStatusCode) return GroupMembershipState.ApiError;
             var body=JToken.Parse(await response.Content.ReadAsStringAsync());
             if (body.Type==JTokenType.Null) return GroupMembershipState.CachedNonMember;
@@ -53,7 +58,11 @@ public partial class VRChatApiService
             var status=body["membershipStatus"]?.Value<string>();
             return status is "banned" or "blocked" ? GroupMembershipState.Blocked : GroupMembershipState.CachedMember;
         }
-        catch { return GroupMembershipState.ApiError; }
+        catch (Exception ex)
+        {
+            GroupInvitePresentation.WriteActivity($"Could not verify membership for {userId} ({ex.GetType().Name}).");
+            return GroupMembershipState.ApiError;
+        }
         finally { _membershipReadGate.Release(); }
     }
 }

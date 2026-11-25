@@ -51,7 +51,7 @@
                               VerticalAlignment="Center"/>
                 </Grid>
                 
-                <Button Content="🔄 Refresh Instance Detection" 
+                <Button Content="🔄 Refresh Logs and Instance"
                        Command="{Binding RefreshCommand}"
                        Style="{StaticResource MaterialDesignRaisedButton}"
                        Background="#7C4DFF"
@@ -100,7 +100,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,20,10">
                             <CheckBox Content="Min time since encounter:"
                                      IsChecked="{Binding SkipJustJoined}"
-                                     ToolTip="Skip users who haven't been in the instance long enough"
+                                     ToolTip="Skip people whose latest encounter was too recent"
                                      Foreground="White"
                                      VerticalAlignment="Center"/>
                             <TextBox x:Name="MinInstanceTimeInput" TextChanged="OnFilterTextChanged" Text="{Binding MinInstanceTimeSeconds, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"
@@ -121,8 +121,8 @@
                     <CheckBox x:Name="AutoInviteCheckBox" Grid.Column="1" Content="Auto GROUP invitations (5s queue checks)" IsChecked="{Binding AutoInviteEnabled, Mode=TwoWay}" Foreground="White" VerticalAlignment="Center" ToolTip="Explicit opt-in confirms exact group/account, visible history IDs and filters. Continues after room changes, room closure or VRChat client exit; off on account/auth/group/filter changes or app close. Always disabled on restart."/>
                 </Grid>
                 <TextBox TextChanged="OnFilterTextChanged" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" materialDesign:HintAssist.Hint="Filter retained current/past history by name or exact ID (edits stop Auto Invite)" Foreground="White" Margin="0,8,0,4"/>
-                <TextBlock Text="Retained Game History is untrusted discovery, NOT verified live presence. Review the visible current/past scope; enabling confirms exact IDs and filters. Future local tracking records only enter the consented queue when that explicit scope is enabled; raw imports require re-confirmation. No current instance or visible API location required. Unknown membership remains pending." Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                <CheckBox Content="History scope includes future exact-ID local tracking records (untrusted discovery; confirmed when enabling)" IsChecked="{Binding IncludeFutureHistory}" Foreground="#BBB" Margin="0,5,0,0"/>
+                <TextBlock Text="Select people to invite, or enable Auto Invite with no selection to review all visible users. Group invitations work from any instance, including after you leave VRChat." Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                <CheckBox Content="Include new local encounters when Auto Invite starts with no selection" IsChecked="{Binding IncludeFutureHistory}" Foreground="#BBB" Margin="0,5,0,0"/>
                 <TextBlock x:Name="AutoInviteStatus" Text="{Binding StatusMessage}" Foreground="#BBB" TextWrapping="Wrap" Margin="0,5,0,0"/>
                 <Expander Header="Auto Invite activity — persistent outcomes in Game Log / shared local history" Foreground="#BBB" Margin="0,5,0,0">
                     <ListBox x:Name="AutoInviteActivity" ItemsSource="{Binding AutoInviteLog}" MaxHeight="100" Foreground="#BBB" Background="Transparent"/>
@@ -175,24 +175,26 @@
                            HorizontalAlignment="Center"
                            Visibility="{Binding FilteredInstanceUsers.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
                     <TextBlock Text="⚠️" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,15"/>
-                    <TextBlock Text="No retained encounter records"
+                    <TextBlock Text="No matching encounters"
                               FontSize="16" 
                               FontWeight="SemiBold" 
                               Foreground="White" 
                               HorizontalAlignment="Center"
                               Margin="0,0,0,10"/>
-                    <TextBlock Text="Scan/review Game Log history, refresh or adjust your filters"
+                    <TextBlock Text="Refresh logs or adjust your filters. The Game Log tab lists the files scanned."
                               FontSize="13" 
                               Foreground="#888" 
                               HorizontalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Users List -->
-                <ScrollViewer Grid.Row="1" 
-                             VerticalScrollBarVisibility="Auto"
-                             Visibility="{Binding FilteredInstanceUsers.Count, Converter={StaticResource ZeroToVisibilityConverter}, ConverterParameter=Inverse}">
-                    <ItemsControl ItemsSource="{Binding FilteredInstanceUsers}" Padding="5">
-                        <ItemsControl.ItemTemplate>
+                <ListBox Grid.Row="1" ItemsSource="{Binding FilteredInstanceUsers}" Padding="5"
+                         Background="Transparent" BorderThickness="0"
+                         HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                         ScrollViewer.CanContentScroll="True"
+                         Visibility="{Binding FilteredInstanceUsers.Count, Converter={StaticResource ZeroToVisibilityConverter}, ConverterParameter=Inverse}">
+                        <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Background="#1E1E1E" 
                                        CornerRadius="8" 
@@ -262,9 +264,8 @@
                                     </Grid>
                                 </Border>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                        </ListBox.ItemTemplate>
+                </ListBox>
             </Grid>
         </Border>
 
@@ -309,7 +310,7 @@
                        Background="#4CAF50"
                        Height="40"
                        Padding="20,0"
-                       IsEnabled="{Binding InstanceUserSelectedCount, Converter={StaticResource ZeroToVisibilityConverter}, ConverterParameter=Inverse}"/>
+                       IsEnabled="{Binding HasSelectedInstanceUsers}"/>
             </Grid>
         </Border>
     </Grid>

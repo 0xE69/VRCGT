@@ -24,7 +24,7 @@ public sealed class IncrementalInstanceSessionReader
     }
     // Syntax anchoring prevents marker substrings in names from acting as events.
     // Logs (even forged full envelopes) remain untrusted hints, not API presence.
-    private static readonly Regex BehaviourRecord = new(@"^(?:\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\s+Log\s+-\s+)?\[Behaviour\]\s+(?<payload>.*)$", RegexOptions.Compiled);
+    private static readonly Regex BehaviourRecord = new("^" + VrchatLogFormat.OptionalHeader + @"\[Behaviour\]\s+(?<payload>.*)$", RegexOptions.Compiled);
     private static bool IsEvent(string payload, string marker) => payload == marker
         || payload.StartsWith(marker + " ", StringComparison.Ordinal)
         || payload.StartsWith(marker + ":", StringComparison.Ordinal);

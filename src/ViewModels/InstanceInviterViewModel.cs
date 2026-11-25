@@ -80,7 +80,10 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
     private bool _autoInviteEnabled;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedInstanceUsers))]
     private int _instanceUserSelectedCount;
+
+    public bool HasSelectedInstanceUsers => InstanceUserSelectedCount > 0;
 
     [ObservableProperty]
     private InstanceDetails? _currentInstanceDetails;
@@ -162,143 +165,58 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await LoadFriendsAsync();
-        UpdateCurrentInstance();
-    }
+    private Task LoadAsync() => RefreshHistoryAsync();
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        StopAutoInvite("Auto Invite off: manual refresh. Review and explicitly enable again.");
-        Console.WriteLine("[INSTANCE-VM] RefreshAsync started");
-        await LoadFriendsAsync();
-        Console.WriteLine("[INSTANCE-VM] Calling UpdateCurrentInstance...");
-        UpdateCurrentInstance();
-        Console.WriteLine("[INSTANCE-VM] RefreshAsync completed");
+        StopAutoInvite("Auto Invite off. Review the refreshed history to enable it again.");
+        await RefreshHistoryAsync();
     }
 
-    private async Task LoadFriendsAsync()
+    private async Task RefreshHistoryAsync()
     {
-        if (IsLoading)
-        {
-            Console.WriteLine("[INSTANCE-VM] LoadFriendsAsync skipped - already loading");
-            return;
-        }
-
+        if (IsLoading) return;
+        IsLoading = true;
         try
         {
-            IsLoading = true;
-            StatusMessage = "Loading friends...";
-            Console.WriteLine("[INSTANCE-VM] Loading friends from API...");
-
-            var friendsList = await _apiService.GetFriendsAsync(OnlineOnly);
-            Console.WriteLine($"[INSTANCE-VM] Friends loaded: {friendsList.Count}");
-
-            Friends.Clear();
-            foreach (var friend in friendsList)
-            {
-                Friends.Add(new FriendItemViewModel(friend, this));
-            }
-
-            ApplyFilters();
-            StatusMessage = $"Loaded {Friends.Count} friends";
+            StatusMessage = "Reading local VRChat logs and retained encounters…";
+            await RefreshInstanceUsersAsync();
+            StatusMessage = $"{InstanceUsers.Count:N0} retained encounters. {_instanceInviterService.EncounterHistoryDiagnostic}";
+            UpdateCurrentInstance();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[INSTANCE-VM] Error loading friends: {ex}");
-            StatusMessage = $"Error loading friends: {ex.Message}";
-            MessageBox.Show($"Failed to load friends: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = $"Could not refresh encounter history. {ex.Message}";
         }
-        finally
-        {
-            IsLoading = false;
-        }
+        finally { IsLoading = false; }
     }
 
     private void UpdateCurrentInstance()
     {
-        Console.WriteLine("[INSTANCE-VM] UpdateCurrentInstance started");
         CurrentInstance = _instanceInviterService.GetCurrentInstance();
-        Console.WriteLine($"[INSTANCE-VM] CurrentInstance result: {(CurrentInstance == null ? "null" : CurrentInstance.WorldId)}");
-        
-        if (CurrentInstance != null)
-        {
-            CurrentInstanceDisplay = $"Current Instance: {CurrentInstance.WorldId} (Detected at {CurrentInstance.DetectedAt:HH:mm:ss})";
-            StatusMessage = "Ready to send invites";
-            
-            // Fetch instance details (including world owner) asynchronously
-            _ = FetchInstanceDetailsAsync();
-            
-            // Load instance users
-            _ = RefreshInstanceUsersAsync();
-        }
-        else
-        {
-            CurrentInstanceDisplay = _instanceInviterService.DetectionDiagnostic.Display;
-            StatusMessage = "Current instance unverified (informational). GROUP invitations remain available from retained Game History. Friend-to-instance invitations still require a verified destination.";
-            CurrentInstanceDetails = null;
-            _ = RefreshInstanceUsersAsync();
-        }
-    }
-
-    private async Task FetchInstanceDetailsAsync()
-    {
-        if (CurrentInstance == null) return;
-        
-        try
-        {
-            CurrentInstanceDetails = await _apiService.GetInstanceAsync(CurrentInstance.WorldId, CurrentInstance.InstanceId);
-            if (CurrentInstanceDetails != null)
-            {
-                Console.WriteLine($"[INSTANCE-VM] Instance details fetched. World owner: {CurrentInstanceDetails.OwnerId}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[INSTANCE-VM] Error fetching instance details: {ex.Message}");
-            CurrentInstanceDetails = null;
-        }
+        CurrentInstanceDisplay = CurrentInstance == null
+            ? _instanceInviterService.DetectionDiagnostic.Display
+            : $"Current Instance: {CurrentInstance.WorldId} (detected at {CurrentInstance.DetectedAt:HH:mm:ss})";
     }
 
     private async Task RefreshInstanceUsersAsync()
     {
-        try
+        var users = await DiscoverAutoUsersAsync();
+        var context = _identityScope;
+        if (!NeedsFilterDetails || context == null) return;
+        var candidates = users.Where(u => BasicEligibility(u, false, allowPendingMembership: true)).ToList();
+        for (var i = 0; i < candidates.Count; i++)
         {
-            var group = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
-            if (!string.IsNullOrWhiteSpace(group)) await LoadLocalEligibilityAsync(group);
-            var users = await DiscoverAutoUsersAsync();
-            // Explicit manual refresh resolves only NEW eligible IDs whose enabled filters need metadata.
-            // Auto polling uses its separate one-new-lookup-per-cycle budget; neither path re-fetches unchanged users.
-            if (NeedsFilterDetails)
-                foreach (var user in users.Where(u => BasicEligibility(u, false)))
-                    await ResolveFilterDetailsAsync(user);
-            InstanceUsers.Clear();
-            foreach (var user in users)
-            {
-                ApplyKnownDetails(user);
-                InstanceUsers.Add(new InstanceUserViewModel(user, this) { GroupInviteResult = $"{GroupInviteEligibility.Membership(user.UserId, _membership)} · {_history.GetValueOrDefault(user.UserId)}" });
-            }
-            
-            // Apply filters to instance users
-            ApplyInstanceUserFilters();
-            
-            // Refresh filters to exclude instance users from friend list
-            ApplyFilters();
-            
-            // Loading only discovers users. Sending always requires manual selection and confirmation.
+            if (!NeedsFilterDetails || ReadAutoContext() != context) break;
+            StatusMessage = $"Checking profile filters ({i + 1:N0} of {candidates.Count:N0})…";
+            await ResolveFilterDetailsAsync(candidates[i]);
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[INSTANCE-INVITER-VM] Error refreshing instance users: {ex.Message}");
-        }
+        ShowEncounters(users);
     }
 
     private void ApplyInstanceUserFilters()
     {
-        FilteredInstanceUsers.Clear();
-
         var filtered = InstanceUsers.Where(u =>
         {
             if (!string.IsNullOrWhiteSpace(SearchQuery) && !u.User.DisplayName.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) && !u.User.UserId.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return false;
@@ -326,10 +244,10 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
             return true;
         });
 
-        foreach (var user in filtered)
-        {
-            FilteredInstanceUsers.Add(user);
-        }
+        var visible = filtered.ToList();
+        if (!FilteredInstanceUsers.SequenceEqual(visible))
+            FilteredInstanceUsers = new ObservableCollection<InstanceUserViewModel>(visible);
+        UpdateInstanceUserSelectedCount();
     }
 
     private void ApplyFilters()
@@ -510,108 +428,189 @@ public partial class InstanceInviterViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectAllInstanceUsers()
     {
-        foreach (var user in FilteredInstanceUsers)
-        {
-            user.IsSelected = BasicEligibility(user.User, false) && PassDetailFilters(user.User);
-        }
-        UpdateInstanceUserSelectedCount();
+        SetSelection(FilteredInstanceUsers, true);
     }
 
     [RelayCommand]
-    private void DeselectAllInstanceUsers()
+    private void DeselectAllInstanceUsers() => SetSelection(InstanceUsers, false);
+
+    private bool _updatingSelection;
+    private void SetSelection(IEnumerable<InstanceUserViewModel> rows, bool select)
     {
-        foreach (var user in InstanceUsers)
+        _updatingSelection = true;
+        try
         {
-            user.IsSelected = false;
+            foreach (var row in rows) row.IsSelected = select && row.CanInvite;
         }
+        finally { _updatingSelection = false; }
         UpdateInstanceUserSelectedCount();
     }
 
     public void UpdateInstanceUserSelectedCount()
     {
-        InstanceUserSelectedCount = InstanceUsers.Count(u => u.IsSelected);
+        if (!_updatingSelection) InstanceUserSelectedCount = FilteredInstanceUsers.Count(u => u.IsSelected);
     }
+
+    internal void OnEncounterSelectionEdited()
+    {
+        if (AutoInviteEnabled) StopAutoInvite("Auto Invite off. Review the changed selection to enable it again.");
+        UpdateInstanceUserSelectedCount();
+    }
+
+    public Func<string, IReadOnlyList<string>, bool> ConfirmHistoryInvites { get; set; } = GroupInvitePresentation.Confirm;
 
     [RelayCommand]
     private async Task InviteInstanceUsersAsync()
     {
-        await InviteInstanceUsersInternal(false);
-    }
-
-    private async Task InviteInstanceUsersInternal(bool silent)
-    {
-        if (IsLoading) return;
-        StopAutoInvite("Auto Invite off: manual invitation batch started.");
-        var activeGroup = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
-        if (string.IsNullOrWhiteSpace(activeGroup)) return;
-        await LoadLocalEligibilityAsync(activeGroup);
-        var selectedUsers = FilteredInstanceUsers.Where(u => u.IsSelected && BasicEligibility(u.User, false) && PassDetailFilters(u.User)).ToList();
-        if (selectedUsers.Count == 0)
+        if (IsLoading) { GroupInvitePresentation.WriteActivity("Manual batch not started: an operation is already in progress."); return; }
+        var context = ReadAutoContext();
+        if (context == null)
         {
-            if (!silent)
-                MessageBox.Show("Please select at least one user to invite.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusMessage = "Log in and select a group to send invitations.";
+            GroupInvitePresentation.WriteActivity("Manual batch not started: no authenticated account or selected group.");
             return;
         }
-
-        // Get the current group ID from settings
-        var groupId = _settingsService.CurrentGroupId ?? _settingsService.Settings.GroupId;
-        if (string.IsNullOrEmpty(groupId))
+        StopAutoInvite("Auto Invite off. Sending the selected group invitations.");
+        IsLoading = true;
+        var total = 0;
+        var sent = 0;
+        var failed = 0;
+        var skipped = 0;
+        var unknown = 0;
+        var inFlight = 0;
+        var confirmed = false;
+        var requesting = false;
+        string? currentRow = null;
+        string? stopReason = null;
+        bool StopForChangedContext()
         {
-            if (!silent)
-                MessageBox.Show("No group configured. Please set up a group first.", "No Group", MessageBoxButton.OK, MessageBoxImage.Warning);
-            else
-                StatusMessage = "Auto-invite failed: No group configured";
-            return;
+            if (ReadAutoContext() == context) return false;
+            StatusMessage = "Invites stopped. The account or group changed.";
+            stopReason = "account or group changed";
+            GroupInvitePresentation.WriteActivity($"{currentRow} result=NotSent reason={stopReason}");
+            skipped++;
+            return true;
         }
 
-        // Group invitations do not depend on a current instance or world ownership.
-        var confirmedContext = ReadAutoContext();
-        if (confirmedContext == null || confirmedContext.GroupId != groupId) return;
-        if (!GroupInvitePresentation.Confirm(groupId, selectedUsers.Select(u => $"{u.User.DisplayName} ({u.User.UserId})"))) return;
-        if (ReadAutoContext() != confirmedContext) return;
         try
         {
-            IsLoading = true;
-            var successCount = 0;
-            var failCount = 0;
-            var suppressedCount = 0;
-
-            foreach (var userVM in selectedUsers)
+            EnsureIdentityScope();
+            await LoadLocalEligibilityAsync(context.GroupId);
+            var selected = FilteredInstanceUsers.Where(row => row.IsSelected && row.CanInvite).ToList();
+            total = selected.Count;
+            if (total == 0)
             {
-                StatusMessage = $"Inviting {userVM.User.DisplayName} to group...";
-
-                // Invite to group using group ID
-                var outcome = await _apiService.SendTrackedAsync(groupId, userVM.User.UserId, () => ReadAutoContext() == confirmedContext && BasicEligibility(userVM.User, false, claimed: true) && PassDetailFilters(userVM.User));
-                userVM.GroupInviteResult = outcome.Message;
-                if (!outcome.Sent && outcome.State != GroupInviteState.Failed) { suppressedCount++; userVM.IsSelected = false; continue; }
-                var success = outcome.Sent;
-
-                if (success)
-                {
-                    successCount++;
-                    userVM.IsSelected = false;
-                }
-                else
-                {
-                    failCount++;
-                }
-
-                // Random delay between 4 and 13 seconds
-                var delay = Random.Shared.Next(4000, 13000);
-                await Task.Delay(delay);
+                StatusMessage = "Select a user with a valid VRChat ID to invite.";
+                GroupInvitePresentation.WriteActivity("Manual batch not started: no eligible recipients selected.");
+                return;
+            }
+            if (ReadAutoContext() != context) { GroupInvitePresentation.WriteActivity("Manual batch not started: account or group changed."); return; }
+            if (!ConfirmHistoryInvites(context.GroupId, selected.Select(r => $"{r.User.DisplayName} ({r.User.UserId})").ToList()))
+            {
+                GroupInvitePresentation.WriteActivity("Manual batch cancelled before sending.");
+                return;
             }
 
-            StatusMessage = $"Invites: {successCount} sent, {failCount} rejected, {suppressedCount} suppressed/unknown. See row status and Game Log history.";
-            if (!silent) MessageBox.Show(StatusMessage, "Group invitations", MessageBoxButton.OK, MessageBoxImage.Information);
+            confirmed = true;
+            GroupInvitePresentation.WriteActivity($"Manual batch started group={context.GroupId} recipients={total}");
+            for (var i = 0; i < total; i++)
+            {
+                var row = selected[i];
+                var user = row.User;
+                var idForLog = ApprovalPublisher.Id(user.UserId, "usr") ? user.UserId : "(invalid user ID)";
+                currentRow = $"[{i + 1}/{total}] {idForLog}";
+                if (StopForChangedContext()) return;
+                if (MembershipOf(user.UserId) is GroupMembershipState.Unknown or GroupMembershipState.ApiError)
+                {
+                    StatusMessage = $"Checking membership for {user.DisplayName}…";
+                    GroupInvitePresentation.WriteActivity($"{currentRow} checking membership name={user.DisplayName}");
+                    var membership = await _apiService.CheckGroupMembershipAsync(context.GroupId, user.UserId);
+                    if (StopForChangedContext()) return;
+                    _exactMembership[user.UserId] = membership;
+                    GroupInvitePresentation.WriteActivity($"{currentRow} membership={membership}");
+                }
+                if (!BasicEligibility(user, false) || !PassDetailFilters(user))
+                {
+                    var membership = MembershipOf(user.UserId);
+                    var prior = _history.GetValueOrDefault(user.UserId);
+                    var reason = membership != GroupMembershipState.CachedNonMember ? $"membership={membership}"
+                        : prior is GroupInviteState.Sent or GroupInviteState.InFlight or GroupInviteState.Unknown ? $"prior invite={prior}"
+                        : "recipient eligibility or filters changed";
+                    row.GroupInviteResult = $"Skipped · {membership}";
+                    row.NotifyEligibilityChanged();
+                    GroupInvitePresentation.WriteActivity($"{currentRow} result=Skipped reason={reason}");
+                    skipped++;
+                    currentRow = null;
+                    continue;
+                }
+                StatusMessage = $"Inviting {user.DisplayName} to the group…";
+                GroupInvitePresentation.WriteActivity($"{currentRow} requesting group invitation name={user.DisplayName}");
+                requesting = true;
+                var outcome = await _apiService.SendTrackedAsync(context.GroupId, user.UserId,
+                    () => ReadAutoContext() == context && BasicEligibility(user, false, claimed: true) && PassDetailFilters(user));
+                requesting = false;
+                string result;
+                switch (outcome.State)
+                {
+                    case GroupInviteState.Sent when outcome.Sent:
+                        sent++;
+                        result = "Sent";
+                        break;
+                    case GroupInviteState.Sent:
+                        skipped++;
+                        result = "AlreadySent reason=duplicate in local history";
+                        break;
+                    case GroupInviteState.Failed:
+                        failed++;
+                        result = "Rejected";
+                        break;
+                    case GroupInviteState.InFlight:
+                        inFlight++;
+                        result = "InFlight reason=prior request pending or interrupted";
+                        break;
+                    case GroupInviteState.NotSent:
+                        skipped++;
+                        result = "NotSent reason=context or eligibility changed before dispatch";
+                        break;
+                    default:
+                        unknown++;
+                        result = "Unknown reason=delivery could not be confirmed";
+                        break;
+                }
+                GroupInvitePresentation.WriteActivity($"{currentRow} result={result}");
+                currentRow = null;
+                row.GroupInviteResult = outcome.Message;
+                _history[user.UserId] = outcome.State;
+                row.NotifyEligibilityChanged();
+                if (i + 1 < total)
+                {
+                    var delayMs = Random.Shared.Next(4000, 13000);
+                    GroupInvitePresentation.WriteActivity($"Waiting {delayMs / 1000.0:F1}s before recipient {i + 2}/{total}.");
+                    await Task.Delay(delayMs);
+                }
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error sending invites: {ex.Message}";
-            if (!silent)
-                MessageBox.Show($"Failed to send invites: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = $"Group invitations stopped. {ex.Message}";
+            stopReason = ex.GetType().Name;
+            if (currentRow != null)
+            {
+                GroupInvitePresentation.WriteActivity($"{currentRow} result={(requesting ? "Unknown" : "NotSent")} reason={stopReason}");
+                if (requesting) unknown++;
+                else skipped++;
+            }
         }
         finally
         {
+            if (confirmed || stopReason != null)
+            {
+                var completion = stopReason == null ? "complete" : $"stopped reason={stopReason}";
+                var remaining = total - sent - failed - skipped - unknown - inFlight;
+                GroupInvitePresentation.WriteActivity($"Manual batch {completion} sent={sent} rejected={failed} skipped={skipped} unknown={unknown} inFlight={inFlight} remaining={remaining}");
+                var summary = $"{sent} sent, {failed} rejected, {skipped} skipped, {unknown} unknown, {inFlight} in flight.";
+                StatusMessage = stopReason == null ? $"Group invitations complete. {summary}" : $"{StatusMessage} {summary} {remaining} remaining.";
+            }
             IsLoading = false;
             UpdateInstanceUserSelectedCount();
         }
@@ -717,7 +716,7 @@ public partial class InstanceUserViewModel : ObservableObject
     private bool _isSelected;
 
     [ObservableProperty] private string? _groupInviteResult;
-    public InstanceUser User { get; }
+    public InstanceUser User { get; private set; }
     public bool CanInvite => _parent.CanSelectInstanceUser(User);
 
     public InstanceUserViewModel(InstanceUser user, InstanceInviterViewModel parent)
@@ -726,10 +725,30 @@ public partial class InstanceUserViewModel : ObservableObject
         _parent = parent;
     }
 
-    partial void OnIsSelectedChanged(bool value)
+    internal void UpdateEncounter(InstanceUser user)
     {
-        _parent.UpdateInstanceUserSelectedCount();
+        var changed = ReferenceEquals(User, user) || User.JoinTime != user.JoinTime || User.DisplayName != user.DisplayName ||
+            User.ProfilePicUrl != user.ProfilePicUrl || User.IsAgeVerified != user.IsAgeVerified || !User.Tags.SequenceEqual(user.Tags);
+        User = user;
+        if (!changed) return;
+        OnPropertyChanged(nameof(User));
+        OnPropertyChanged(nameof(TimeInInstance));
+        OnPropertyChanged(nameof(TrustLevel));
+        OnPropertyChanged(nameof(TrustLevelBrush));
+        NotifyEligibilityChanged();
     }
+
+    internal void NotifyEligibilityChanged()
+    {
+        OnPropertyChanged(nameof(CanInvite));
+        if (_isSelected && !CanInvite)
+        {
+            SetProperty(ref _isSelected, false, nameof(IsSelected));
+            _parent.UpdateInstanceUserSelectedCount();
+        }
+    }
+
+    partial void OnIsSelectedChanged(bool value) => _parent.OnEncounterSelectionEdited();
 
     public string TimeInInstance
     {

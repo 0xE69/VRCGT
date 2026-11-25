@@ -1,41 +1,82 @@
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using VRCGroupTools.ViewModels;
 
 namespace VRCGroupTools.Services;
 
 public sealed partial class GroupInviteLedger
 {
-    // Discovery only, never persistent authorisation. Reuses the shared local DB, not contacts.
-    public const int EncounterLimit = 1000;
-    public async Task SaveEncountersAsync(List<SeenUser> users)
+    private const string CreateEncounters = "CREATE TABLE IF NOT EXISTS GroupInviteEncounters (Identity TEXT PRIMARY KEY, Record TEXT NOT NULL, UpdatedUtc TEXT NOT NULL)";
+
+    public Task SaveEncountersAsync(List<SeenUser> users) => MergeEncountersAsync(users, includeProfile: true);
+    internal Task SaveLocalDiscoveriesAsync(List<SeenUser> users) => MergeEncountersAsync(users, includeProfile: false);
+
+    private async Task MergeEncountersAsync(List<SeenUser> users, bool includeProfile)
     {
+        if (users.Count == 0) return;
         using var connection = await OpenAsync();
         using var transaction = connection.BeginTransaction();
-        using var command = connection.CreateCommand(); command.Transaction = transaction;
-        command.CommandText = "CREATE TABLE IF NOT EXISTS GroupInviteEncounters (Identity TEXT PRIMARY KEY, Record TEXT NOT NULL, UpdatedUtc TEXT NOT NULL)";
-        await command.ExecuteNonQueryAsync();
-        foreach (var user in users.Take(EncounterLimit))
+        using var read = connection.CreateCommand();
+        read.Transaction = transaction;
+        read.CommandText = CreateEncounters;
+        await read.ExecuteNonQueryAsync();
+        read.CommandText = "SELECT Record FROM GroupInviteEncounters WHERE Identity = $id";
+        var readId = read.Parameters.Add("$id", SqliteType.Text);
+
+        using var write = connection.CreateCommand();
+        write.Transaction = transaction;
+        write.CommandText = """
+            INSERT INTO GroupInviteEncounters(Identity,Record,UpdatedUtc) VALUES ($id,$record,$utc)
+            ON CONFLICT(Identity) DO UPDATE SET Record=excluded.Record, UpdatedUtc=excluded.UpdatedUtc
+            """;
+        var writeId = write.Parameters.Add("$id", SqliteType.Text);
+        var writeRecord = write.Parameters.Add("$record", SqliteType.Text);
+        write.Parameters.AddWithValue("$utc", DateTime.UtcNow.ToString("O"));
+        foreach (var user in users)
         {
-            // Unresolved names remain visible for review but can never authorise a send.
-            var key = ApprovalPublisher.Id(user.UserId, "usr") ? user.UserId : "name:" + user.DisplayName;
-            command.CommandText = "INSERT INTO GroupInviteEncounters VALUES ($i,$r,$t) ON CONFLICT(Identity) DO UPDATE SET Record=$r,UpdatedUtc=$t";
-            command.Parameters.Clear(); command.Parameters.AddWithValue("$i", key);
-            command.Parameters.AddWithValue("$r", JsonSerializer.Serialize(user)); command.Parameters.AddWithValue("$t", DateTime.UtcNow.ToString("O"));
-            await command.ExecuteNonQueryAsync();
+            var id = ApprovalPublisher.Id(user.UserId, "usr") ? user.UserId : "name:" + user.DisplayName;
+            readId.Value = writeId.Value = id;
+            var previous = await read.ExecuteScalarAsync() as string;
+            var existing = previous == null ? null : JsonSerializer.Deserialize<SeenUser>(previous);
+            var record = user;
+            if (existing != null)
+            {
+                // Importing older logs or rediscovering an exact ID must preserve the newest encounter and any known profile.
+                if (user.LastSeenAt >= existing.LastSeenAt)
+                {
+                    existing.DisplayName = user.DisplayName;
+                    existing.LastSeenAt = user.LastSeenAt;
+                    existing.WorldId = user.WorldId;
+                    existing.Source = user.Source;
+                }
+                if (includeProfile)
+                {
+                    existing.ProfilePicUrl = user.ProfilePicUrl;
+                    existing.IsAgeVerified = user.IsAgeVerified;
+                    existing.Tags = user.Tags;
+                }
+                record = existing;
+            }
+            var json = JsonSerializer.Serialize(record);
+            if (json == previous) continue;
+            writeRecord.Value = json;
+            await write.ExecuteNonQueryAsync();
         }
-        command.Parameters.Clear();
-        command.CommandText = $"DELETE FROM GroupInviteEncounters WHERE Identity NOT IN (SELECT Identity FROM GroupInviteEncounters ORDER BY UpdatedUtc DESC,Identity LIMIT {EncounterLimit})";
-        await command.ExecuteNonQueryAsync(); transaction.Commit();
+        transaction.Commit();
     }
+
     public async Task<List<SeenUser>> ReadEncountersAsync()
     {
-        using var connection = await OpenAsync(); using var command = connection.CreateCommand();
-        command.CommandText = $"CREATE TABLE IF NOT EXISTS GroupInviteEncounters (Identity TEXT PRIMARY KEY, Record TEXT NOT NULL, UpdatedUtc TEXT NOT NULL); SELECT Record FROM GroupInviteEncounters ORDER BY UpdatedUtc DESC,Identity LIMIT {EncounterLimit}";
-        using var reader = await command.ExecuteReaderAsync(); var users = new List<SeenUser>();
+        using var connection = await OpenAsync();
+        using var command = connection.CreateCommand();
+        command.CommandText = CreateEncounters + "; SELECT Record FROM GroupInviteEncounters ORDER BY Identity";
+        using var reader = await command.ExecuteReaderAsync();
+        var users = new List<SeenUser>();
         while (await reader.ReadAsync())
         {
-            var user = JsonSerializer.Deserialize<SeenUser>(reader.GetString(0)); if (user != null) users.Add(user);
+            var user = JsonSerializer.Deserialize<SeenUser>(reader.GetString(0));
+            if (user != null) users.Add(user);
         }
-        return users;
+        return users.OrderByDescending(u => u.LastSeenAt).ToList();
     }
 }

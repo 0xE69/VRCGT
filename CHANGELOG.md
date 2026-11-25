@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.24] - 2026-11-25
+
+- Game Log and Game History Inviter now read every available local VRChat output log, including timestamped `Debug` joins. Encounters persist across room changes, client restarts and log removal. The previous 1,000-user cap is removed.
+- Game History Inviter loads when opened. Select individual recipients or use Select All for manual group invitations. Auto Invite confirms the checked recipients or, with no selection, the filtered list and optional future encounters.
+- Manual invitation batches show membership checks, pacing, HTTP status, per-recipient outcomes and totals in the console. The local group invitation history records delivery outcomes across restarts.
+- The Windows updater can load its built-in PowerShell commands when launched from a custom shell environment.
+
 ## [1.1.23] - 2026-11-08
 
 ### Fixed — GROUP invitations from Game History

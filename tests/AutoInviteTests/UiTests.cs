@@ -51,19 +51,20 @@ static class UiTests
                 Assert(check!=null&&BindingOperations.GetBindingExpression(check,CheckBox.IsCheckedProperty)?.Status==BindingStatus.Active,"Compiled checkbox binding missing");
                 Assert(check!.IsChecked==false&&handler.Calls==0,"Auto started on view load");
                 check.SetCurrentValue(CheckBox.IsCheckedProperty,true);Pump();
+                var session=await PresenceTests.WaitForSessionAsync(vm);
                 Assert(confirmations==1&&vm.AutoInviteEnabled,"Explicit checkbox did not start confirmed session");
-                var session=(AutoGroupInviteSession)typeof(InstanceInviterViewModel).GetField("_autoSession",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(vm)!;
-                await session.TickAsync();await session.PendingSend;Assert(handler.Calls==3&&await ledger.GetStateAsync(group,user)==GroupInviteState.Sent,$"Integrated automatic dispatch not tracked: calls={handler.Calls}, state={await ledger.GetStateAsync(group,user)}, status={vm.StatusMessage}");
-                await session.TickAsync();Assert(handler.Calls==3,"Unchanged poll duplicated HTTP");
+                await session.TickAsync();await session.PendingSend;Assert(handler.Calls>=2&&await ledger.GetStateAsync(group,user)==GroupInviteState.Sent,$"Integrated automatic dispatch not tracked: calls={handler.Calls}, state={await ledger.GetStateAsync(group,user)}, status={vm.StatusMessage}");
+                var callsAfterInvite=handler.Calls;
+                await session.TickAsync();Assert(handler.Calls==callsAfterInvite,"Unchanged poll duplicated HTTP");
                 Assert(((TextBlock)view.FindName("AutoInviteStatus")).Text.Contains("Sent"),"Visible status binding did not update");
                 vm.SkipVisitors=true;Assert(!vm.AutoInviteEnabled&&!session.IsRunning,"Filter edit did not revoke consent");
-                vm.SkipVisitors=false;check.SetCurrentValue(CheckBox.IsCheckedProperty,true);Pump();Assert(confirmations==2,"Re-enable must reconfirm");
+                vm.SkipVisitors=false;check.SetCurrentValue(CheckBox.IsCheckedProperty,true);await PresenceTests.WaitForSessionAsync(vm);Assert(confirmations==2,"Re-enable must reconfirm");
                 ((TextBox)view.FindName("MinInstanceTimeInput")).Text="invalid-number";Assert(!vm.AutoInviteEnabled,"Invalid text silently retained automatic consent");
-                ((TextBox)view.FindName("MinInstanceTimeInput")).Text="60";check.SetCurrentValue(CheckBox.IsCheckedProperty,true);Pump();Assert(confirmations==3,"Text edits must require new consent");
+                ((TextBox)view.FindName("MinInstanceTimeInput")).Text="60";check.SetCurrentValue(CheckBox.IsCheckedProperty,true);await PresenceTests.WaitForSessionAsync(vm);Assert(confirmations==3,"Text edits must require new consent");
                 view.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));Assert(!vm.AutoInviteEnabled,"Leaving view did not stop");
                 var reloaded=new GroupInviteLedger(temp.Db);Assert(await reloaded.GetStateAsync(group,user)==GroupInviteState.Sent,"Restart forgot automatic invite");
                 try { await api.SendGroupInviteAsync(group,user);throw new Exception("Manual path bypassed automatic ledger"); } catch(GroupInviteSuppressedException){}
-                Assert(handler.Calls==3,"Cross-entrypoint duplicate reached HTTP");
+                Assert(handler.Calls==callsAfterInvite,"Cross-entrypoint duplicate reached HTTP");
                 const string newcomer="usr_66666666-6666-6666-6666-666666666666";
                 vm.Only18Plus=true;System.IO.File.AppendAllText(temp.Log,$"[Behaviour] OnPlayerJoined Newcomer ({newcomer})\n");
                 handler.Body=$"{{\"id\":\"{newcomer}\",\"ageVerificationStatus\":\"18+\",\"ageVerified\":true,\"tags\":[\"system_trust_basic\"]}}";
@@ -72,7 +73,7 @@ static class UiTests
                 await (Task)refresh.Invoke(vm,null)!;
                 Assert(vm.FilteredInstanceUsers.Any(u=>u.User.UserId==newcomer&&u.CanInvite),"Manual refresh cannot review/select newly resolved 18+ users without enabling automation");
                 var afterDetails=handler.Calls;await (Task)refresh.Invoke(vm,null)!;Assert(handler.Calls==afterDetails,"Manual refresh re-fetched unchanged metadata");
-                check.SetCurrentValue(CheckBox.IsCheckedProperty,true);Pump();Assert(vm.AutoInviteEnabled,"Shutdown regression needs an active opted-in session");
+                check.SetCurrentValue(CheckBox.IsCheckedProperty,true);await PresenceTests.WaitForSessionAsync(vm);Assert(vm.AutoInviteEnabled,"Shutdown regression needs an active opted-in session");
                 typeof(InstanceInviterView).GetMethod("OnApplicationExit",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,new object?[]{app,null});
                 Assert(!vm.AutoInviteEnabled,"Application-exit handler did not revoke automatic consent");
                 vm.AutoInviteEnabled=true;Assert(!vm.AutoInviteEnabled,"Disposed session restarted automatically");

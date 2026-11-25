@@ -87,6 +87,7 @@ tests.AddRange(UntrustedLogTests.All());
 tests.AddRange(PresenceTests.All());
 tests.AddRange(PresenceDispatchTests.All());
 tests.AddRange(HistoryTests.All());
+tests.AddRange(SelectedHistoryTests.All());
 tests.AddRange(ReviewRegressionTests.All());
 Add("Historical group context needs account and group, not a current instance",()=>{
     using var temp=new Temp();

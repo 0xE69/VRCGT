@@ -39,13 +39,12 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 - One-click invite sending
 
 ### 📬 Inviter Hub (New!)
-- **Instance Inviter**: Detect users in your current VRChat instance and invite them to your group.
-    - Filter by Trust Level (Visitor, New User, User, Known, Trusted).
-    - **18+ Only Filter**: Only show users with confirmed 18+ age verification.
-    - "Select All" and bulk invite capabilities.
-    - **Anti-abuse protection**: Prevents sending group invites from another group's instance.
+- **Game History Inviter** — Send group invitations to people encountered across instances, including after VRChat closes.
+    - Select individual people or all eligible visible rows. Review recipients and the selected group before sending.
+    - Switch on Auto Invite to queue checked recipients, or confirm the filtered list and optionally include new encounters. Leaving the view stops Auto Invite.
+    - Follow membership checks and per-recipient results in the console or review saved invitation outcomes in Game Log.
 - **Friend Inviter**: Quickly invite your online friends to your group.
-- **Game Log Scanner**: Parse VRChat game logs to find and invite users you've recently encountered.
+- **Game Log Scanner** — Browse all available local VRChat output logs and search retained encounters by name or user ID.
     - Filter by 18+ verification status.
     - View trust levels and last seen timestamps.
     - Bulk invite capabilities.
@@ -213,7 +212,7 @@ A powerful desktop toolkit for VRChat group owners and moderators. Fast login, r
 
 ## 🚀 Quick Start
 
-1. **Download:** Get the latest release from [Releases](../../releases) or build from source
+1. **Download** the Windows x64 installer or extract the portable ZIP from the [latest release](https://github.com/0xE69/VRCGT/releases/latest). Existing installations check for updates on startup.
 2. **Run:** Launch `VRCGroupTools.exe`
    - **Windows SmartScreen Warning?** This appears because the app isn't code-signed (signing certificates cost $$$). The app is safe and open source. Click **"More info"** → **"Run anyway"**
 3. **Login:** Enter your VRChat credentials + 2FA code

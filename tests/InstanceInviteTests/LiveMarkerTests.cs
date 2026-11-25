@@ -8,6 +8,17 @@ static class LiveMarkerTests
 {
     public static IEnumerable<(string Name, Func<Task> Run)> All()
     {
+        yield return ("Timestamped Debug joins complete and a later disconnect clears the destination", () =>
+        {
+            using var f = new DetectionLog();
+            var reader = new IncrementalInstanceSessionReader();
+            string DebugLine(string payload) => $"{f.Now.ToLocalTime():yyyy.MM.dd HH:mm:ss} Debug      -  [Behaviour] {payload}\n";
+            File.WriteAllText(f.File, DebugLine("Joining " + f.Location) + DebugLine("Successfully joined room"));
+            Check(reader.Read(f.Dir, f.Start, f.Now)?.FullLocation == f.Location, "Debug join markers were ignored");
+            File.AppendAllText(f.File, DebugLine("OnDisconnected"));
+            Check(reader.Read(f.Dir, f.Start, f.Now) == null, "A Debug disconnect left a stale destination");
+            return Task.CompletedTask;
+        });
         yield return ("Reported 1.1.21 live marker sequence completes without OnJoinedRoom", () =>
         {
             using var f = new DetectionLog();

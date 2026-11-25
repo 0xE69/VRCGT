@@ -2,82 +2,140 @@ name: Build and Release
 
 on:
   push:
-    branches: [ main, master ]
-    tags:
-      - 'v*'
+    branches: [main, master, 'release/**']
+    tags: ['v*']
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
-env:
-  DOTNET_VERSION: '8.0.x'
-  PROJECT_PATH: 'src/VRCGroupTools.csproj'
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: read
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      commit: ${{ steps.version.outputs.commit }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Determine version and release trigger
+        id: version
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        shell: pwsh
+        run: |
+          $project = 'src/VRCGroupTools.csproj'
+          $version = ([xml](Get-Content -LiteralPath $project -Raw)).Project.PropertyGroup.Version
+          if ($version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+            throw "Expected a stable project version, got '$version'."
+          }
+          $publish = 'false'
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF_TYPE -eq 'tag') {
+            if ($env:GITHUB_REF_NAME -cne "v$version") { throw "Tag $env:GITHUB_REF_NAME differs from project version $version." }
+            $publish = 'true'
+          } elseif ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -ceq 'refs/heads/main' -and $env:BEFORE_SHA -notmatch '^0+$') {
+            $previousXml = git show "${env:BEFORE_SHA}:$project"
+            if ($LASTEXITCODE -ne 0) { throw "Could not read the project at the push's previous commit." }
+            $previous = ([xml]($previousXml -join "`n")).Project.PropertyGroup.Version
+            if ([version]$version -gt [version]$previous) { $publish = 'true' }
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "publish=$publish" >> $env:GITHUB_OUTPUT
+          "commit=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
 
-    - name: Build
-      run: dotnet build ${{ env.PROJECT_PATH }} -c Release --no-restore
+      - name: Build and publish the Windows executable
+        shell: pwsh
+        run: |
+          dotnet build src/VRCGroupTools.csproj -c Release -r win-x64 --self-contained true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish src/VRCGroupTools.csproj -c Release -r win-x64 --self-contained true --no-build --no-restore -o src/bin/Publish
 
-    - name: Publish
-      run: |
-        dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      - name: Compile the Windows setup with Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          & $iscc installer/setup.iss
 
-    - name: Upload Build Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: VRCGroupTools-win-x64
-        path: publish/
-        retention-days: 30
+      - name: Package and verify the portable ZIP, checksums and setup
+        shell: pwsh
+        run: |
+          python installer/package-update.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python installer/verify-package.py
+
+      - name: Run offline regression suites against the packaged build
+        run: python installer/verify-history-release.py release-tests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VRCGroupTools-v${{ steps.version.outputs.version }}-win-x64
+          path: |
+            installer/Output/VRCGroupTools-v${{ steps.version.outputs.version }}-win-x64.zip
+            installer/Output/VRCGroupTools-v${{ steps.version.outputs.version }}-win-x64.zip.sha256
+            installer/Output/VRCGroupTools_Setup_${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
 
   release:
     needs: build
-    runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+    concurrency:
+      group: stable-release-v${{ needs.build.outputs.version }}
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      BUILD_COMMIT: ${{ needs.build.outputs.commit }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: VRCGroupTools-v${{ needs.build.outputs.version }}-win-x64
+          path: assets
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Publish the verified assets at the build commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          # The tags API returns the commit SHA for both annotated and lightweight tags.
+          target=$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags?per_page=100" --jq ".[] | select(.name == \"$tag\") | .commit.sha")
+          if [[ -n "$target" && "$target" != "$BUILD_COMMIT" ]]; then
+            echo "::error::Tag $tag points to $target, but this build is from $BUILD_COMMIT."
+            exit 1
+          fi
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
+          # List releases with the write token so existing drafts are visible too.
+          releases=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .draft] | @tsv')
+          if grep -Fxq "$tag"$'\tfalse' <<< "$releases"; then
+            echo "Release $tag already exists. Keeping its published assets."
+            exit 0
+          fi
+          if grep -Fxq "$tag"$'\ttrue' <<< "$releases"; then
+            echo "::error::A draft release already exists for $tag. Inspect its assets before publishing."
+            exit 1
+          fi
 
-    - name: Publish Release Build
-      run: |
-        dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o release
+          if [[ -z "$target" ]]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$BUILD_COMMIT" --silent
+          fi
 
-    - name: Create ZIP Archive
-      run: |
-        Compress-Archive -Path release/VRCGroupTools.exe -DestinationPath VRCGroupTools-${{ github.ref_name }}-win-x64.zip
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: VRCGroupTools-${{ github.ref_name }}-win-x64.zip
-        draft: false
-        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # gh creates a draft, uploads every named asset and only then publishes the release.
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --latest --generate-notes \
+            "assets/VRCGroupTools-$tag-win-x64.zip" \
+            "assets/VRCGroupTools-$tag-win-x64.zip.sha256" \
+            "assets/VRCGroupTools_Setup_$VERSION.exe"

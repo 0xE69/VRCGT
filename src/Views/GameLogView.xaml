@@ -19,21 +19,57 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,15">
-            <TextBlock Text="📜 Game Log - Last Seen Users" 
+            <TextBlock Text="Game Log"
                       FontSize="24" 
                       FontWeight="Bold" 
                       Foreground="White"/>
-            <TextBlock Text="View and invite users you've recently encountered in VRChat" 
+            <TextBlock Text="Retained encounters from your VRChat logs"
                       Foreground="#888" 
                       FontSize="13" 
                       Margin="0,5,0,0"/>
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#B0B0B0" TextWrapping="Wrap" Margin="0,4,0,0"/>
             <TextBlock Text="{Binding GroupContext}" Foreground="#B0B0B0" TextWrapping="Wrap" Margin="0,8,0,4"/>
             <WrapPanel>
-                <Button Content="Refresh local history" Command="{Binding RefreshGroupCommand}" Margin="0,0,8,4"/>
-                <Button Content="Check visible unknown memberships (max 20, paced API)" Command="{Binding CheckVisibleMembershipCommand}" Margin="0,0,8,4"/>
+                <Button Content="Check visible profiles" Command="{Binding RefreshProfileDetailsCommand}" Margin="0,0,8,4"/>
+                <Button Content="Check memberships (up to 20)" Command="{Binding CheckVisibleMembershipCommand}" Margin="0,0,8,4"/>
                 <Button Content="Sync members (API)" Command="{Binding SyncMembersCommand}" Margin="0,0,8,4"/>
                 <CheckBox Content="Hide sent / pending / unknown invites" IsChecked="{Binding HidePriorInvites}" Foreground="White" Margin="0,0,8,4"/>
             </WrapPanel>
+            <Expander Header="{Binding ScanSummary}" Foreground="White">
+                <DataGrid ItemsSource="{Binding LogFiles}" IsReadOnly="True" AutoGenerateColumns="False"
+                          MaxHeight="160" CanUserAddRows="False" EnableRowVirtualization="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Log file" Binding="{Binding Name}" Width="*"/>
+                        <DataGridTextColumn Header="Modified" Binding="{Binding LastWriteTime, StringFormat=g}" Width="Auto"/>
+                        <DataGridTextColumn Header="Bytes" Binding="{Binding SizeBytes, StringFormat=N0}" Width="Auto"/>
+                        <DataGridTemplateColumn Header="Read status" Width="Auto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="Readable"/>
+                                                <Style.Triggers><DataTrigger Binding="{Binding ReadError}" Value="True">
+                                                    <Setter Property="Text" Value="Unreadable"/>
+                                                </DataTrigger></Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Width="Auto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Open log" ToolTip="Read the full file in Notepad"
+                                            Command="{Binding DataContext.OpenLogFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Expander>
             <Expander Header="Local group invitation history (all app areas)" Foreground="White">
                 <StackPanel>
                     <TextBlock Text="Sent blocks duplicates. InFlight may be pending or interrupted; Unknown may have been sent. Check VRChat; neither is retried. Failed = rejected; explicit retry is allowed. Legacy unscoped invite rows cannot be assigned to a group." TextWrapping="Wrap" Foreground="#AAA"/>
@@ -73,7 +109,7 @@
                 
                 <TextBox Grid.Column="0"
                         Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                        materialDesign:HintAssist.Hint="🔍 Search by name..."
+                        materialDesign:HintAssist.Hint="🔍 Search by name or user ID"
                         Foreground="White"
                         CaretBrush="White"
                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
@@ -91,16 +127,16 @@
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
                     <TextBlock Text="📊 " Foreground="#888" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding TotalUsersFound, StringFormat='Found {0} users'}" 
+                    <TextBlock Text="{Binding TotalUsersFound, StringFormat='{}{0} encounters'}"
                               Foreground="#888" 
                               VerticalAlignment="Center"
                               Margin="0,0,15,0"/>
                 </StackPanel>
 
                 <Button Grid.Column="4"
-                       Content="🔄 Scan Game Log"
+                       Content="Rescan logs"
                        Command="{Binding ScanGameLogCommand}"
-                       ToolTip="Scan VRChat game logs for recently seen users"
+                       ToolTip="Read new encounters from every available VRChat output log"
                        Style="{StaticResource MaterialDesignRaisedButton}"
                        Background="#7C4DFF"
                        Width="160"
@@ -119,10 +155,7 @@
                                 IsIndeterminate="True"
                                 Width="40" Height="40"
                                 Foreground="#7C4DFF"/>
-                    <TextBlock Text="{Binding StatusMessage}" 
-                              Foreground="#888" 
-                              Margin="0,10,0,0"
-                              HorizontalAlignment="Center"/>
+
                 </StackPanel>
 
                 <!-- Empty State -->
@@ -146,7 +179,7 @@
                               FontSize="16" 
                               Foreground="#888"
                               HorizontalAlignment="Center"/>
-                    <TextBlock Text="Click 'Scan Game Log' to load recently seen users" 
+                    <TextBlock Text="Check the log files above or adjust your filters."
                               Foreground="#666" 
                               FontSize="12" 
                               HorizontalAlignment="Center"
@@ -154,22 +187,12 @@
                 </StackPanel>
 
                 <!-- Users List -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-                    <ScrollViewer.Style>
-                        <Style TargetType="ScrollViewer">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <MultiDataTrigger>
-                                    <MultiDataTrigger.Conditions>
-                                        <Condition Binding="{Binding IsLoading}" Value="False"/>
-                                    </MultiDataTrigger.Conditions>
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </MultiDataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ScrollViewer.Style>
-                    <ItemsControl ItemsSource="{Binding FilteredUsers}">
-                        <ItemsControl.ItemTemplate>
+                <ListBox ItemsSource="{Binding FilteredUsers}" Padding="10" Background="Transparent" BorderThickness="0"
+                         HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         Visibility="{Binding IsLoading, Converter={StaticResource InverseBoolToVisConverter}}">
+                        <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Background="#2D2D30" 
                                        CornerRadius="6" 
@@ -233,6 +256,7 @@
                                                           Visibility="{Binding HasUserId, Converter={StaticResource InverseBoolToVisConverter}}"/>
                                             </StackPanel>
                                             
+                                            <TextBlock Text="{Binding User.UserId}" Foreground="#B0B0B0" FontSize="11"/>
                                             <TextBlock Text="{Binding GroupStatus}" Foreground="#B0B0B0" FontSize="11"/>
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                 <TextBlock Text="Last seen: " 
@@ -271,9 +295,8 @@
                                     </Grid>
                                 </Border>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                        </ListBox.ItemTemplate>
+                </ListBox>
             </Grid>
         </Border>
 

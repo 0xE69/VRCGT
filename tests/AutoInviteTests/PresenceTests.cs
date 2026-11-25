@@ -51,6 +51,17 @@ static class PresenceTests
     }
     public static string Json(string id,string location,string state="online",string traveling="")=>System.Text.Json.JsonSerializer.Serialize(new{id,location,state,travelingToLocation=traveling});
     public static void Check(bool ok,string reason){if(!ok)throw new Exception(reason);}
+    public static async Task<AutoGroupInviteSession> WaitForSessionAsync(InstanceInviterViewModel vm)
+    {
+        var field = typeof(InstanceInviterViewModel).GetField("_autoSession", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var timeout = System.Diagnostics.Stopwatch.StartNew();
+        while (timeout.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            if (field.GetValue(vm) is AutoGroupInviteSession { IsRunning: true } session) return session;
+            await Task.Delay(10);
+        }
+        throw new TimeoutException($"Auto Invite did not finish starting. {vm.StatusMessage}");
+    }
     public sealed class Harness:IDisposable
     {
         public Temp Temp=new();public PresenceHandler Handler;public VRChatApiService Api;public InstanceInviterViewModel Vm;
@@ -78,11 +89,12 @@ static class PresenceTests
     public sealed class PresenceHandler(string body):HttpMessageHandler
     {
         public int Reads,Writes;public string? IdentityBody;public bool ThrowRead;public bool AllowWrites=true;public HttpStatusCode ReadStatus=HttpStatusCode.OK;
+        public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? WriteResponse { get; set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken c)
         {
             if(r.Method==HttpMethod.Get){Reads++;if(ThrowRead)throw new HttpRequestException("Offline fixture");return Task.FromResult(new HttpResponseMessage(ReadStatus){Content=new StringContent(r.RequestUri!.AbsolutePath.Contains("/groups/")?body:IdentityBody??body)});}
             Writes++;if(!AllowWrites)throw new InvalidOperationException("Write transport denied");
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("{}")});
+            return WriteResponse?.Invoke(r, c) ?? Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("{}")});
         }
     }
 }

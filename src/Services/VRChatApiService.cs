@@ -1071,12 +1071,17 @@ public partial class VRChatApiService : IVRChatApiService
         var outcome = GroupInviteState.Unknown;
         var dispatched = false;
         var gateHeld = false;
+        var recipient = ApprovalPublisher.Id(userId, "usr") ? userId : "selected recipient";
         try
         {
             await _groupInviteDispatchGate.WaitAsync(cancellationToken);
             gateHeld = true;
             var backoff = GroupInviteRetryAfterUtc - DateTimeOffset.UtcNow;
-            if (backoff > TimeSpan.Zero) await Task.Delay(backoff, cancellationToken);
+            if (backoff > TimeSpan.Zero)
+            {
+                GroupInvitePresentation.WriteActivity($"Waiting {Math.Ceiling(backoff.TotalSeconds)}s for the VRChat rate limit before inviting {recipient}.");
+                await Task.Delay(backoff, cancellationToken);
+            }
             await RateLimitAsync();
             using var request = new HttpRequestMessage(HttpMethod.Post, $"groups/{groupId}/invites?apiKey={ApiKey}")
             {
@@ -1089,6 +1094,7 @@ public partial class VRChatApiService : IVRChatApiService
             }
             dispatched = true;
             using var response = await _httpClient.SendAsync(request, cancellationToken);
+            GroupInvitePresentation.WriteActivity($"Invite for {recipient} returned HTTP {(int)response.StatusCode} ({response.StatusCode}).");
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
                 var until = response.Headers.RetryAfter?.Date
@@ -1101,10 +1107,11 @@ public partial class VRChatApiService : IVRChatApiService
                     ? GroupInviteState.Failed : GroupInviteState.Unknown;
         }
         catch (GroupInviteSuppressedException) { throw; }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Only a dispatched timeout/disconnect is uncertain. Cancellation during pacing is proven NotSent.
             outcome = dispatched ? GroupInviteState.Unknown : GroupInviteState.NotSent;
+            GroupInvitePresentation.WriteActivity($"Invite for {recipient}: {outcome} ({ex.GetType().Name}).");
         }
         finally { if (gateHeld) _groupInviteDispatchGate.Release(); }
         try { await _groupInviteLedger.CompleteAsync(groupId, userId, outcome); }

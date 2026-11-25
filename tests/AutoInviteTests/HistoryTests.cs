@@ -24,7 +24,7 @@ static class HistoryTests
             PresenceTests.Check(f.Instance.GetCurrentInstance()==null&&f.Instance.DetectionDiagnostic.Code==InstanceDetectionCode.JoinNotObserved,"Expected JoinNotObserved");
             f.Vm.ConfirmAutoInvite=(_,scope)=>scope.Contains("Include future exact-ID");
             var running=f.Vm.StartAutoInviteAsync();
-            var session=(AutoGroupInviteSession)typeof(InstanceInviterViewModel).GetField("_autoSession",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(f.Vm)!;
+            var session=await PresenceTests.WaitForSessionAsync(f.Vm);
             PresenceTests.Check((await new GroupInviteLedger(f.Temp.Db).ReadEncountersAsync()).Count==0&&f.Handler.Writes==0,"Empty initial scope wrote");
             System.IO.File.AppendAllText(f.Temp.Log,$"[Behaviour] OnPlayerJoined Exact ({PresenceTests.User})\n[Behaviour] OnPlayerLeft Exact ({PresenceTests.User})\n[Behaviour] OnDisconnected\n");f.Running=false;
             await session.TickAsync();await session.PendingSend;
@@ -99,6 +99,7 @@ static class HistoryTests
             await new GroupInviteLedger(f.Temp.Db).SaveMembershipAsync(new(Group,new(),DateTime.UtcNow,false));
             var confirms=0;f.Vm.ConfirmAutoInvite=(c,scope)=>{confirms++;PresenceTests.Check(c.GroupId==Group&&scope.Contains("History scope:")&&scope.Contains("Include future exact-ID"),"Scope/account confirmation missing");return true;};
             var running=f.Vm.StartAutoInviteAsync();
+            await PresenceTests.WaitForSessionAsync(f.Vm);
             PresenceTests.Check(confirms==1&&f.Vm.AutoInviteEnabled&&!running.IsCompleted,"Blanket complete-cache/current-instance restriction prevented explicit opt-in");
             f.Vm.StopAutoInvite();await running;PresenceTests.Check(f.Handler.Reads==0&&f.Handler.Writes==0,"Enabling sent before the five-second queue tick");
         });

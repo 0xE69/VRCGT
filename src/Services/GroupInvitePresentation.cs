@@ -1,12 +1,20 @@
-using System.Windows;
+using VRCGroupTools.Views;
 namespace VRCGroupTools.Services;
 
 public sealed record GroupInviteAttempt(bool Sent, GroupInviteState State, string Message);
 public static class GroupInvitePresentation
 {
-    public static bool Confirm(string groupId, IEnumerable<string> recipients) => MessageBox.Show(
-        $"Send group invitations to {groupId}?\n\n{string.Join("\n", recipients)}\n\nPreviously sent, in-flight and unknown invites are blocked locally. This does not send instance invitations.",
-        "Confirm group invitations", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    internal static void WriteActivity(string message)
+    {
+        // Display names can contain controls. Keep one console record per event.
+        var line = string.Concat(message.Select(c => char.IsControl(c) || c is '\u2028' or '\u2029' ? ' ' : c));
+        try { Console.WriteLine($"[GROUP-INVITE] {line}"); }
+        catch (System.IO.IOException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    public static bool Confirm(string groupId, IEnumerable<string> recipients) => HistoryInviteConfirmation.Ask(
+        "Review group invitations", $"Send group invitations to {groupId}?\n\n{string.Join("\n", recipients)}", "Send invitations");
 
     public static async Task<GroupInviteAttempt> SendTrackedAsync(this IVRChatApiService api, string groupId, string userId, Func<bool>? canSend = null)
     {

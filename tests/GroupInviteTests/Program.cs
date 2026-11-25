@@ -2,7 +2,7 @@ using VRCGroupTools.Services;
 using System.Net;
 using System.Net.Http;
 using System.IO;
-var path = Path.Combine(Environment.GetEnvironmentVariable("TMPDIR")!, "vrcgt-tests-" + Guid.NewGuid() + ".db");
+var path = Path.Combine(Environment.GetEnvironmentVariable("TMPDIR") ?? Path.GetTempPath(), "vrcgt-tests-" + Guid.NewGuid() + ".db");
 try
 {
  var ledger = new GroupInviteLedger(path);
@@ -181,9 +181,37 @@ try
  var ambiguousVm = new VRCGroupTools.ViewModels.GameLogViewModel(first, settings, ledger);
  var ambiguousRow = new VRCGroupTools.ViewModels.GameLogUserViewModel(new() { DisplayName = "Ambiguous" }, ambiguousVm);
  ambiguousVm.SeenUsers.Add(ambiguousRow);
+ ambiguousVm.SearchQuery = "Ambiguous";
+ var beforeNameLookup = handler.Calls;
  await (Task)typeof(VRCGroupTools.ViewModels.GameLogViewModel).GetMethod("FetchUserDetailsAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(ambiguousVm, null)!;
- Check(!ambiguousRow.HasUserId, "Ambiguous display-name resolution must not choose a moderation/invitation target");
+ Check(handler.Calls == beforeNameLookup + 1 && !ambiguousRow.HasUserId, "Ambiguous display-name resolution must not choose a moderation/invitation target");
  Console.WriteLine("PASS ambiguous Game Log names remain unresolved rather than choosing a ban target");
+ var logDirectory = Directory.CreateTempSubdirectory("vrcgt-game-log-");
+ try
+ {
+   var fixtureFile = Path.Combine(logDirectory.FullName, "output_log_2026-10-01.txt");
+   const string encounterId = "usr_aaaaaaaa-cccc-4444-8888-000000000001";
+   File.WriteAllText(fixtureFile, $"2026.10.01 21:11:50 Debug - [Behaviour] OnPlayerJoined Old Session ({encounterId})\n");
+   File.WriteAllText(Path.Combine(logDirectory.FullName, "output_log_empty.txt"), "");
+   var gameHistory = new VRCGroupTools.ViewModels.GameLogViewModel(first, settings, ledger, logDirectory: logDirectory.FullName);
+   var beforeScan = handler.Calls;
+   await gameHistory.LoadCommand.ExecuteAsync(null);
+   Check(gameHistory.LogFiles.Count == 2 && gameHistory.LogFiles.Any(file => file.FullPath == fixtureFile),
+       "Open Game Log must list every file, including logs with zero encounters");
+   gameHistory.SearchQuery = encounterId;
+   Check(gameHistory.FilteredUsers.Single().User.DisplayName == "Old Session", "ID search failed on automatically scanned Debug header");
+   File.Delete(fixtureFile);
+   await gameHistory.ScanGameLogCommand.ExecuteAsync(null);
+   Check(gameHistory.LogFiles.Count == 1 && gameHistory.FilteredUsers.Single().User.UserId == encounterId,
+       "Rescan lost encounter retained from a removed log file");
+   Check(handler.Calls == beforeScan, "Opening and rescanning local Game Log history should not perform HTTP requests");
+   Console.WriteLine("PASS full file inventory, automatic discovery, ID search and retained history after file removal");
+ }
+ finally
+ {
+   foreach (var fixtureFile in logDirectory.GetFiles()) fixtureFile.Delete();
+   logDirectory.Delete();
+ }
  var callsBeforeView = handler.Calls;
  await GroupUiTests.RunAsync(first, settings, ledger);
  Check(handler.Calls == callsBeforeView, "Rendering Game Log must not dispatch HTTP");

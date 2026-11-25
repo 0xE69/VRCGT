@@ -88,7 +88,7 @@
                         </Button.Style>
                         <StackPanel Orientation="Vertical">
                             <TextBlock Text="💌" FontSize="20" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Instance Inviter" 
+                            <TextBlock Text="Game History Inviter"
                                       FontSize="12" 
                                       FontWeight="SemiBold"
                                       HorizontalAlignment="Center"

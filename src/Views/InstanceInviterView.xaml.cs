@@ -13,9 +13,11 @@ public partial class InstanceInviterView : UserControl
     public InstanceInviterView()
     {
         InitializeComponent();
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
             if (System.Windows.Application.Current is { } app) { app.Exit -= OnApplicationExit; app.Exit += OnApplicationExit; }
+            if (DataContext is VRCGroupTools.ViewModels.InstanceInviterViewModel vm)
+                await vm.LoadCommand.ExecuteAsync(null);
         };
         Unloaded += (_, _) =>
         {

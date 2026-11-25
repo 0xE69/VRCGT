@@ -31,6 +31,7 @@ static class PackageTests
         yield return ("Replacement helper updates isolated dummy executable and actually relaunches",async()=>{
             using var f=new UpdateFixture();var source=await f.Probe();var target=Path.Combine(f.Dir,"app space ' & ü.exe");File.WriteAllText(target,"old dummy");var marker=Path.Combine(f.Dir,"relaunch.marker");var log=Path.Combine(f.Dir,"update.log");
             var info=UpdateReplacement.StartInfo(UpdateReplacement.Script(source,target,2147483646,log,UpdatePackage.Hash(source),false));info.Environment["VRCGT_UPDATE_PROBE"]=marker;
+            info.Environment["PSModulePath"] = Path.Combine(f.Dir, "custom-modules");
             var exit=await Run(info);Check(exit==0,"Helper failed: "+(File.Exists(log)?File.ReadAllText(log):"no log"));
             for(var i=0;i<100&&!File.Exists(marker);i++)await Task.Delay(20);
             Check(File.Exists(marker)&&UpdatePackage.Hash(target)==UpdatePackage.Hash(source),"Replacement/relaunch not real");Check(Directory.GetFiles(f.Dir,"*.update-backup-*").Length==1,"Backup missing");});

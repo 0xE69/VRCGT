@@ -19,6 +19,8 @@ public static class UpdateReplacement
         // Encoded PowerShell and single-quoted literals preserve Unicode/spaces/metacharacters without cmd expansion.
         return $$"""
 $ErrorActionPreference = 'Stop'
+# The helper runs in Windows PowerShell even when the app inherits PowerShell 7's module path.
+$env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
 $source = {{Quote(source)}}
 $target = {{Quote(target)}}
 $log = {{Quote(log)}}

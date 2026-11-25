@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VRCGroupTools.Services;
 using VRCGroupTools.Helpers;
+using VRCGroupTools.Views;
 using VRCGroupTools.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,8 @@ public partial class GameLogViewModel : ObservableObject
     private readonly IVRChatApiService _apiService;
     private readonly ISettingsService _settingsService;
     private readonly GroupInviteLedger _ledger;
+    private readonly LocalEncounterHistoryReader _logReader = new();
+    private readonly string _logDirectory;
     private readonly ICacheService? _cache;
     private readonly VRCGroupTools.Data.IDatabaseService? _database;
     [ObservableProperty] private string _groupContext = "No group loaded";
@@ -60,20 +63,27 @@ public partial class GameLogViewModel : ObservableObject
     [ObservableProperty]
     private int _totalUsersFound;
 
+    [ObservableProperty] private IReadOnlyList<GameLogFile> _logFiles = Array.Empty<GameLogFile>();
+    [ObservableProperty] private string _scanSummary = "Looking for VRChat output logs…";
+
     public GameLogViewModel(
         IVRChatApiService apiService,
         ISettingsService settingsService,
         GroupInviteLedger? ledger = null,
         ICacheService? cache = null,
-        VRCGroupTools.Data.IDatabaseService? database = null)
+        VRCGroupTools.Data.IDatabaseService? database = null,
+        string? logDirectory = null)
     {
         _apiService = apiService;
-        ConfirmGroupInvites = (group, users) => Task.FromResult(MessageBox.Show($"Send {users.Count} GROUP invitations?\n\nExact group: {group}\nActing account: {_apiService.CurrentUserId}\n\n{string.Join("\n", users)}\n\nGame History is untrusted discovery, not verified live presence. Prior Sent/InFlight/Unknown block duplicates. Failed retries are deliberate.", "Confirm group/account/history recipients", MessageBoxButton.YesNo, MessageBoxImage.Question)==MessageBoxResult.Yes);
+        ConfirmGroupInvites = (group, users) => Task.FromResult(HistoryInviteConfirmation.Ask(
+            "Confirm group invitations",
+            $"Send {users.Count} group invitations?\nGroup: {group}\nActing account: {_apiService.CurrentUserId}\n\n{string.Join("\n", users)}",
+            "Send invitations"));
         _settingsService = settingsService;
         _ledger = ledger ?? new GroupInviteLedger();
         _cache = cache;
         _database = database;
-        _statusMessage = "Click 'Scan Game Log' to load recently seen users";
+        _logDirectory = logDirectory ?? LocalEncounterHistoryReader.DefaultDirectory;
     }
 
     [RelayCommand]
@@ -84,8 +94,7 @@ public partial class GameLogViewModel : ObservableObject
         var groupId = SelectedGroupId;
         if (groupId != _contextGroupId) { DeselectAll(); foreach (var row in SeenUsers) { row.Membership = GroupMembershipState.Unknown; row.InviteState = GroupInviteState.None; } }
         _contextGroupId = groupId;
-        InviteHistory.Clear();
-        if (string.IsNullOrWhiteSpace(groupId)) { GroupContext = "Select a group first"; ApplyFilters(); return; }
+        if (string.IsNullOrWhiteSpace(groupId)) { InviteHistory.Clear(); GroupContext = "Select a group first"; ApplyFilters(); return; }
         try
         {
             var snapshot = await _ledger.ReadMembershipAsync(groupId);
@@ -99,12 +108,13 @@ public partial class GameLogViewModel : ObservableObject
             }
             var history = await _ledger.ReadAsync(groupId);
             if (SelectedGroupId != groupId) return;
-            foreach (var record in history) InviteHistory.Add(record);
+            if (!InviteHistory.SequenceEqual(history)) InviteHistory = new ObservableCollection<GroupInviteRecord>(history);
             var states = history.ToDictionary(r => r.UserId, r => r.State, StringComparer.Ordinal);
             foreach (var row in SeenUsers)
             {
-                row.Membership = GroupInviteEligibility.Membership(row.User.UserId, snapshot);
-                if (row.Membership==GroupMembershipState.Unknown && _checkedMembership.TryGetValue((groupId,row.User.UserId),out var exact)) row.Membership=exact;
+                var membership = GroupInviteEligibility.Membership(row.User.UserId, snapshot);
+                row.Membership = membership == GroupMembershipState.Unknown
+                    ? _checkedMembership.GetValueOrDefault((groupId, row.User.UserId), membership) : membership;
                 row.InviteState = states.GetValueOrDefault(row.User.UserId, GroupInviteState.None);
             }
             GroupContext = $"Group: {groupId} · Membership cache: {(snapshot.IsComplete ? snapshot.CapturedUtc.ToLocalTime().ToString("g") : "incomplete/unknown — Sync members")} · History: {history.Count}";
@@ -139,313 +149,112 @@ public partial class GameLogViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task LoadAsync()
-    {
-        await LoadRetainedHistoryAsync();
-    }
+    private Task LoadAsync() => ScanGameLogAsync();
 
     [RelayCommand]
     private async Task ScanGameLogAsync()
     {
         if (IsLoading) return;
-
+        IsLoading = true;
+        StatusMessage = "Scanning local VRChat logs…";
         try
         {
-            IsLoading = true;
-            StatusMessage = "Scanning VRChat game log...";
-            SeenUsers.Clear();
-            FilteredUsers.Clear();
-
-            var parsed = await Task.Run(() => ParseGameLog());
-            await _ledger.SaveEncountersAsync(parsed);
-            var users = await _ledger.ReadEncountersAsync();
-            TotalUsersFound = users.Count;
-
-            if (users.Count == 0)
-            {
-                StatusMessage = "No users found in game log. Make sure VRChat has been running.";
-                return;
-            }
-
-            StatusMessage = $"Found {users.Count} users. Fetching details...";
-
-            // Add users to collection
-            foreach (var user in users)
-            {
-                SeenUsers.Add(new GameLogUserViewModel(user, this));
-            }
-
-            ApplyFilters();
-
-            // Fetch additional details from API
-            await FetchUserDetailsAsync();
-            await _ledger.SaveEncountersAsync(SeenUsers.Select(r=>r.User).ToList());
-            await RefreshGroupContextAsync();
-
-            StatusMessage = $"Loaded {SeenUsers.Count} current/past discovery records; not verified live presence";
+            var result = await _logReader.ScanAsync(_logDirectory, _ledger);
+            LogFiles = result.Files;
+            ScanSummary = LogFiles.Count == 0
+                ? $"{_logReader.Diagnostic} Folder: {_logDirectory}" : _logReader.Diagnostic;
         }
-        catch (Exception ex)
+        catch (Exception ex) { ScanSummary = $"Could not scan {_logDirectory}: {ex.Message}"; }
+        // A missing or locked file must not hide records from earlier scans.
+        try
         {
-            StatusMessage = $"Error scanning game log: {ex.Message}";
-            MessageBox.Show($"Failed to scan game log: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            await LoadRetainedHistoryAsync();
         }
-        finally
-        {
-            IsLoading = false;
-        }
+        catch (Exception ex) { StatusMessage = $"Could not load retained encounters: {ex.Message}"; }
+        finally { IsLoading = false; }
     }
 
-    private List<SeenUser> ParseGameLog()
+    [RelayCommand]
+    private void OpenLogFile(GameLogFile? file)
     {
-        var users = new List<SeenUser>();
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
+        if (file == null || !LogFiles.Contains(file)) return;
         try
         {
-            var appDataLocal = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "Low";
-            var vrchatLogPath = Path.Combine(appDataLocal, "VRChat", "VRChat");
-
-            if (!Directory.Exists(vrchatLogPath))
-            {
-                Console.WriteLine("[GAME-LOG] VRChat log directory not found");
-                return users;
-            }
-
-            // Get all recent log files (last 7 days worth)
-            var logFiles = Directory.GetFiles(vrchatLogPath, "output_log_*.txt")
-                .Where(f => new FileInfo(f).Length <= 20 * 1024 * 1024) // Explicit scan only; bounded, never background authorisation.
-                .OrderByDescending(f => File.GetLastWriteTime(f))
-                .Take(10) // Check last 10 log files
-                .ToList();
-
-            if (logFiles.Count == 0)
-            {
-                Console.WriteLine("[GAME-LOG] No VRChat log files found");
-                return users;
-            }
-
-            Console.WriteLine($"[GAME-LOG] Found {logFiles.Count} log files to scan");
-
-            // Regex patterns
-            var onPlayerJoinedPattern = new Regex(@"OnPlayerJoined\s+(.+?)(?:\s*$)", RegexOptions.Compiled);
-            var playerJoinedPattern = new Regex(@"\[Player\]\s+(.+?)\s+joined", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-            var userIdPattern = new Regex(@"usr_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", RegexOptions.Compiled);
-            var timestampRegex = new Regex(@"^(\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}:\d{2})", RegexOptions.Compiled);
-            var worldJoinPattern = new Regex(@"Joining\s+wrld_[a-f0-9-]+", RegexOptions.Compiled);
-
-            string? currentWorldId = null;
-
-            foreach (var logFile in logFiles)
-            {
-                try
-                {
-                    Console.WriteLine($"[GAME-LOG] Scanning: {Path.GetFileName(logFile)}");
-
-                    using var stream = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    using var reader = new StreamReader(stream);
-
-                    string? line;
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        // Track world changes
-                        if (line.Contains("[Behaviour]") && line.Contains("Joining"))
-                        {
-                            var worldMatch = worldJoinPattern.Match(line);
-                            if (worldMatch.Success)
-                            {
-                                currentWorldId = worldMatch.Value.Replace("Joining ", "");
-                            }
-                        }
-
-                        // Look for OnPlayerJoined events
-                        if (line.Contains("OnPlayerJoined"))
-                        {
-                            var match = onPlayerJoinedPattern.Match(line);
-                            if (match.Success && match.Groups.Count > 1)
-                            {
-                                var displayName = match.Groups[1].Value.Trim();
-
-                                if (!string.IsNullOrWhiteSpace(displayName) && !seenNames.Contains(displayName))
-                                {
-                                    seenNames.Add(displayName);
-
-                                    var userIdMatch = userIdPattern.Match(line);
-                                    var userId = userIdMatch.Success ? userIdMatch.Value : string.Empty;
-
-                                    var timestampMatch = timestampRegex.Match(line);
-                                    var seenTime = DateTime.MinValue;
-                                    if (timestampMatch.Success)
-                                    {
-                                        DateTime.TryParseExact(timestampMatch.Groups[1].Value, "yyyy.MM.dd HH:mm:ss",
-                                            System.Globalization.CultureInfo.InvariantCulture,
-                                            System.Globalization.DateTimeStyles.None, out seenTime);
-                                    }
-
-                                    users.Add(new SeenUser
-                                    {
-                                        DisplayName = displayName,
-                                        UserId = userId,
-                                        LastSeenAt = seenTime,
-                                        WorldId = currentWorldId
-                                    });
-                                }
-                            }
-                        }
-
-                        // Also look for alternate "[Player] X joined" format
-                        if (line.Contains("[Player]") && line.Contains("joined"))
-                        {
-                            var match = playerJoinedPattern.Match(line);
-                            if (match.Success && match.Groups.Count > 1)
-                            {
-                                var displayName = match.Groups[1].Value.Trim();
-
-                                if (!string.IsNullOrWhiteSpace(displayName) && !seenNames.Contains(displayName))
-                                {
-                                    seenNames.Add(displayName);
-
-                                    var timestampMatch = timestampRegex.Match(line);
-                                    var seenTime = DateTime.MinValue;
-                                    if (timestampMatch.Success)
-                                    {
-                                        DateTime.TryParseExact(timestampMatch.Groups[1].Value, "yyyy.MM.dd HH:mm:ss",
-                                            System.Globalization.CultureInfo.InvariantCulture,
-                                            System.Globalization.DateTimeStyles.None, out seenTime);
-                                    }
-
-                                    users.Add(new SeenUser
-                                    {
-                                        DisplayName = displayName,
-                                        UserId = string.Empty,
-                                        LastSeenAt = seenTime,
-                                        WorldId = currentWorldId
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[GAME-LOG] Error reading {Path.GetFileName(logFile)}: {ex.Message}");
-                }
-            }
-
-            Console.WriteLine($"[GAME-LOG] Total unique users found: {users.Count}");
-
-            // Sort by last seen time (most recent first)
-            return users.OrderByDescending(u => u.LastSeenAt).ToList();
+            var editor = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "notepad.exe"));
+            editor.ArgumentList.Add(file.FullPath);
+            if (!File.Exists(file.FullPath)) { StatusMessage = $"File is no longer available: {file.Name}"; return; }
+            Process.Start(editor)?.Dispose();
         }
-        catch (Exception ex)
+        catch (Exception ex) { StatusMessage = $"Could not open {file.Name}: {ex.Message}"; }
+    }
+
+    [RelayCommand]
+    private async Task RefreshProfileDetailsAsync()
+    {
+        if (IsLoading || !_apiService.IsLoggedIn) return;
+        IsLoading = true;
+        try
         {
-            Console.WriteLine($"[GAME-LOG] Error parsing game log: {ex.Message}");
-            return users;
+            await FetchUserDetailsAsync();
+            await RefreshGroupContextAsync();
+            StatusMessage = "Finished checking visible profiles.";
         }
+        catch (Exception ex) { StatusMessage = $"Could not refresh profiles: {ex.Message}"; }
+        finally { IsLoading = false; }
     }
 
     private async Task FetchUserDetailsAsync()
     {
-        if (!_apiService.IsLoggedIn || SeenUsers.Count == 0) return;
+        if (!_apiService.IsLoggedIn) return;
 
-        var usersToFetch = SeenUsers.ToList();
-        var completed = 0;
-
-        using var semaphore = new System.Threading.SemaphoreSlim(5);
-
-        var tasks = usersToFetch.Select(async userVM =>
+        var rows = FilteredUsers.ToArray();
+        var updated = new List<SeenUser>();
+        for (int i = 0; i < rows.Length; i++)
         {
-            await semaphore.WaitAsync();
-            try
+            var row = rows[i];
+            StatusMessage = $"Checking profile {i + 1} of {rows.Length}…";
+            if (string.IsNullOrEmpty(row.User.UserId))
             {
-                // If we don't have a UserId, search by name
-                if (string.IsNullOrEmpty(userVM.User.UserId))
-                {
-                    try
-                    {
-                        var searchResults = await _apiService.SearchUsersAsync(userVM.User.DisplayName);
-                        var matches = searchResults.Where(u =>
-                            u.DisplayName.Equals(userVM.User.DisplayName, StringComparison.OrdinalIgnoreCase)).ToList();
-                        // Display names are not unique identities. Never select an arbitrary ban/invite target.
-                        var match = matches.Count == 1 ? matches[0] : null;
-
-                        if (match != null && ApprovalPublisher.Id(match.UserId,"usr"))
-                        {
-                            userVM.User.UserId = match.UserId;
-                            userVM.User.ProfilePicUrl = match.ProfilePicUrl ?? string.Empty;
-                            userVM.User.IsAgeVerified = match.IsAgeVerified;
-                            userVM.User.Tags = match.Tags ?? new List<string>();
-                        }
-                    }
-                    catch (Exception searchEx)
-                    {
-                        Console.WriteLine($"[GAME-LOG] Search failed for {userVM.User.DisplayName}: {searchEx.Message}");
-                    }
-                }
-                else if (ApprovalPublisher.Id(userVM.User.UserId,"usr"))
-                {
-                    // Fetch full details
-                    var details = await _apiService.GetUserAsync(userVM.User.UserId);
-                    if (details?.UserId == userVM.User.UserId)
-                    {
-                        userVM.User.ProfilePicUrl = details.ProfilePicUrl ?? string.Empty;
-                        userVM.User.IsAgeVerified = details.IsAgeVerified;
-                        userVM.User.Tags = details.Tags ?? new List<string>();
-                    }
-                }
-
-                completed++;
-                if (completed % 10 == 0)
-                {
-                    StatusMessage = $"Fetching user details... {completed}/{usersToFetch.Count}";
-                }
-
-                // Notify property changes
-                userVM.OnPropertiesChanged();
+                var matches = (await _apiService.SearchUsersAsync(row.User.DisplayName))
+                    .Where(user => string.Equals(user.DisplayName, row.User.DisplayName, StringComparison.OrdinalIgnoreCase))
+                    .Take(2).ToList();
+                if (matches.Count != 1 || !ApprovalPublisher.Id(matches[0].UserId, "usr")) continue;
+                var match = matches[0];
+                row.User.UserId = match.UserId;
+                row.User.ProfilePicUrl = match.ProfilePicUrl ?? string.Empty;
+                row.User.Tags = match.Tags ?? new List<string>();
+                row.User.IsAgeVerified = match.IsAgeVerified;
+                row.User.Source = "Profile matched by display name";
+                row.OnPropertiesChanged();
+                continue;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[GAME-LOG] Failed to fetch details for {userVM.User.DisplayName}: {ex.Message}");
-            }
-            finally
-            {
-                semaphore.Release();
-            }
-        });
-
-        await Task.WhenAll(tasks);
+            if (!ApprovalPublisher.Id(row.User.UserId, "usr")) continue;
+            var details = await _apiService.GetUserAsync(row.User.UserId);
+            if (details?.UserId != row.User.UserId) continue;
+            row.User.ProfilePicUrl = details.ProfilePicUrl ?? string.Empty;
+            row.User.IsAgeVerified = details.IsAgeVerified;
+            row.User.Tags = details.Tags ?? new List<string>();
+            row.OnPropertiesChanged();
+            if (row.HasRetainedId) updated.Add(row.User);
+        }
+        if (updated.Count > 0) await _ledger.SaveEncountersAsync(updated);
         ApplyFilters();
     }
 
     private void ApplyFilters()
     {
-        FilteredUsers.Clear();
-
-        var query = SearchQuery?.ToLowerInvariant() ?? string.Empty;
-
-        var filtered = SeenUsers.Where(u =>
-        {
-            if (HideAlreadyInGroup && u.Membership != GroupMembershipState.CachedNonMember) return false;
-            if (HidePriorInvites && u.InviteState is GroupInviteState.Sent or GroupInviteState.Unknown or GroupInviteState.InFlight) return false;
-            // Apply 18+ filter
-            if (Only18Plus && !u.User.IsAgeVerified)
-                return false;
-
-            // Apply search filter
-            if (!string.IsNullOrWhiteSpace(query))
-            {
-                var matchesName = u.User.DisplayName.ToLowerInvariant().Contains(query);
-                if (!matchesName)
-                    return false;
-            }
-
-            return true;
-        });
-
-        foreach (var user in filtered)
-        {
-            FilteredUsers.Add(user);
-        }
-        foreach (var user in SeenUsers.Where(u => !FilteredUsers.Contains(u) || !u.CanInvite)) user.IsSelected = false;
+        var query = SearchQuery?.Trim() ?? string.Empty;
+        var visible = SeenUsers.Where(row =>
+            (!HideAlreadyInGroup || row.Membership == GroupMembershipState.CachedNonMember) &&
+            (!HidePriorInvites || row.InviteState is not (GroupInviteState.Sent or GroupInviteState.Unknown or GroupInviteState.InFlight)) &&
+            (!Only18Plus || row.User.IsAgeVerified) &&
+            (row.User.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+             row.User.UserId.Contains(query, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (!FilteredUsers.SequenceEqual(visible))
+            FilteredUsers = new ObservableCollection<GameLogUserViewModel>(visible);
+        var visibleRows = visible.ToHashSet();
+        foreach (var row in SeenUsers.Where(r => r.IsSelected && (!visibleRows.Contains(r) || !r.CanInvite)))
+            row.IsSelected = false;
         UpdateSelectedCount();
     }
 
@@ -474,10 +283,11 @@ public partial class GameLogViewModel : ObservableObject
 
     public async Task LoadRetainedHistoryAsync()
     {
-        SeenUsers.Clear();
-        foreach(var user in await _ledger.ReadEncountersAsync()) SeenUsers.Add(new(user,this));
-        TotalUsersFound=SeenUsers.Count; await RefreshGroupContextAsync(); ApplyFilters();
-        StatusMessage=$"Retained Game History: {SeenUsers.Count} current/past records (max {GroupInviteLedger.EncounterLimit}); untrusted discovery, not live presence.";
+        var users = await _ledger.ReadEncountersAsync();
+        SeenUsers = new ObservableCollection<GameLogUserViewModel>(users.Select(user => new GameLogUserViewModel(user, this)));
+        TotalUsersFound = SeenUsers.Count;
+        await RefreshGroupContextAsync();
+        StatusMessage = $"{TotalUsersFound} retained encounters";
     }
 
     [RelayCommand]
@@ -505,8 +315,7 @@ public partial class GameLogViewModel : ObservableObject
         SelectedCount = SeenUsers.Count(u => u.IsSelected);
     }
 
-    public Func<string, IReadOnlyList<string>, Task<bool>> ConfirmGroupInvites { get; set; } = (group, users) => Task.FromResult(
-        MessageBox.Show($"Send {users.Count} group invitations to {group}?\n\n{string.Join("\n", users)}\n\nPrior sent/pending/unknown invitations are blocked locally.", "Confirm group invitations", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes);
+    public Func<string, IReadOnlyList<string>, Task<bool>> ConfirmGroupInvites { get; set; }
     public Func<Task> InvitePacing { get; set; } = () => Task.Delay(500);
 
     [ObservableProperty] private GroupBanTarget? _actionTarget;
@@ -611,16 +420,18 @@ public partial class GameLogUserViewModel : ObservableObject
     partial void OnMembershipChanged(GroupMembershipState value) { OnPropertyChanged(nameof(CanInvite)); OnPropertyChanged(nameof(GroupStatus)); if (!CanInvite) IsSelected = false; }
     partial void OnInviteStateChanged(GroupInviteState value) { OnPropertyChanged(nameof(CanInvite)); OnPropertyChanged(nameof(GroupStatus)); if (!CanInvite) IsSelected = false; }
     public SeenUser User { get; }
+    internal bool HasRetainedId { get; }
 
     public GameLogUserViewModel(SeenUser user, GameLogViewModel? parent)
     {
         User = user;
+        HasRetainedId = ApprovalPublisher.Id(user.UserId, "usr");
         _parent = parent;
     }
 
     partial void OnIsSelectedChanged(bool value)
     {
-        _parent?.UpdateSelectedCount();
+        if (_parent != null) _parent.SelectedCount += value ? 1 : -1;
     }
 
     public string AgeVerificationDisplay => User.IsAgeVerified ? "✓ 18+" : "";

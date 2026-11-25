@@ -34,6 +34,9 @@ static class GroupUiTests
                 Check(Descendants(view).OfType<DataGrid>().Any(g => ReferenceEquals(g.ItemsSource, vm.InviteHistory)), "Persistent history list not bound");
                 var filter = Descendants(view).OfType<CheckBox>().Single(c => BindingOperations.GetBindingExpression(c, CheckBox.IsCheckedProperty)?.ParentBinding.Path.Path == "HideAlreadyInGroup");
                 Check(filter.TranslatePoint(new Point(), view).X + filter.ActualWidth <= view.ActualWidth, "Nonmember filter is clipped at normal panel width");
+                Check(Descendants(view).OfType<DataGrid>().Any(g => ReferenceEquals(g.ItemsSource, vm.LogFiles)), "Missing full log file inventory");
+                Check(Descendants(view).OfType<ListBox>().Any(list => ReferenceEquals(list.ItemsSource, vm.FilteredUsers) && VirtualizingPanel.GetIsVirtualizing(list)),
+                    "Large encounter histories must use a virtualized list");
                 var scan = buttons.Single(b => b.Command == vm.ScanGameLogCommand);
                 Check(scan.TranslatePoint(new Point(), view).X + scan.ActualWidth <= view.ActualWidth, "Scan action is clipped by nonmember filter");
                 view.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
