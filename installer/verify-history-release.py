@@ -14,8 +14,11 @@ env=os.environ.copy()
 env.setdefault('TMPDIR',tempfile.gettempdir())
 if os.name=='nt':
     # The legacy replacement harness starts Windows PowerShell 5.1, even when the caller uses pwsh.
-    native_modules=Path(env['SystemRoot'])/'System32/WindowsPowerShell/v1.0/Modules'
-    env['PSModulePath']=str(native_modules)+os.pathsep+env.get('PSModulePath','')
+    # os.environ is case-insensitive on Windows, but its copy() has upper-cased keys (SYSTEMROOT, PSMODULEPATH).
+    native_modules=Path(os.environ.get('SystemRoot') or r'C:\Windows')/'System32/WindowsPowerShell/v1.0/Modules'
+    existing=os.environ.get('PSModulePath','')
+    for key in [k for k in env if k.upper()=='PSMODULEPATH']: del env[key]
+    env['PSModulePath']=str(native_modules)+(os.pathsep+existing if existing else '')
 def run(name,args):
     start=time.monotonic(); p=subprocess.run(args,cwd=ROOT,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace')
     (OUT/(name+'.log')).write_text(p.stdout,encoding='utf-8')
