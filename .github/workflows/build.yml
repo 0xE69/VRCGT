@@ -102,7 +102,7 @@ jobs:
       BUILD_COMMIT: ${{ needs.build.outputs.commit }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: VRCGroupTools-v${{ needs.build.outputs.version }}-win-x64
           path: assets
